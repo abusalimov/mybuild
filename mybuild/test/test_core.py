@@ -20,10 +20,25 @@ class ModuleTestCase(unittest.TestCase):
             pass
         self.assertEqual(tuple(m._options), ('foo', 'bar'))
 
-    def test_def_invalid_module_options(self):
+    def test_def_module_func_with_starargs(self):
+        """Module function must not declare neither *args nor **kwargs."""
+
         with self.assertRaises(TypeError):
             @module
-            def m(self, foo, *args):
+            def m(self, *args):
+                pass
+
+        with self.assertRaises(TypeError):
+            @module
+            def m(self, **kwargs):
+                pass
+
+    def test_def_module_options_with_leading_underscore(self):
+        """Module options must not start with an underscore."""
+
+        with self.assertRaises(TypeError):
+            @module
+            def m(self, _foo):
                 pass
 
 

@@ -166,8 +166,9 @@ class _Optuple(Module.Type):
         return self._type_hash() ^ tuple.__hash__(self)
 
     def _to_expr(self):
-        return And(self._module,
-                   *(A(v) for v,A in self._izipwith(self._atom_types)))
+        option_atoms = tuple(A(v) for v,A in self._izipwith(self._atom_types))
+        return (And._from_iterable(option_atoms) if option_atoms else
+                self._module._to_expr())
 
     @classmethod
     def _new_type(cls, module_type, options, defaults):
