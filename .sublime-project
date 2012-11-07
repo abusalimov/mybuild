@@ -4,5 +4,16 @@
 		{
 			"path": "."
 		}
+	],
+	"build_systems":
+	[
+		{
+			"name": "Python (project-specific)",
+			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
+			"selector": "source.python",
+
+			"cmd": ["python", "-u", "$file"],
+			"working_dir": "${project_path}"
+		}
 	]
 }
