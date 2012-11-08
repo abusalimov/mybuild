@@ -556,7 +556,7 @@ class Constraints(object):
                     parent = parent._parent
                 except AttributeError:
                     assert parent is None
-                    raise RuntimeError(
+                    raise InternalError(
                         "'until_parent' must be a parent of this dict")
 
                 yield current
@@ -643,14 +643,14 @@ class FrozenConstraints(Constraints):
     """
     __slots__ = ()
 
-    def __new__(self, *args, **kwargs):
-        raise RuntimeError('Attempting to instantiate FrozenConstraints class')
+    def __new__(cls, *args, **kwargs):
+        raise InternalError('Attempting to instantiate FrozenConstraints')
 
     def constrain(self, module, option=None, value=True, negated=False,
             fork=False):
         if not fork:
-            raise RuntimeError('Attempting to constrain frozen constraints '
-                               'without forking')
+            raise InternalError('Attempting to constrain frozen constraints '
+                                'without forking')
 
         return Constraints.constrain(self, module, option, value, negated,
                                      fork=True)
@@ -992,7 +992,8 @@ class OptionContext(MutableSet):
 
 
 class Error(Exception):
-    """docstring for Error"""
+    """Base class for errors providing a logging-like constructor."""
+
     def __init__(self, msg, *args, **kwargs):
         if not isinstance(msg, basestring):
             raise TypeError("'msg' argument must be a string")
@@ -1018,12 +1019,20 @@ class Error(Exception):
                                  fmt_args)
 
 class InstanceError(Error):
-    """docstring for InstanceError"""
-    pass
+    """
+    Throwing this kind of errors from inside a module function indicates that
+    instance is not viable anymore and thus shouldn't be considered.
+    """
 
 class ConstraintError(InstanceError):
-    """docstring for ConstraintError"""
-    pass
+    """
+    InstanceError subclass raised in case when the reason of an error is
+    constraints violation.
+    """
+
+
+class InternalError(Exception):
+    """Unrecoverable application errors indicating that goes really wrong."""
 
 
 ###############################################################################
