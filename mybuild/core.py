@@ -398,8 +398,7 @@ class _Instance(Module.Type):
             self._spawn_all(choices[not ret])
 
             log.debug('mybuild: return %s', ret)
-
-        return ret
+            return ret
 
     def _decide_option(self, optuple, option):
         module = optuple._module
@@ -429,6 +428,7 @@ class _Instance(Module.Type):
             vset.subscribe(self, partial(self._fork_and_spawn,
                 self._constraints, module, option))
             # after that one shouldn't touch self._constraints anymore
+            self._constraints.freeze()
 
             def constrain_all(values):
                 constrain = self._constraints.constrain
@@ -517,30 +517,9 @@ class Constraints(object):
             else:
                 raise KeyError
 
-        def get(self, key, insert_clone=True):
-            """
-            The argument 'insert_clone' takes an effect in case when the key is
-            missing in this instance but found in a parent dict. It tells
-            whether to clone the mapped value and insert the copy into this
-            instance or to return the value from parent.
-            When the key is missing even in parent dicts it creates an inserts
-            a new constraint object.
-            """
-            assert isinstance(key, Module)
-
-            if key in self:
-                return self[key]
-
-            try:
-                value = self.__missing__(key)
-            except KeyError:
-                value = ModuleConstraint(key)
-            else:
-                if insert_clone:
-                    value = value.clone()
-
-            self[key] = value
-            return value
+        def fork(self):
+            cls = type(self)
+            return cls(parent=self)
 
         def merge_children(self, children, update_parent=True):
             """
@@ -592,14 +571,16 @@ class Constraints(object):
             _constraints_dict = self._ConstraintsDict()
         self._dict = _constraints_dict
 
+    def freeze(self):
+        self.__class__ = FrozenConstraints
+
     def fork(self):
-        cls = type(self)
-        return cls(cls._ConstraintsDict(self._dict))
+        self.freeze()
+        return Constraints(self._dict.fork())
 
     def merge_children(self, children, update_parent=True):
-        cls = type(self)
         log.debug('mybuild: parent=%r, merging %r', self, children)
-        return cls(self._dict.merge_children(
+        return Constraints(self._dict.merge_children(
                    imap(attrgetter('_dict'), children), update_parent))
 
     def get(self, module, option=None):
@@ -630,8 +611,20 @@ class Constraints(object):
     def constrain(self, module, option=None, value=True, negated=False,
             fork=False):
         self = self if not fork else self.fork()
+        self_dict = self._dict
 
-        constraint = self._dict.get(module, insert_clone=True)
+        try: # retrieve a privately owned constraint
+            constraint = self_dict[module]
+
+        except KeyError: # if necessary, create it from scratch
+            constraint = self_dict[module] = ModuleConstraint(module)
+
+        else: # or clone it from a parent
+            if module not in self_dict: # found in some parent
+                constraint = self_dict[module] = constraint.clone()
+
+        # Anyway, the 'constraint' is not shared with any other instance,
+        # and we are free to modify it.
 
         if option is None:
             constraint.constrain(value, negated)
@@ -642,6 +635,25 @@ class Constraints(object):
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self._dict)
+
+class FrozenConstraints(Constraints):
+    """
+    Constraints instance becomes frozen on fork to keep its children in a
+    consistent state.
+    """
+    __slots__ = ()
+
+    def __new__(self, *args, **kwargs):
+        raise RuntimeError('Attempting to instantiate FrozenConstraints class')
+
+    def constrain(self, module, option=None, value=True, negated=False,
+            fork=False):
+        if not fork:
+            raise RuntimeError('Attempting to constrain frozen constraints '
+                               'without forking')
+
+        return Constraints.constrain(self, module, option, value, negated,
+                                     fork=True)
 
 
 class ConstraintBase(object):
