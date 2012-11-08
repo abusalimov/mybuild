@@ -493,57 +493,58 @@ class _Instance(Module.Type):
                     dict(__slots__=(), _init_fxn=init_fxn))
 
 
+class IncrementalDict(dict):
+    """Delegates lookup for a missing key to the parent dictionary."""
+    __slots__ = ('_parent',)
+
+    parent = property(attrgetter('_parent'))
+
+    def __init__(self, parent=None):
+        dict.__init__(self)
+        self._parent = parent
+
+    def __missing__(self, key):
+        """Looks up the parents chain for the key."""
+        parent = self._parent
+        while parent is not None:
+            if key in parent:
+                return parent[key]
+            parent = parent._parent
+        else:
+            raise KeyError
+
+    def fork(self):
+        cls = type(self)
+        return cls(parent=self)
+
+    def iter_parents(self, until_parent=None, update_parent=False):
+        parent = self._parent
+
+        while parent is not until_parent:
+            current = parent
+            try:
+                parent = parent._parent
+            except AttributeError:
+                assert parent is None
+                raise InternalError("'until_parent' must be a parent ""of this dict")
+
+            yield current
+
+        if update_parent:
+            self._parent = until_parent
+
+    def __repr__(self):
+        return (dict.__repr__(self) if self._parent is None else
+                '%r <- %s' % (self._parent, dict.__repr__(self)))
+
 class Constraints(object):
     __slots__ = ('_dict',)
 
-    class _ConstraintsDict(dict):
-        """Delegates lookup for a missing key to the parent dictionary."""
-        __slots__ = ('_parent',)
-
-        def __init__(self, parent=None):
-            dict.__init__(self)
-            self._parent = parent
-
-        def __missing__(self, key):
-            """Looks up the parents chain for the key."""
-            parent = self._parent
-            while parent is not None:
-                if key in parent:
-                    return parent[key]
-                parent = parent._parent
-            else:
-                raise KeyError
-
-        def fork(self):
-            cls = type(self)
-            return cls(parent=self)
-
-        def iter_parents(self, until_parent=None, update_parent=False):
-            parent = self._parent
-
-            while parent is not until_parent:
-                current = parent
-                try:
-                    parent = parent._parent
-                except AttributeError:
-                    assert parent is None
-                    raise InternalError(
-                        "'until_parent' must be a parent of this dict")
-
-                yield current
-
-            if update_parent:
-                self._parent = until_parent
-
-        def __repr__(self):
-            return (dict.__repr__(self) if self._parent is None else
-                    '%r <- %s' % (self._parent, dict.__repr__(self)))
-
-    def __init__(self, _constraints_dict=None):
+    def __init__(self, _dict=None):
         super(Constraints, self).__init__()
-        if _constraints_dict is None:
-            _constraints_dict = self._ConstraintsDict()
-        self._dict = _constraints_dict
+        if _dict is None:
+            _dict = IncrementalDict()
+        self._dict = _dict
 
     def freeze(self):
         self.__class__ = FrozenConstraints
