@@ -23,6 +23,7 @@ from itertools import izip_longest
 from itertools import product
 from itertools import repeat
 from operator import attrgetter
+from operator import methodcaller
 from traceback import print_exc
 from traceback import print_stack
 
@@ -496,11 +497,7 @@ class Constraints(object):
     __slots__ = ('_dict',)
 
     class _ConstraintsDict(dict):
-        """Delegates lookup for a missing key to the parent dictionary.
-
-        Also overrides 'get' method extending it with an optional
-        'insert_clone' argument.
-        """
+        """Delegates lookup for a missing key to the parent dictionary."""
         __slots__ = ('_parent',)
 
         def __init__(self, parent=None):
@@ -521,33 +518,7 @@ class Constraints(object):
             cls = type(self)
             return cls(parent=self)
 
-        def merge_children(self, children, update_parent=True):
-            """
-            Caller must guarantee that each of 'children' is actually a child
-            of this instance.
-            """
-            new_dict = type(self)(parent=self)
-
-            for child in children:
-                child.flatten(self, update_parent)
-                for key, value in child.iteritems():
-                    if key in new_dict:
-                        new_dict[key].update(value)
-                    else:
-                        new_dict[key] = value.clone()
-
-            return new_dict
-
-        def flatten(self, until_parent=None, update_parent=True):
-            for parent in self._iter_parents(until_parent):
-                for key, value in parent.iteritems():
-                    if key not in self:
-                        self[key] = value.clone()
-
-            if update_parent:
-                self._parent = until_parent
-
-        def _iter_parents(self, until_parent=None):
+        def iter_parents(self, until_parent=None, update_parent=False):
             parent = self._parent
 
             while parent is not until_parent:
@@ -561,9 +532,12 @@ class Constraints(object):
 
                 yield current
 
+            if update_parent:
+                self._parent = until_parent
+
         def __repr__(self):
-            return dict.__repr__(self) if self._parent is None else \
-                '%s <- %s' % (repr(self._parent), dict.__repr__(self))
+            return (dict.__repr__(self) if self._parent is None else
+                    '%r <- %s' % (self._parent, dict.__repr__(self)))
 
     def __init__(self, _constraints_dict=None):
         super(Constraints, self).__init__()
@@ -580,8 +554,28 @@ class Constraints(object):
 
     def merge_children(self, children, update_parent=True):
         log.debug('mybuild: parent=%r, merging %r', self, children)
-        return Constraints(self._dict.merge_children(
-                   imap(attrgetter('_dict'), children), update_parent))
+
+        self_dict = self._dict
+        new_dict = self_dict.fork()
+
+        for child in children:
+            child.flatten(self, update_parent)
+            for key, value in child._dict.iteritems():
+                if key in new_dict:
+                    new_dict[key].update(value)
+                else:
+                    new_dict[key] = value.clone()
+
+        return Constraints(new_dict)
+
+    def flatten(self, until_parent=None, update_parent=True):
+        self_dict = self._dict
+
+        for parent_dict in self_dict.iter_parents(until_parent._dict,
+                                                  update_parent):
+            for key, value in parent.iteritems():
+                if key not in self_dict:
+                    self_dict[key] = value.clone()
 
     def get(self, module, option=None):
         try:
