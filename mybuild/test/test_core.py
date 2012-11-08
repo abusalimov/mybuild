@@ -2,25 +2,29 @@
 Tests for Mybuild core.
 """
 
-import unittest
+from unittest import TestCase
+# from mock import Mock, patch
 
 from mybuild.core import module
+from mybuild.core import Constraints
 
-class ModuleTestCase(unittest.TestCase):
 
-    def test_def_module_without_options(self):
+class ModuleTestCase(TestCase):
+    """High-level tests for @module deco."""
+
+    def test_without_options(self):
         @module
         def m(self):
             pass
         self.assertEqual(tuple(m._options), ())
 
-    def test_def_module_with_options(self):
+    def test_with_options(self):
         @module
         def m(self, foo, bar):
             pass
         self.assertEqual(tuple(m._options), ('foo', 'bar'))
 
-    def test_def_module_func_with_starargs(self):
+    def test_func_with_starargs(self):
         """Module function must not declare neither *args nor **kwargs."""
 
         with self.assertRaises(TypeError):
@@ -33,7 +37,7 @@ class ModuleTestCase(unittest.TestCase):
             def m(self, **kwargs):
                 pass
 
-    def test_def_module_options_with_leading_underscore(self):
+    def test_options_with_leading_underscore(self):
         """Module options must not start with an underscore."""
 
         with self.assertRaises(TypeError):
@@ -41,6 +45,11 @@ class ModuleTestCase(unittest.TestCase):
             def m(self, _foo):
                 pass
 
+class ConstraintsTestCase(TestCase):
+    """Tests for Constraints and friends."""
+
+    def test_xxx(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()
