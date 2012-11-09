@@ -31,12 +31,12 @@ class ModuleTestCase(TestCase):
 
         with self.assertRaises(TypeError):
             @module
-            def m(self, *args):
+            def m1(self, *args):
                 pass
 
         with self.assertRaises(TypeError):
             @module
-            def m(self, **kwargs):
+            def m2(self, **kwargs):
                 pass
 
     def test_options_with_leading_underscore(self):

@@ -9,6 +9,7 @@ __date__ = "2012-11-09"
 __all__ = ["Constraints", "ConstraintError"]
 
 
+from itertools import izip
 from operator import attrgetter
 
 from core import *
@@ -53,7 +54,7 @@ class Constraints(object):
 
         for parent_dict in self_dict.iter_parents(until_parent._dict,
                                                   update_parent):
-            for key, value in parent.iteritems():
+            for key, value in parent_dict.iteritems():
                 if key not in self_dict:
                     self_dict[key] = value.clone()
 

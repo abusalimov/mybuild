@@ -1,8 +1,5 @@
 """
-Mybuild core.
-
-Author: Eldar Abusalimov
-Date: Sep 2012
+Mybuild core types.
 
 TODO docs. -- Eldar
 """
@@ -19,21 +16,18 @@ __all__ = [
 
 
 from collections import namedtuple
-from contextlib import contextmanager
 from functools import update_wrapper
 from inspect import getargspec
 from itertools import chain
-from itertools import imap
 from itertools import izip
-from itertools import product
 from itertools import repeat
 from operator import attrgetter
-from traceback import print_exc
-from traceback import print_stack
 
 from expr import *
 
-import logs as log
+
+def module(fxn):
+    return update_wrapper(Module(fxn), fxn)
 
 
 class Module(object):
@@ -117,16 +111,13 @@ class Module(object):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options))
 
-def module(fxn):
-    return update_wrapper(Module(fxn), fxn)
-
 @Module.register_type('_atom')
-class _ModuleAtom(Atom):
+class ModuleAtom(Atom):
     """Module-bound atom."""
     __slots__ = ('_module',)
 
     def __init__(self, module):
-        super(_ModuleAtom, self).__init__()
+        super(ModuleAtom, self).__init__()
         self._module = module
 
     def eval(self, fxn, *args, **kwargs):
@@ -140,8 +131,9 @@ class _ModuleAtom(Atom):
     def _new_type(cls, module_type, *args):
         return cls(module_type._module)
 
+
 @Module.register_type('_optuple_type')
-class _Optuple(Module.Type):
+class Optuple(Module.Type):
     """Option tuple mixin type."""
     __slots__ = ()
 
@@ -218,7 +210,7 @@ class _Optuple(Module.Type):
         options, defaults = cls._options_defaults_from_fxn(fxn)
         assert len(options) == len(defaults)
 
-        optype_base = namedtuple('_OptupleBase', options)
+        optype_base = namedtuple('OptupleBase', options)
 
         bogus_attrs = set(a for a in dir(optype_base)
             if not a.startswith('_'))
@@ -234,14 +226,14 @@ class _Optuple(Module.Type):
         new_type._defaults = new_type._make(defaults)
         new_type._ellipsis = new_type._make(repeat(Ellipsis, len(options)))
         new_type._atom_types = \
-            new_type._make(_OptionAtom._new_type(module_type, o)
+            new_type._make(OptionAtom._new_type(module_type, o)
                            for o in options)
 
         optype_base._fields = new_type._make(options)
 
         return new_type
 
-class _OptionAtom(Module.Type, Atom):
+class OptionAtom(Module.Type, Atom):
     """A single bound option."""
     __slots__ = ('_value')
 
@@ -249,7 +241,7 @@ class _OptionAtom(Module.Type, Atom):
     option = property(attrgetter('_option'))
 
     def __init__(self, value):
-        super(_OptionAtom, self).__init__()
+        super(OptionAtom, self).__init__()
         self._value = value
 
     def __eq__(self, other):

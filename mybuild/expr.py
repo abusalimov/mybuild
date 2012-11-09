@@ -1,11 +1,9 @@
 """
-Boolean expessions. -- Eldar
+Boolean expessions.
 """
 
-from itertools import imap
-from operator import attrgetter
-
-from util import singleton
+__author__ = "Eldar Abusalimov"
+__date__ = "2012-10-28"
 
 __all__ = [
     "exprify",
@@ -17,6 +15,13 @@ __all__ = [
     "Not",
     "Atom",
 ]
+
+
+from itertools import imap
+from operator import attrgetter
+
+from util import singleton
+
 
 def exprify(something):
     if hasattr(something, '_to_expr'):
@@ -93,7 +98,7 @@ class ExprVisitor(object):
         method = getattr(self, 'visit_' + method_name)
 
         return method(expr, *args, **kwargs)
-    
+
     def visit_And(self, expr, *args, **kwargs):
         for op in expr.operands: self.visit(op, *args, **kwargs)
     def visit_Or(self, expr, *args, **kwargs):
@@ -174,7 +179,7 @@ class _AtomicExpr(Expr):
     """Leaf expressions: Atom, Not(Atom)."""
 
     atom = property()
-        
+
     def _iter_atoms(self):
         yield self.atom
 
@@ -232,6 +237,7 @@ class Atom(_AtomicExpr):
 
     def eval(self, *args, **kwargs):
         return self
+
 
 if __name__ == '__main__':
     A,B,C = (Atom() for _ in xrange(3))
