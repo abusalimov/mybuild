@@ -7,9 +7,6 @@ Date: Sep 2012
 TODO docs. -- Eldar
 """
 
-from collections import defaultdict
-from collections import deque
-from collections import MutableSet
 from collections import namedtuple
 from contextlib import contextmanager
 from functools import partial
@@ -19,7 +16,6 @@ from inspect import getargspec
 from itertools import chain
 from itertools import imap
 from itertools import izip
-from itertools import izip_longest
 from itertools import product
 from itertools import repeat
 from operator import attrgetter
@@ -566,7 +562,8 @@ class IncrementalDict(dict):
                 parent = parent._parent
             except AttributeError:
                 assert parent is None
-                raise InternalError("'until_parent' must be a parent ""of this dict")
+                raise InternalError("'until_parent' must be a parent "
+                                    "of this dict")
 
             yield current
 
@@ -893,141 +890,6 @@ class OptionConstraint(ConstraintBase):
             super(OptionConstraint, self).__repr__()
 
 
-class BuildContext(object):
-    """docstring for BuildContext"""
-
-    def __init__(self):
-        super(BuildContext, self).__init__()
-        self._modules = {}
-        self._job_queue = deque()
-        self._reent_locked = False
-
-    def post(self, fxn):
-        self._job_queue.append(fxn)
-
-        with self.reent_lock():
-            pass # to flush the queue
-
-    @contextmanager
-    def reent_lock(self):
-        was_locked = self._reent_locked
-        self._reent_locked = True
-
-        try:
-            yield
-        finally:
-            if not was_locked:
-                self._job_queue_flush()
-            self._reent_locked = was_locked
-
-    def _job_queue_flush(self):
-        queue = self._job_queue
-
-        while queue:
-            fxn = queue.popleft()
-            fxn()
-
-    def consider(self, optuple):
-        self.context_for(optuple._module).consider(optuple)
-
-    def register(self, instance):
-        self.context_for(instance._module).register(instance)
-
-    def context_for(self, module, option=None):
-        try:
-            context = self._modules[module]
-        except KeyError:
-            with self.reent_lock():
-                context = self._modules[module] = ModuleContext(self,module)
-
-        return context
-
-
-class ModuleContext(object):
-    """docstring for ModuleContext"""
-
-    def __init__(self, build_ctx, module):
-        super(ModuleContext, self).__init__()
-
-        self.build_ctx = build_ctx
-        self.module = module
-
-        init_optuple = module._optuple_type._defaults
-        self.vsets = init_optuple._make(OptionContext() for _ in init_optuple)
-
-        self.instances = defaultdict(set) # { optuple : { instances... } }
-
-        for a_tuple in izip_longest(*init_optuple, fillvalue=Ellipsis):
-            self.consider(a_tuple)
-
-    def consider(self, optuple):
-        vsets_optuple = self.vsets
-
-        what_to_extend = ((vset,v)
-            for vset,v in izip(vsets_optuple, optuple)
-            if v is not Ellipsis and v not in vset)
-
-        for vset_to_extend, value in what_to_extend:
-            log.debug('mybuild: extending %r with %r', vset_to_extend, value)
-            vset_to_extend.add(value)
-
-            sliced_vsets = (vset if vset is not vset_to_extend else (value,)
-                for vset in vsets_optuple)
-
-            for new_tuple in product(*sliced_vsets):
-                self.module._instance_type._post_new(self.build_ctx,
-                    vsets_optuple._make(new_tuple))
-
-    def register(self, instance):
-        self.instances[instance._optuple].add(instance)
-
-    def vset_for(self, option):
-        return getattr(self.vsets, option)
-
-
-class OptionContext(MutableSet):
-    """docstring for OptionContext"""
-
-    def __init__(self):
-        super(OptionContext, self).__init__()
-        self._set = set()
-        self._subscribers = []
-        self._subscribers_keys = set() # XXX
-
-    def add(self, value):
-        if value in self:
-            return
-        self._set.add(value)
-
-        subscribers = self._subscribers
-        self._subscribers = None # our methods are not reenterable
-
-        for s in subscribers:
-            s(value)
-
-        self._subscribers = subscribers
-
-    def discard(self, value):
-        if value not in self:
-            return
-        raise NotImplementedError
-
-    def subscribe(self, key, fxn):
-        assert key not in self._subscribers_keys
-        self._subscribers_keys.add(key)
-        self._subscribers.append(fxn)
-
-    def __iter__(self):
-        return iter(self._set)
-    def __len__(self):
-        return len(self._set)
-    def __contains__(self, value):
-        return value in self._set
-
-    def __repr__(self):
-        return '<OptionContext %r>' % (self._set,)
-
-
 class Error(Exception):
     """Base class for errors providing a logging-like constructor."""
 
@@ -1070,50 +932,4 @@ class ConstraintError(InstanceError):
 
 class InternalError(Exception):
     """Unrecoverable application errors indicating that goes really wrong."""
-
-
-###############################################################################
-
-log.zones = {'mybuild'}
-log.verbose = True
-log.init_log()
-
-def check(module):
-    wrapped = module._instance_type._init_fxn
-    @wraps(wrapped)
-    def wrapper(mod, *args, **kwargs):
-        try:
-            wrapped(mod, *args, **kwargs)
-        except:
-            # print_exc()
-            raise
-    module._instance_type._init_fxn = wrapper
-    return module
-
-@module
-def conf(mod, z=None):
-    mod._build_ctx.consider(m0(o=42))
-    mod.constrain(m0(o=42))
-
-@module
-def m0(mod, o):
-    mod1 = mod.ask(m1)
-    t = "with m1" if mod1 else "no m1"
-    log.debug("mybuild: <m0> o=%s, %s, m1.x=%r" % (o, t, mod1.x))
-
-@module
-def m1(mod, x=11):
-    mod0 = mod.ask(m0)
-    if mod0.o < 43:
-        mod._build_ctx.consider(m0(o=mod0.o + 1))
-    log.debug("myconstrain: <m1> x=%s, m0.o=%d" % (x, mod0.o))
-
-if __name__ == '__main__':
-    bctx = BuildContext()
-    # bctx.consider(m0(o=42))
-    # bctx.consider(m0(o=41))
-    bctx.consider(conf())
-    # for o in bctx._modules[m0].instances.keys():
-    #     print o
-
 
