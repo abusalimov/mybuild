@@ -23,7 +23,6 @@ from itertools import izip_longest
 from itertools import product
 from itertools import repeat
 from operator import attrgetter
-from operator import methodcaller
 from traceback import print_exc
 from traceback import print_stack
 
@@ -53,20 +52,125 @@ class Module(object):
         def __hash__(self):
             return self._type_hash()
 
-    def __init__(self, init_fxn):
+    _types = {} # attr-to-type
+
+    @classmethod
+    def register_type(cls, attr):
+        """Deco maker for per-module classes."""
+
+        if not isinstance(attr, basestring):
+            raise TypeError("Attribure name must be a string, "
+                            "got %s object instead: %r" % (type(attr), attr))
+
+        if not attr.startswith('_'):
+            raise ValueError("Attribure name must start with an underscore")
+
+        def deco(target):
+            if not isinstance(target, type):
+                raise TypeError("'@%s.register_type(...)' must be applied "
+                                "to a class, got %s object instead: %r" %
+                                (cls.__name__, type(target), target))
+
+            if not hasattr(target, '_new_type'):
+                raise TypeError("'@%s.register_type(...)'-decorated class "
+                                "must define a '_new_type' classmethod" %
+                                (cls.__name__,))
+
+            if hasattr(cls, attr) or attr in cls._types:
+                raise ValueError("%s class already has attribure '%s'" %
+                                 (cls.__name__, attr))
+
+            cls._types[attr] = target
+
+            return target
+
+        return deco
+
+    def __init__(self, fxn):
         super(Module, self).__init__()
 
-        self._name = init_fxn.__name__
-        module_type = type('Module_M%s' % (self._name,), (self.Type,),
-            dict(__slots__=(), _module=self, _module_name=self._name))
+        self._name = fxn.__name__
+        module_type = type('Module_M%s' % (self._name,),
+                           (self.Type,),
+                           dict(__slots__=(),
+                                _module=self,
+                                _module_name=self._name))
 
-        self._instance_type = _Instance._new_type(module_type, init_fxn)
-        self._optuple_type = _Optuple._new_type(module_type,
-            *self._options_defaults_from_fxn(init_fxn))
-
-        self._atom = _ModuleAtom(self)
+        for attr, cls in self._types.iteritems():
+            setattr(self, attr, cls._new_type(module_type, fxn))
 
     _options = property(attrgetter('_optuple_type._fields'))
+
+    def __call__(self, **kwargs):
+        return self._optuple_type._ellipsis._replace(**kwargs)
+
+    def _to_optuple(self):
+        return self._optuple_type._ellipsis
+
+    def _to_expr(self):
+        return self._atom
+
+    def __repr__(self):
+        return '%s(%s)' % (self._name, ', '.join(self._options))
+
+def module(fxn):
+    return update_wrapper(Module(fxn), fxn)
+
+@Module.register_type('_atom')
+class _ModuleAtom(Atom):
+    """Module-bound atom."""
+    __slots__ = ('_module',)
+
+    def __init__(self, module):
+        super(_ModuleAtom, self).__init__()
+        self._module = module
+
+    def eval(self, fxn, *args, **kwargs):
+        ret = fxn(self._module, *args, **kwargs)
+        return self if ret is None else ret
+
+    def __repr__(self):
+        return '%s' % (self._module._name,)
+
+    @classmethod
+    def _new_type(cls, module_type, *args):
+        return cls(module_type._module)
+
+@Module.register_type('_optuple_type')
+class _Optuple(Module.Type):
+    """Option tuple mixin type."""
+    __slots__ = ()
+
+    def _iter(self, with_ellipsis=False):
+        return (iter(self) if with_ellipsis else
+                (v for v in self if v is not Ellipsis))
+
+    def _iterpairs(self, with_ellipsis=False):
+        return self._izipwith(self._fields, with_ellipsis, swap=True)
+
+    def _izipwith(self, other, with_ellipsis=False, swap=False):
+        it = izip(self, other) if not swap else izip(other, self)
+        self_idx = int(bool(swap))
+        return (it if with_ellipsis else
+                (pair for pair in it if pair[self_idx] is not Ellipsis))
+
+    def _to_optuple(self):
+        return self
+
+    def __repr__(self):
+        return '%s(%s)' % (self._module._name,
+                           ', '.join('%s=%r' % pair
+                                     for pair in self._iterpairs()))
+
+    def __eq__(self, other):
+        return self._type_eq(other) and tuple.__eq__(self, other)
+    def __hash__(self):
+        return self._type_hash() ^ tuple.__hash__(self)
+
+    def _to_expr(self):
+        option_atoms = tuple(A(v) for v,A in self._izipwith(self._atom_types))
+        return (And._from_iterable(option_atoms) if option_atoms else
+                self._module._to_expr())
 
     @classmethod
     def _options_defaults_from_fxn(cls, fxn):
@@ -105,74 +209,9 @@ class Module(object):
 
         return options, defaults
 
-    def __call__(self, **kwargs):
-        return self._optuple_type._ellipsis._replace(**kwargs)
-
-    def _to_optuple(self):
-        return self._optuple_type._ellipsis
-
-    def _to_expr(self):
-        return self._atom
-
-    def __repr__(self):
-        return '%s(%s)' % (self._name, ', '.join(self._options))
-
-def module(fxn):
-    return update_wrapper(Module(fxn), fxn)
-
-class _ModuleAtom(Atom):
-    """Module-bound atom."""
-    __slots__ = ('_module',)
-
-    def __init__(self, module):
-        super(_ModuleAtom, self).__init__()
-        self._module = module
-
-    def eval(self, fxn, *args, **kwargs):
-        ret = fxn(self._module, *args, **kwargs)
-        return self if ret is None else ret
-
-    def __repr__(self):
-        return '%s' % (self._module._name,)
-
-
-class _Optuple(Module.Type):
-    """Option tuple mixin type."""
-    __slots__ = ()
-
-    def _iter(self, with_ellipsis=False):
-        return (iter(self) if with_ellipsis else
-                (v for v in self if v is not Ellipsis))
-
-    def _iterpairs(self, with_ellipsis=False):
-        return self._izipwith(self._fields, with_ellipsis, swap=True)
-
-    def _izipwith(self, other, with_ellipsis=False, swap=False):
-        it = izip(self, other) if not swap else izip(other, self)
-        self_idx = int(bool(swap))
-        return (it if with_ellipsis else
-                (pair for pair in it if pair[self_idx] is not Ellipsis))
-
-    def _to_optuple(self):
-        return self
-
-    def __repr__(self):
-        return '%s(%s)' % (self._module._name,
-                           ', '.join('%s=%r' % pair
-                                     for pair in self._iterpairs()))
-
-    def __eq__(self, other):
-        return self._type_eq(other) and tuple.__eq__(self, other)
-    def __hash__(self):
-        return self._type_hash() ^ tuple.__hash__(self)
-
-    def _to_expr(self):
-        option_atoms = tuple(A(v) for v,A in self._izipwith(self._atom_types))
-        return (And._from_iterable(option_atoms) if option_atoms else
-                self._module._to_expr())
-
     @classmethod
-    def _new_type(cls, module_type, options, defaults):
+    def _new_type(cls, module_type, fxn):
+        options, defaults = cls._options_defaults_from_fxn(fxn)
         assert len(options) == len(defaults)
 
         optype_base = namedtuple('_OptupleBase', options)
@@ -233,6 +272,7 @@ class _OptionAtom(Module.Type, Atom):
         return '%s(%s=%r)' % (self._module._name, self._option, self._value)
 
 
+@Module.register_type('_instance_type')
 class _Instance(Module.Type):
     """docstring for _Instance"""
 
@@ -487,10 +527,10 @@ class _Instance(Module.Type):
         return '<Instance %r with %r>' % (self._optuple, self._constraints)
 
     @classmethod
-    def _new_type(cls, module_type, init_fxn):
+    def _new_type(cls, module_type, fxn):
         return type('Instance_M%s' % (module_type._module_name,),
                     (cls, module_type),
-                    dict(__slots__=(), _init_fxn=init_fxn))
+                    dict(__slots__=(), _init_fxn=fxn))
 
 
 class IncrementalDict(dict):
@@ -536,6 +576,7 @@ class IncrementalDict(dict):
     def __repr__(self):
         return (dict.__repr__(self) if self._parent is None else
                 '%r <- %s' % (self._parent, dict.__repr__(self)))
+
 
 class Constraints(object):
     __slots__ = ('_dict',)
@@ -630,6 +671,7 @@ class Constraints(object):
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self._dict)
+
 
 class FrozenConstraints(Constraints):
     """
