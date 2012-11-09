@@ -7,8 +7,7 @@ from unittest import TestCase
 # from mock import Mock, patch
 
 from mybuild.core import module
-from mybuild.core import Constraints
-# from mybuild.constraints import Constraints
+from mybuild.constraints import Constraints
 from mybuild.context import Context
 
 

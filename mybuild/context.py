@@ -12,12 +12,15 @@ from collections import defaultdict
 from collections import deque
 from collections import MutableSet
 from contextlib import contextmanager
+from functools import partial
 from itertools import izip
 from itertools import izip_longest
 from itertools import product
 
 from core import *
+from constraints import *
 from expr import *
+from util import singleton
 
 import logs as log
 
