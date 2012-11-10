@@ -165,7 +165,8 @@ class IncrementalDict(dict):
                 parent = parent._parent
             except AttributeError:
                 assert parent is None
-                raise InternalError("'until_parent' must be a parent ""of this dict")
+                raise InternalError("'until_parent' must be a parent "
+                                    "of this dict")
 
             yield current
 
