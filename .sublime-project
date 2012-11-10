@@ -14,6 +14,14 @@
 
 			"cmd": ["python", "-u", "$file"],
 			"working_dir": "${project_path}"
+		},
+		{
+			"name": "Python with Coverage (project-specific)",
+			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
+			"selector": "source.python",
+
+			"cmd": ["coverage", "run", "$file"],
+			"working_dir": "${project_path}"
 		}
 	]
 }

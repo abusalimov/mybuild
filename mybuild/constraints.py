@@ -278,11 +278,11 @@ class ModuleConstraint(ConstraintBase):
             return getattr(self._options, option).check(other_value)
 
     def constrain_option(self, option, new_value, negated=False):
-        if not negated:
-            self.constrain(True)
-
         if self._value is not False:
             getattr(self._options, option).constrain(new_value, negated)
+
+        if not negated:
+            self.constrain(True)
 
     def constrain(self, new_value, negated=False):
         assert isinstance(new_value, bool)
