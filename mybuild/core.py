@@ -16,7 +16,6 @@ __all__ = [
 
 
 from collections import namedtuple
-from functools import update_wrapper
 from inspect import getargspec
 from itertools import chain
 from itertools import izip
@@ -26,34 +25,36 @@ from operator import attrgetter
 from expr import *
 
 
-def module(fxn):
-    return update_wrapper(Module(fxn), fxn)
+class InstanceBoundTypeMixin(object):
+    """
+    Base class for per-instance types, that is types defined for each instance
+    of the target type.
+
+    Do not use without mixing in a instance-private type.
+    """
+    __slots__ = ()
+
+    # These may be too strict checks, but it is OK,
+    # since types are mapped to the corresponding instances one-to-one.
+    _type_eq   = classmethod(lambda cls, other: cls is type(other))
+    _type_hash = classmethod(id)
+
+    def __eq__(self, other):
+        return self._type_eq(type(other))
+    def __hash__(self):
+        return self._type_hash()
 
 
-class Module(object):
-    """A basic building block of Mybuild."""
+class DynamicAttrsMixin(object):
+    """
+    Provides a facility for other types to register themselves to be notified
+    each time when a new instance of this type gets created.
+    """
 
-    class Type(object):
-        """Base (marker) class for per-module types.
-
-        Do not inherit or instantiate directly.
-        """
-        __slots__ = ()
-
-        # These may be too strict checks, but it is OK,
-        # since types are mapped to their modules one-to-one.
-        _type_eq   = classmethod(lambda cls, other: cls is type(other))
-        _type_hash = classmethod(id)
-
-        def __eq__(self, other):
-            return self._type_eq(type(other))
-        def __hash__(self):
-            return self._type_hash()
-
-    _types = {} # attr-to-type
+    _registered_attrs = {} # attr-to-method
 
     @classmethod
-    def register_type(cls, attr):
+    def register_attr(cls, attr, factory_method='_new_type'):
         """Deco maker for per-module classes."""
 
         if not isinstance(attr, basestring):
@@ -65,24 +66,35 @@ class Module(object):
 
         def deco(target):
             if not isinstance(target, type):
-                raise TypeError("'@%s.register_type(...)' must be applied "
+                raise TypeError("'@%s.register_attr(...)' must be applied "
                                 "to a class, got %s object instead: %r" %
                                 (cls.__name__, type(target), target))
 
-            if not hasattr(target, '_new_type'):
-                raise TypeError("'@%s.register_type(...)'-decorated class "
-                                "must define a '_new_type' classmethod" %
-                                (cls.__name__,))
+            if not hasattr(target, factory_method):
+                raise TypeError("'@%s.register_attr(...)'-decorated class "
+                                "must define a '%s' classmethod" %
+                                (cls.__name__, factory_method))
 
-            if hasattr(cls, attr) or attr in cls._types:
+            if hasattr(cls, attr) or attr in cls._registered_attrs:
                 raise ValueError("%s class already has attribure '%s'" %
                                  (cls.__name__, attr))
 
-            cls._types[attr] = target
+            cls._registered_attrs[attr] = getattr(target, factory_method)
 
             return target
 
         return deco
+
+    def _instantiate_attrs(self, *args, **kwargs):
+        for attr, factory in self._registered_attrs.iteritems():
+            setattr(self, attr, factory(*args, **kwargs))
+
+
+class Module(DynamicAttrsMixin):
+    """A basic building block of Mybuild."""
+
+    class Type(InstanceBoundTypeMixin):
+        pass
 
     def __init__(self, fxn):
         super(Module, self).__init__()
@@ -94,8 +106,7 @@ class Module(object):
                                 _module=self,
                                 _module_name=self._name))
 
-        for attr, cls in self._types.iteritems():
-            setattr(self, attr, cls._new_type(module_type, fxn))
+        self._instantiate_attrs(module_type, fxn)
 
     _options = property(attrgetter('_optuple_type._fields'))
 
@@ -111,7 +122,7 @@ class Module(object):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options))
 
-@Module.register_type('_atom')
+@Module.register_attr('_atom')
 class ModuleAtom(Atom):
     """Module-bound atom."""
     __slots__ = ('_module',)
@@ -132,7 +143,7 @@ class ModuleAtom(Atom):
         return cls(module_type._module)
 
 
-@Module.register_type('_optuple_type')
+@Module.register_attr('_optuple_type')
 class Optuple(Module.Type):
     """Option tuple mixin type."""
     __slots__ = ()
@@ -232,6 +243,44 @@ class Optuple(Module.Type):
         optype_base._fields = new_type._make(options)
 
         return new_type
+
+
+class Option(object):
+
+    def __init__(self, *values, **setup_flags):
+        super(Option, self).__init__()
+
+        self._default = values[0] if values else Ellipsis
+        self._allow_others = True
+
+        self._values = frozenset(values)
+        if Ellipsis in self._values:
+            raise ValueError('Ellipsis value is not permitted')
+
+        self.set(**setup_flags)
+
+    def set(self, **flags):
+        if 'default' in flags:
+            default = flags.pop('default')
+            self._default = default
+            if default is not Ellipsis and default not in self._values:
+                self._values |= {default}
+
+        if 'allow_others' in flags:
+            self._allow_others = flags.pop('allow_others')
+
+        if flags:
+            raise TypeError('Unrecognized flags: %s' % ', '.join(flags.keys()))
+
+        return self
+
+    @classmethod
+    def enum(cls, *values):
+        return cls(*values, allow_others=False)
+
+    @classmethod
+    def bool(cls, default=False):
+        return cls(True, False, default=default, allow_others=False)
 
 class OptionAtom(Module.Type, Atom):
     """A single bound option."""

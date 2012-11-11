@@ -36,10 +36,8 @@ class Context(object):
         self._reent_locked = False
 
     def post(self, fxn):
-        self._job_queue.append(fxn)
-
-        with self.reent_lock():
-            pass # to flush the queue
+        with self.reent_lock(): # to flush the queue on block exit
+            self._job_queue.append(fxn)
 
     @contextmanager
     def reent_lock(self):
@@ -161,7 +159,7 @@ class OptionContext(MutableSet):
         return '<OptionContext %r>' % (self._set,)
 
 
-@Module.register_type('_instance_type')
+@Module.register_attr('_instance_type')
 class Instance(Module.Type):
     """docstring for Instance"""
 

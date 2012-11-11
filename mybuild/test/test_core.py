@@ -6,7 +6,7 @@ import unittest
 from unittest import TestCase
 # from mock import Mock, patch
 
-from mybuild.core import module
+from mybuild import module
 from mybuild.context import Context
 
 

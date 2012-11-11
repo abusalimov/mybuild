@@ -6,7 +6,7 @@ from contextlib import contextmanager
 import unittest
 from unittest import TestCase
 
-from mybuild.core import module
+from mybuild import module
 from mybuild.constraints import Constraints
 from mybuild.constraints import ConstraintError
 
