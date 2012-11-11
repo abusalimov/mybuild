@@ -53,6 +53,11 @@ class DynamicAttrsMixin(object):
 
     _registered_attrs = {} # attr-to-method
 
+    def __init__(self, *args, **kwargs):
+        super(DynamicAttrsMixin, self).__init__()
+        for attr, factory in self._registered_attrs.iteritems():
+            setattr(self, attr, factory(*args, **kwargs))
+
     @classmethod
     def register_attr(cls, attr, factory_method='_new_type'):
         """Deco maker for per-module classes."""
@@ -85,10 +90,6 @@ class DynamicAttrsMixin(object):
 
         return deco
 
-    def _instantiate_attrs(self, *args, **kwargs):
-        for attr, factory in self._registered_attrs.iteritems():
-            setattr(self, attr, factory(*args, **kwargs))
-
 
 class Module(DynamicAttrsMixin):
     """A basic building block of Mybuild."""
@@ -97,8 +98,6 @@ class Module(DynamicAttrsMixin):
         pass
 
     def __init__(self, fxn):
-        super(Module, self).__init__()
-
         self._name = fxn.__name__
         module_type = type('Module_M%s' % (self._name,),
                            (self.Type,),
@@ -106,7 +105,7 @@ class Module(DynamicAttrsMixin):
                                 _module=self,
                                 _module_name=self._name))
 
-        self._instantiate_attrs(module_type, fxn)
+        super(Module, self).__init__(module_type, fxn)
 
     _options = property(attrgetter('_optuple_type._fields'))
 
@@ -180,7 +179,7 @@ class Optuple(Module.Type):
                 self._module._to_expr())
 
     @classmethod
-    def _options_defaults_from_fxn(cls, fxn):
+    def _options_from_fxn(cls, fxn):
         """Converts a function argspec into a (options, defaults) tuple."""
 
         args, va, kw, defaults = getargspec(fxn)
@@ -200,32 +199,31 @@ class Optuple(Module.Type):
             raise TypeError(
                 'The first argument cannot have a default value: %r' % args[0])
 
-        options = args[1:]
-        for o in options:
-            if not isinstance(o, basestring):
+        option_args = args[1:]
+        for a in option_args:
+            if not isinstance(a, basestring):
                 raise TypeError(
-                    'Tuple parameter unpacking is not supported: %r' % o)
-            if o.startswith('_'):
+                    'Tuple parameter unpacking is not supported: %r' % a)
+            if a.startswith('_'):
                 raise TypeError(
-                    'Option name cannot start with an underscore: %r' % o)
+                    'Option name cannot start with an underscore: %r' % a)
 
-        head_defaults = repeat((), len(options)-len(defaults))
-        tail_defaults = ((v, not v) if isinstance(v, bool) else (v,)
-            for v in defaults)
-        defaults = tuple(chain(head_defaults, tail_defaults))
+        head = (Option() for _ in xrange(len(defaults), len(option_args)))
+        tail = (o if isinstance(o, Option) else Option(o) for o in defaults)
 
-        return options, defaults
+        options = tuple(o.set(_name=a)
+                        for o,a in izip(chain(head, tail), option_args))
+
+        return options
 
     @classmethod
     def _new_type(cls, module_type, fxn):
-        options, defaults = cls._options_defaults_from_fxn(fxn)
-        assert len(options) == len(defaults)
+        options = cls._options_from_fxn(fxn)
 
-        optype_base = namedtuple('OptupleBase', options)
+        optype_base = namedtuple('OptupleBase', (o._name for o in options))
 
-        bogus_attrs = set(a for a in dir(optype_base)
-            if not a.startswith('_'))
-        bogus_attrs.difference_update(options)
+        bogus_attrs = set(a for a in dir(optype_base) if not a.startswith('_'))
+        bogus_attrs.difference_update(optype_base._fields)
 
         for attr in bogus_attrs:
             setattr(optype_base, attr, property())
@@ -234,13 +232,13 @@ class Optuple(Module.Type):
                         (cls, optype_base, module_type),
                         dict(__slots__=()))
 
-        new_type._defaults = new_type._make(defaults)
+        new_type._options = new_type._make(options)
         new_type._ellipsis = new_type._make(repeat(Ellipsis, len(options)))
         new_type._atom_types = \
-            new_type._make(OptionAtom._new_type(module_type, o)
+            new_type._make(OptionAtom._new_type(module_type, o._name)
                            for o in options)
 
-        optype_base._fields = new_type._make(options)
+        optype_base._fields = new_type._make(optype_base._fields)
 
         return new_type
 

@@ -83,31 +83,34 @@ class ModuleContext(object):
         self.build_ctx = build_ctx
         self.module = module
 
-        init_optuple = module._optuple_type._defaults
-        self.vsets = init_optuple._make(OptionContext() for _ in init_optuple)
+        options = module._optuple_type._defaults
+        self.vsets = options._make(OptionContext() for _ in options)
 
         self.instances = defaultdict(set) # { optuple : { instances... } }
 
-        for a_tuple in izip_longest(*init_optuple, fillvalue=Ellipsis):
+        for a_tuple in izip_longest(*options, fillvalue=Ellipsis):
             self.consider(a_tuple)
 
     def consider(self, optuple):
-        vsets_optuple = self.vsets
 
-        what_to_extend = ((vset,v)
-            for vset,v in izip(vsets_optuple, optuple)
-            if v is not Ellipsis and v not in vset)
+        what_to_extend = ((vset,v) for vset,v in izip(self.vsets, optuple)
+                          if v is not Ellipsis and v not in vset)
 
         for vset_to_extend, value in what_to_extend:
-            log.debug('mybuild: extending %r with %r', vset_to_extend, value)
-            vset_to_extend.add(value)
+            self._extend_vset(vset_to_extend, (value,))
 
-            sliced_vsets = (vset if vset is not vset_to_extend else (value,)
-                for vset in vsets_optuple)
+    def _extend_vset(self, vset_to_extend, values):
+        log.debug('mybuild: extending %r with %r', vset_to_extend, values)
+        vset_to_extend.update(values)
 
-            for new_tuple in product(*sliced_vsets):
-                self.module._instance_type._post_new(self.build_ctx,
-                    vsets_optuple._make(new_tuple))
+        vsets_optuple = self.vsets
+
+        sliced_vsets = (vset if vset is not vset_to_extend else values
+                        for vset in vsets_optuple)
+
+        for new_tuple in product(*sliced_vsets):
+            self.module._instance_type._post_new(self.build_ctx,
+                vsets_optuple._make(new_tuple))
 
     def register(self, instance):
         self.instances[instance._optuple].add(instance)
