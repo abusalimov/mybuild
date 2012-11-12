@@ -83,22 +83,20 @@ class ModuleContext(object):
         self.build_ctx = build_ctx
         self.module = module
 
+        self.instances = defaultdict(set) # { optuple : { instances... } }
+
         options = module._options
         self.vsets = options._make(OptionContext() for _ in options)
 
-        self.instances = defaultdict(set) # { optuple : { instances... } }
-
-        for a_tuple in izip_longest(*(o._values for o in options),
-                                    fillvalue=Ellipsis):
-            self.consider(a_tuple)
+        for vset, option in izip(self.vsets, options):
+            self._extend_vset(vset, option._values)
 
     def consider(self, optuple):
-
         what_to_extend = ((vset,v) for vset,v in izip(self.vsets, optuple)
                           if v is not Ellipsis and v not in vset)
 
-        for vset_to_extend, value in what_to_extend:
-            self._extend_vset(vset_to_extend, (value,))
+        for vset, value in what_to_extend:
+            self._extend_vset(vset, (value,))
 
     def _extend_vset(self, vset_to_extend, values):
         log.debug('mybuild: extending %r with %r', vset_to_extend, values)
