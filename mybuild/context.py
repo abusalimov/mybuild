@@ -169,7 +169,7 @@ class Instance(Module.Type):
 
     class _InstanceProxy(object):
         """docstring for _InstanceProxy"""
-        __slots__ = ('_owner_instance', '_optuple')
+        __slots__ = '_owner_instance', '_optuple'
 
         def __init__(self, owner_instance, optuple):
             super(Instance._InstanceProxy, self).__init__()

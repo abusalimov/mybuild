@@ -18,7 +18,7 @@ import logs as log
 
 
 class Constraints(object):
-    __slots__ = ('_dict',)
+    __slots__ = '_dict'
 
     def __init__(self, _dict=None):
         super(Constraints, self).__init__()
@@ -134,7 +134,7 @@ class FrozenConstraints(Constraints):
 
 class IncrementalDict(dict):
     """Delegates lookup for a missing key to the parent dictionary."""
-    __slots__ = ('_parent',)
+    __slots__ = '_parent'
 
     parent = property(attrgetter('_parent'))
 
@@ -180,7 +180,7 @@ class IncrementalDict(dict):
 
 class ConstraintBase(object):
     """A constraint holding a single value."""
-    __slots__ = ('_value',)
+    __slots__ = '_value'
 
     def __init__(self):
         super(ConstraintBase, self).__init__()
@@ -309,7 +309,7 @@ class ModuleConstraint(ConstraintBase):
 
 class OptionConstraint(ConstraintBase):
     """A constraint which supports additional exclusion set."""
-    __slots__ = ('_exclusion_set',)
+    __slots__ = '_exclusion_set'
 
     def __init__(self):
         super(OptionConstraint, self).__init__()

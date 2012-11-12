@@ -116,7 +116,7 @@ class ExprVisitor(object):
 
 class _LatticeOp(Expr):
     """Associative, commutative and idempotent operation."""
-    __slots__ = ('_operands',)
+    __slots__ = '_operands'
 
     operands = property(attrgetter('_operands'))
 
@@ -184,7 +184,7 @@ class _AtomicExpr(Expr):
         yield self.atom
 
 class Not(_AtomicExpr):
-    __slots__ = ('_atom',)
+    __slots__ = '_atom'
 
     atom = property(attrgetter('_atom'))
 

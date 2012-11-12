@@ -128,7 +128,7 @@ class Module(DynamicAttrsMixin):
 @Module.register_attr('_atom')
 class ModuleAtom(Atom):
     """Module-bound atom."""
-    __slots__ = ('_module',)
+    __slots__ = '_module'
 
     def __init__(self, module):
         super(ModuleAtom, self).__init__()
@@ -297,7 +297,7 @@ class Option(DynamicAttrsMixin):
 @Option.register_attr('_atom')
 class OptionAtom(Option.Type, Atom):
     """A single bound option."""
-    __slots__ = ('_value',)
+    __slots__ = '_value'
 
     value  = property(attrgetter('_value'))
     option = property(attrgetter('_option'))
