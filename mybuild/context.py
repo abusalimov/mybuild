@@ -77,10 +77,10 @@ class Context(object):
 class ModuleContext(object):
     """docstring for ModuleContext"""
 
-    def __init__(self, build_ctx, module):
+    def __init__(self, context, module):
         super(ModuleContext, self).__init__()
 
-        self.build_ctx = build_ctx
+        self.context = context
         self.module = module
 
         self.instances = defaultdict(set) # { optuple : { instances... } }
@@ -108,7 +108,7 @@ class ModuleContext(object):
                         for vset in vsets_optuple)
 
         for new_tuple in product(*sliced_vsets):
-            self.module._instance_type._post_new(self.build_ctx,
+            self.module._instance_type._post_new(self.context,
                 vsets_optuple._make(new_tuple))
 
     def register(self, instance):
@@ -183,11 +183,11 @@ class Instance(Module.Type):
 
             return self._owner_instance._decide_option(self._optuple, attr)
 
-    def __init__(self, build_ctx, optuple, constraints):
+    def __init__(self, context, optuple, constraints):
         """Private constructor. Use '_post_new' instead."""
         super(Instance, self).__init__()
 
-        self._build_ctx = build_ctx
+        self._context = context
         self._optuple = optuple
         self._constraints = constraints
 
@@ -201,23 +201,23 @@ class Instance(Module.Type):
                 log.debug("mybuild: succeeded %r", self)
 
     @classmethod
-    def _post_new(cls, build_ctx, optuple, _constraints=None):
+    def _post_new(cls, context, optuple, _constraints=None):
         if _constraints is None:
             _constraints = Constraints()
 
         def new():
             try:
-                instance = cls(build_ctx, optuple, _constraints)
+                instance = cls(context, optuple, _constraints)
             except InstanceError:
                 pass
             else:
-                build_ctx.register(instance)
+                context.register(instance)
 
-        build_ctx.post(new)
+        context.post(new)
 
     def ask(self, mslice):
         optuple = mslice._to_optuple()
-        self._build_ctx.consider(optuple)
+        self._context.consider(optuple)
         return self._InstanceProxy(self, optuple)
 
     @singleton
@@ -352,7 +352,7 @@ class Instance(Module.Type):
             # for case when the whole module has been previously excluded.
             self.constrain(module)
 
-            ctx = self._build_ctx.context_for(module)
+            ctx = self._context.context_for(module)
             vset = ctx.vset_for(option)
 
             vset.subscribe(self, partial(self._fork_and_spawn,
@@ -410,7 +410,7 @@ class Instance(Module.Type):
 
     def _spawn(self, constraints):
         log.debug('mybuild: spawn %r', constraints)
-        self._post_new(self._build_ctx, self._optuple, constraints)
+        self._post_new(self._context, self._optuple, constraints)
 
     def __repr__(self):
         return '<Instance %r with %r>' % (self._optuple, self._constraints)
