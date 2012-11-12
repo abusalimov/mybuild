@@ -51,44 +51,50 @@ class DynamicAttrsMixin(object):
     each time when a new instance of this type gets created.
     """
 
-    _registered_attrs = {} # attr-to-method
+    class __metaclass__(type):
+        # TODO mixing in a metaclass looks like a not goog idea... -- Eldar
 
-    def __init__(self, *args, **kwargs):
-        super(DynamicAttrsMixin, self).__init__()
-        for attr, factory in self._registered_attrs.iteritems():
-            setattr(self, attr, factory(*args, **kwargs))
+        def __init__(cls, *args, **kwargs):
+            type.__init__(cls, *args, **kwargs)
+            cls._registered_attrs = {} # attr-to-method
 
-    @classmethod
-    def register_attr(cls, attr, factory_method='_new_type'):
-        """Deco maker for per-module classes."""
+        def register_attr(cls, attr, factory_method='_new_type'):
+            """Deco maker for per-module classes."""
 
-        if not isinstance(attr, basestring):
-            raise TypeError("Attribure name must be a string, "
-                            "got %s object instead: %r" % (type(attr), attr))
+            if not isinstance(attr, basestring):
+                raise TypeError("Attribure name must be a string, "
+                                "got %s object instead: %r" %
+                                (type(attr), attr))
 
-        if not attr.startswith('_'):
-            raise ValueError("Attribure name must start with an underscore")
+            if not attr.startswith('_'):
+                raise ValueError("Attribute name must start with underscore")
 
-        def deco(target):
-            if not isinstance(target, type):
-                raise TypeError("'@%s.register_attr(...)' must be applied "
-                                "to a class, got %s object instead: %r" %
-                                (cls.__name__, type(target), target))
+            def deco(target):
+                if not isinstance(target, type):
+                    raise TypeError("'@%s.register_attr(...)' must be applied "
+                                    "to a class, got %s object instead: %r" %
+                                    (cls.__name__, type(target), target))
 
-            if not hasattr(target, factory_method):
-                raise TypeError("'@%s.register_attr(...)'-decorated class "
-                                "must define a '%s' classmethod" %
-                                (cls.__name__, factory_method))
+                if not hasattr(target, factory_method):
+                    raise TypeError("'@%s.register_attr(...)'-decorated class "
+                                    "must define a '%s' classmethod" %
+                                    (cls.__name__, factory_method))
 
-            if hasattr(cls, attr) or attr in cls._registered_attrs:
-                raise ValueError("%s class already has attribure '%s'" %
-                                 (cls.__name__, attr))
+                if hasattr(cls, attr) or attr in cls._registered_attrs:
+                    raise ValueError("%s class already has attribure '%s'" %
+                                     (cls.__name__, attr))
 
-            cls._registered_attrs[attr] = getattr(target, factory_method)
+                cls._registered_attrs[attr] = getattr(target, factory_method)
 
-            return target
+                return target
 
-        return deco
+            return deco
+
+    def _init_attrs(self, *args, **kwargs):
+        for cls in type(self).__mro__:
+            if isinstance(cls, self.__metaclass__):
+                for attr, factory in cls._registered_attrs.iteritems():
+                    setattr(self, attr, factory(*args, **kwargs))
 
 
 class Module(DynamicAttrsMixin):
@@ -105,21 +111,19 @@ class Module(DynamicAttrsMixin):
                                 _module=self,
                                 _module_name=self._name))
 
-        super(Module, self).__init__(module_type, fxn)
-
-    _options = property(attrgetter('_optuple_type._fields'))
+        self._init_attrs(module_type, fxn)
 
     def __call__(self, **kwargs):
-        return self._optuple_type._ellipsis._replace(**kwargs)
+        return self._options._ellipsis._replace(**kwargs)
 
     def _to_optuple(self):
-        return self._optuple_type._ellipsis
+        return self._options._ellipsis
 
     def _to_expr(self):
         return self._atom
 
     def __repr__(self):
-        return '%s(%s)' % (self._name, ', '.join(self._options))
+        return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
 @Module.register_attr('_atom')
 class ModuleAtom(Atom):
@@ -142,7 +146,7 @@ class ModuleAtom(Atom):
         return cls(module_type._module)
 
 
-@Module.register_attr('_optuple_type')
+@Module.register_attr('_options')
 class Optuple(Module.Type):
     """Option tuple mixin type."""
     __slots__ = ()
@@ -174,8 +178,8 @@ class Optuple(Module.Type):
         return self._type_hash() ^ tuple.__hash__(self)
 
     def _to_expr(self):
-        option_atoms = tuple(A(v) for v,A in self._izipwith(self._atom_types))
-        return (And._from_iterable(option_atoms) if option_atoms else
+        atoms = tuple(o._atom(v) for v,o in self._izipwith(self._options))
+        return (And._from_iterable(atoms) if atoms else
                 self._module._to_expr())
 
     @classmethod
@@ -211,39 +215,37 @@ class Optuple(Module.Type):
         head = (Option() for _ in xrange(len(defaults), len(option_args)))
         tail = (o if isinstance(o, Option) else Option(o) for o in defaults)
 
-        options = tuple(o.set(_name=a)
-                        for o,a in izip(chain(head, tail), option_args))
-
-        return options
+        return tuple(o.set(_name=a)
+                     for o,a in izip(chain(head, tail), option_args))
 
     @classmethod
     def _new_type(cls, module_type, fxn):
         options = cls._options_from_fxn(fxn)
 
-        optype_base = namedtuple('OptupleBase', (o._name for o in options))
+        optuple_base = namedtuple('OptupleBase', (o._name for o in options))
 
-        bogus_attrs = set(a for a in dir(optype_base) if not a.startswith('_'))
-        bogus_attrs.difference_update(optype_base._fields)
-
+        bogus_attrs = set(a for a in dir(optuple_base)
+                          if not a.startswith('_'))
+        bogus_attrs.difference_update(optuple_base._fields)
         for attr in bogus_attrs:
-            setattr(optype_base, attr, property())
+            setattr(optuple_base, attr, property())
 
         new_type = type('Optuple_M%s' % (module_type._module_name,),
-                        (cls, optype_base, module_type),
+                        (cls, optuple_base, module_type),
                         dict(__slots__=()))
 
-        new_type._options = new_type._make(options)
+        optuple_base._fields = new_type._make(optuple_base._fields)
         new_type._ellipsis = new_type._make(repeat(Ellipsis, len(options)))
-        new_type._atom_types = \
-            new_type._make(OptionAtom._new_type(module_type, o._name)
-                           for o in options)
+        new_type._options = new_type._make(o._init_types(module_type)
+                                           for o in options)
 
-        optype_base._fields = new_type._make(optype_base._fields)
-
-        return new_type
+        return new_type._options
 
 
-class Option(object):
+class Option(DynamicAttrsMixin):
+
+    class Type(Module.Type):
+        pass
 
     def __init__(self, *values, **setup_flags):
         super(Option, self).__init__()
@@ -257,6 +259,16 @@ class Option(object):
 
         self.set(**setup_flags)
 
+    def _init_types(self, module_type):
+        option_type = type('Option_M%s_O%s' % (module_type._module_name,
+                                               self._name),
+                           (self.Type, module_type),
+                           dict(__slots__=(),
+                                _option=self,
+                                _option_name=self._name))
+        self._init_attrs(option_type)
+        return self
+
     def set(self, **flags):
         if 'default' in flags:
             default = flags.pop('default')
@@ -264,8 +276,9 @@ class Option(object):
             if default is not Ellipsis and default not in self._values:
                 self._values |= {default}
 
-        if 'allow_others' in flags:
-            self._allow_others = flags.pop('allow_others')
+        for attr in 'allow_others', '_name':
+            if attr in flags:
+                setattr(self, attr, flags.pop(attr))
 
         if flags:
             raise TypeError('Unrecognized flags: %s' % ', '.join(flags.keys()))
@@ -280,9 +293,10 @@ class Option(object):
     def bool(cls, default=False):
         return cls(True, False, default=default, allow_others=False)
 
-class OptionAtom(Module.Type, Atom):
+@Option.register_attr('_atom')
+class OptionAtom(Option.Type, Atom):
     """A single bound option."""
-    __slots__ = ('_value')
+    __slots__ = ('_value',)
 
     value  = property(attrgetter('_value'))
     option = property(attrgetter('_option'))
@@ -297,7 +311,7 @@ class OptionAtom(Module.Type, Atom):
         return self._type_hash() ^ hash(self._value)
 
     def eval(self, fxn, *args, **kwargs):
-        ret = fxn(self._module, option=self._option, value=self.value,
+        ret = fxn(self._module, option=self._option_name, value=self.value,
                 *args, **kwargs)
         return self if ret is None else ret
 
@@ -306,10 +320,11 @@ class OptionAtom(Module.Type, Atom):
         return cls(new_value)
 
     @classmethod
-    def _new_type(cls, module_type, option):
-        return type('OptionAtom_M%s_O%s' % (module_type._module_name, option),
-                    (cls, module_type),
-                    dict(__slots__=(), _option=option))
+    def _new_type(cls, option_type):
+        return type('OptionAtom_M%s_O%s' % (option_type._module_name,
+                                            option_type._option_name),
+                    (cls, option_type),
+                    dict(__slots__=()))
 
     def __repr__(self):
         return '%s(%s=%r)' % (self._module._name, self._option, self._value)

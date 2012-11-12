@@ -242,7 +242,7 @@ class ModuleConstraint(ConstraintBase):
 
     def __init__(self, module):
         super(ModuleConstraint, self).__init__()
-        optuple = module._optuple_type._ellipsis
+        optuple = module._options
         self._options = optuple._make(OptionConstraint() for _ in optuple)
 
     def clone(self):
@@ -271,7 +271,6 @@ class ModuleConstraint(ConstraintBase):
         if self._value is False:
             raise ConstraintError('Getting an option '
                                   'of a definitely excluded module')
-
         return getattr(self._options, option).get()
 
     def check_option(self, option, other_value):

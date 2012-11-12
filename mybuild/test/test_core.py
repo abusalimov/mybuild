@@ -23,7 +23,7 @@ class ModuleTestCase(TestCase):
         @module
         def m(self, foo, bar):
             pass
-        self.assertEqual(tuple(m._options), ('foo', 'bar'))
+        self.assertEqual(tuple(m._options._fields), ('foo', 'bar'))
 
     def test_func_with_starargs(self):
         """Module function must not declare neither *args nor **kwargs."""

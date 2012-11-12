@@ -83,12 +83,13 @@ class ModuleContext(object):
         self.build_ctx = build_ctx
         self.module = module
 
-        options = module._optuple_type._defaults
+        options = module._options
         self.vsets = options._make(OptionContext() for _ in options)
 
         self.instances = defaultdict(set) # { optuple : { instances... } }
 
-        for a_tuple in izip_longest(*options, fillvalue=Ellipsis):
+        for a_tuple in izip_longest(*(o._values for o in options),
+                                    fillvalue=Ellipsis):
             self.consider(a_tuple)
 
     def consider(self, optuple):
@@ -101,7 +102,7 @@ class ModuleContext(object):
 
     def _extend_vset(self, vset_to_extend, values):
         log.debug('mybuild: extending %r with %r', vset_to_extend, values)
-        vset_to_extend.update(values)
+        vset_to_extend |= values
 
         vsets_optuple = self.vsets
 
