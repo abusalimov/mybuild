@@ -235,10 +235,7 @@ class ConstraintBase(object):
 
 class ModuleConstraint(ConstraintBase):
     """ModuleConstraint vector."""
-    __slots__ = ('_options')
-
-    options = property(attrgetter('_options'))
-    _module = property(attrgetter('_options._module'))
+    __slots__ = '_options'
 
     def __init__(self, module):
         super(ModuleConstraint, self).__init__()

@@ -236,7 +236,8 @@ class Optuple(Module.Type):
 
         optuple_base._fields = new_type._make(optuple_base._fields)
         new_type._ellipsis = new_type._make(repeat(Ellipsis, len(options)))
-        new_type._options = new_type._make(o._init_types(module_type)
+        new_type._options = new_type._make(o.set(_module=module_type._module)
+                                            ._init_types(module_type)
                                            for o in options)
 
         return new_type._options
@@ -276,7 +277,7 @@ class Option(DynamicAttrsMixin):
             if default is not Ellipsis and default not in self._values:
                 self._values |= {default}
 
-        for attr in 'allow_others', '_name':
+        for attr in 'allow_others', '_name', '_module':
             if attr in flags:
                 setattr(self, attr, flags.pop(attr))
 

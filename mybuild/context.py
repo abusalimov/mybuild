@@ -227,8 +227,8 @@ class Instance(Module.Type):
 
         def visit(self, expr, constraints):
             expr = exprify(expr)
-            log.debug('mybuild: visit [%r] %r with %r',
-                      type(expr), expr, constraints)
+            # log.debug('mybuild: visit [%r] %r with %r',
+            #           type(expr), expr, constraints)
             return ExprVisitor.visit(self,
                 exprify_eval(expr, constraints.check), constraints)
 
