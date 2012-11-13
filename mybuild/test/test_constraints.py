@@ -22,8 +22,7 @@ class ConstraintsTestCase(TestCase):
                     res = fxn()
                 except Exception as e:
                     res = type(e)
-                else:
-                    yield res
+                yield res
 
         before = tuple(iter_eval())
 
@@ -32,8 +31,9 @@ class ConstraintsTestCase(TestCase):
         finally:
             after = tuple(iter_eval())
 
-            for old, new in zip(before, after):
-                self.assertEqual(old, new)
+            #for old, new in zip(before, after):
+            #self.assertEqual(old, new)
+            self.assertEqual(before, after)
 
     def test_no_forks(self):
         @module
@@ -92,6 +92,67 @@ class ConstraintsTestCase(TestCase):
         with assert_pure(): self.assertTrue(c.check(m))
         with assert_pure(): self.assertTrue(c.check(m, 'foo', value=42))
         with assert_pure(): self.assertFalse(c.check(m, 'foo', value=17))
+        
+    def test_module_without_constrains(self):
+        @module
+        def m(self):
+            pass
+
+        # Test a fresh constraints object.
+        c = Constraints()
+        
+        c.constrain(m)
+        
+        self.assertTrue(c.check(m))
+       
+        
+
+    def test_identic_modules_with_static_constrains(self):
+        @module
+        def m(self, foo, bar):
+            pass
+        
+        # Test a fresh constraints object.
+        c = Constraints()
+        
+        # Test with an exact value for the option.
+        c.constrain(m, 'bar', value=2)
+
+        
+        self.assertTrue(c.check(m))        
+        
+        self.assertTrue(c.check(m, 'bar', value=2))
+        self.assertFalse(c.check(m, 'foo'))
+ 
+        c.constrain(m, 'foo', value=42)  
+        
+        
+        
+    def test_different_modules_with_static_constrains(self):
+        @module
+        def m1(self, foo, bar):
+            pass
+        
+        @module
+        def m2(self, foo, bar):
+            pass
+
+        # Test a fresh constraints object.
+        c = Constraints()
+        
+        # Test with an exact value for the option.
+        c.constrain(m1, 'bar', value=2)
+        
+        self.assertTrue(c.check(m1))        
+        self.assertTrue(c.check(m1, 'bar', value=2))
+        self.assertFalse(c.check(m1, 'foo'))
+        self.assertFalse(c.check(m2))
+        
+        c.constrain(m2, 'foo', value=42)
+        self.assertTrue(c.check(m2))
+        self.assertTrue(c.check(m2, 'foo', value=42))
+        self.assertFalse(c.check(m2, 'bar'))
+        self.assertFalse(c.check(m1, 'foo'))
 
 
 if __name__ == '__main__':
