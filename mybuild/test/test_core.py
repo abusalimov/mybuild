@@ -58,8 +58,7 @@ log.init_log()
 
 
 @module
-def conf(mod, z=None):
-    mod._context.consider(m0(o=42))
+def conf(mod):
     mod.constrain(m0(o=42))
 
 @module
@@ -72,7 +71,7 @@ def m0(mod, o):
 def m1(mod, x=11):
     mod0 = mod.ask(m0)
     if mod0.o < 43:
-        mod._context.consider(m0(o=mod0.o + 1))
+        mod._context.consider(m0, "o", mod0.o + 1)
     log.debug("myconstrain: <m1> x=%s, m0.o=%d" % (x, mod0.o))
 
 
@@ -80,7 +79,7 @@ def m1(mod, x=11):
 if __name__ == '__main__':
 
     ctx = Context()
-    ctx.consider(conf())
+    ctx.consider(conf)
 
     unittest.main()
 

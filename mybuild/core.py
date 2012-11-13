@@ -22,7 +22,7 @@ from itertools import izip
 from itertools import repeat
 from operator import attrgetter
 
-from expr import *
+import expr
 
 
 class InstanceBoundTypeMixin(object):
@@ -126,7 +126,7 @@ class Module(DynamicAttrsMixin):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
 @Module.register_attr('_atom')
-class ModuleAtom(Atom):
+class ModuleAtom(expr.Atom):
     """Module-bound atom."""
     __slots__ = '_module'
 
@@ -179,7 +179,7 @@ class Optuple(Module.Type):
 
     def _to_expr(self):
         atoms = tuple(o._atom(v) for v,o in self._izipwith(self._options))
-        return (And._from_iterable(atoms) if atoms else
+        return (expr.And._from_iterable(atoms) if atoms else
                 self._module._to_expr())
 
     @classmethod
@@ -295,7 +295,7 @@ class Option(DynamicAttrsMixin):
         return cls(True, False, default=default, allow_others=False)
 
 @Option.register_attr('_atom')
-class OptionAtom(Option.Type, Atom):
+class OptionAtom(Option.Type, expr.Atom):
     """A single bound option."""
     __slots__ = '_value'
 

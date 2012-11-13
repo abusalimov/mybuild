@@ -58,8 +58,10 @@ class Context(object):
             fxn = queue.popleft()
             fxn()
 
-    def consider(self, optuple):
-        self.context_for(optuple._module).consider(optuple)
+    def consider(self, module, option=None, value=True):
+        context = self.context_for(module)
+        if option is not None:
+            context.consider_option(option, value)
 
     def register(self, instance):
         self.context_for(instance._module).register(instance)
@@ -100,16 +102,16 @@ class ModuleContext(object):
         for new_tuple in product(*iterables):
             instantiate(self.context, make_optuple(new_tuple))
 
-    def consider(self, optuple):
-        for value, octx in optuple._izipwith(self._options):
-            if value in octx:
-                continue
+    def consider_option(self, option, value):
+        octx_to_extend = getattr(self._options, option)
+        if value in octx_to_extend:
+            return
 
-            log.debug('mybuild: extending %r with %r', octx, value)
-            octx.add(value)
+        log.debug('mybuild: extending %r with %r', octx_to_extend, value)
+        octx_to_extend.add(value)
 
-            self._instantiate_product(o if o is not octx else (value,)
-                                      for o in self._options)
+        self._instantiate_product(o if o is not octx_to_extend else (value,)
+                                  for o in self._options)
 
     def register(self, instance):
         self._instances[instance._optuple].add(instance)
@@ -207,7 +209,7 @@ class Instance(Module.Type):
 
     def ask(self, mslice):
         optuple = mslice._to_optuple()
-        self._context.consider(optuple)
+        exprify_eval(optuple, self._context.consider)
         return self._InstanceProxy(self, optuple)
 
     @singleton
@@ -293,6 +295,8 @@ class Instance(Module.Type):
             length, name, 's' if length != 1 else '', choices)
 
     def constrain(self, expr):
+        expr = exprify_eval(expr, self._context.consider)
+
         with log.debug('mybuild: constrain %r', expr):
             choices = self._build_visitor.visit(expr, self._constraints)
             self._log_build_choices('constrain', choices)
