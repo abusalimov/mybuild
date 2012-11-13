@@ -69,7 +69,10 @@ class Context(object):
             context = self._modules[module]
         except KeyError:
             with self.reent_lock():
-                context = self._modules[module] = ModuleContext(self,module)
+                context = self._modules[module] = ModuleContext(self, module)
+
+        if option is not None:
+            context = context.context_for(option)
 
         return context
 
@@ -81,73 +84,63 @@ class ModuleContext(object):
         super(ModuleContext, self).__init__()
 
         self.context = context
-        self.module = module
+        self._module = module
 
-        self.instances = defaultdict(set) # { optuple : { instances... } }
+        self._instances = defaultdict(set) # { optuple : { instances... } }
 
-        options = module._options
-        self.vsets = options._make(OptionContext() for _ in options)
+        self._options = module._options._make(OptionContext(o)
+                                              for o in module._options)
 
-        for vset, option in izip(self.vsets, options):
-            self._extend_vset(vset, option._values)
+        self._instantiate_product(self._options)
+
+    def _instantiate_product(self, iterables):
+        instantiate = self._module._instance_type._post_new
+        make_optuple = self._options._make
+
+        for new_tuple in product(*iterables):
+            instantiate(self.context, make_optuple(new_tuple))
 
     def consider(self, optuple):
-        what_to_extend = ((vset,v) for vset,v in izip(self.vsets, optuple)
-                          if v is not Ellipsis and v not in vset)
+        for value, octx in optuple._izipwith(self._options):
+            if value in octx:
+                continue
 
-        for vset, value in what_to_extend:
-            self._extend_vset(vset, (value,))
+            log.debug('mybuild: extending %r with %r', octx, value)
+            octx.add(value)
 
-    def _extend_vset(self, vset_to_extend, values):
-        log.debug('mybuild: extending %r with %r', vset_to_extend, values)
-        vset_to_extend |= values
-
-        vsets_optuple = self.vsets
-
-        sliced_vsets = (vset if vset is not vset_to_extend else values
-                        for vset in vsets_optuple)
-
-        for new_tuple in product(*sliced_vsets):
-            self.module._instance_type._post_new(self.context,
-                vsets_optuple._make(new_tuple))
+            self._instantiate_product(o if o is not octx else (value,)
+                                      for o in self._options)
 
     def register(self, instance):
-        self.instances[instance._optuple].add(instance)
+        self._instances[instance._optuple].add(instance)
 
-    def vset_for(self, option):
-        return getattr(self.vsets, option)
+    def context_for(self, option):
+        return getattr(self._options, option)
 
 
 class OptionContext(MutableSet):
     """docstring for OptionContext"""
 
-    def __init__(self):
+    def __init__(self, option):
         super(OptionContext, self).__init__()
-        self._set = set()
+        self._option = option
+        self._set = set(option._values)
         self._subscribers = []
-        self._subscribers_keys = set() # XXX
 
     def add(self, value):
         if value in self:
             return
         self._set.add(value)
 
-        subscribers = self._subscribers
-        self._subscribers = None # our methods are not reenterable
-
-        for s in subscribers:
+        for s in self._subscribers:
             s(value)
-
-        self._subscribers = subscribers
 
     def discard(self, value):
         if value not in self:
             return
         raise NotImplementedError
 
-    def subscribe(self, key, fxn):
-        assert key not in self._subscribers_keys
-        self._subscribers_keys.add(key)
+    def subscribe(self, fxn):
         self._subscribers.append(fxn)
 
     def __iter__(self):
@@ -178,9 +171,6 @@ class Instance(Module.Type):
             return self._owner_instance._decide(self._optuple)
 
         def __getattr__(self, attr):
-            if attr.startswith('_'):
-                return object.__getattr__(attr)
-
             return self._owner_instance._decide_option(self._optuple, attr)
 
     def __init__(self, context, optuple, constraints):
@@ -352,11 +342,10 @@ class Instance(Module.Type):
             # for case when the whole module has been previously excluded.
             self.constrain(module)
 
-            ctx = self._context.context_for(module)
-            vset = ctx.vset_for(option)
+            octx = self._context.context_for(module, option)
 
-            vset.subscribe(self, partial(self._fork_and_spawn,
-                self._constraints, module, option))
+            octx.subscribe(partial(self._fork_and_spawn,
+                                   self._constraints, module, option))
             # after that one shouldn't touch self._constraints anymore
             self._constraints.freeze()
 
@@ -368,7 +357,7 @@ class Instance(Module.Type):
                     except ConstraintError:
                         pass
 
-            self._constraints = self._take_one_spawn_rest(constrain_all(vset))
+            self._constraints = self._take_one_spawn_rest(constrain_all(octx))
 
             ret_value = self._constraints.get(module, option) # must not throw
 
