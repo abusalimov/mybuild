@@ -34,13 +34,17 @@ class Constraints(object):
         return Constraints(self._dict.fork())
 
     def merge_children(self, children, update_parent=True):
-        log.debug('mybuild: parent=%r, merging %r', self, children)
+        return self.merge(children, self, update_parent)
 
-        self_dict = self._dict
-        new_dict = self_dict.fork()
+    @classmethod
+    def merge(cls, children, until_parent=None, update_parent=True):
+        log.debug('mybuild: parent=%r, merging %r', until_parent, children)
+
+        parent_dict = until_parent._dict if until_parent is not None else None
+        new_dict = IncrementalDict(parent_dict)
 
         for child in children:
-            child.flatten(self, update_parent)
+            child.flatten(until_parent, update_parent)
             for key, value in child._dict.iteritems():
                 if key in new_dict:
                     new_dict[key].update(value)
