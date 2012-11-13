@@ -87,6 +87,22 @@ class Constraints(object):
         else:
             return constraint.check_option(option, value)
 
+    def check_optuple(self, optuple):
+        """
+        Returns tristate: boolean for a definite answer, None otherwise.
+        In case when answers for elements differ, precedence is the following:
+            False -> None -> True (like for AND, but with None alternative)
+        """
+        try:
+            constraint = self._dict[optuple._module]
+        except KeyError:
+            return None
+
+        # if option is None:
+        #     return constraint.check(value)
+        # else:
+        #     return constraint.check_option(option, value)
+
     def constrain(self, module, option=None, value=True, negated=False,
             fork=False):
         self = self if not fork else self.fork()
