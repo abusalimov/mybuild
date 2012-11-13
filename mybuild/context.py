@@ -78,6 +78,21 @@ class Context(object):
 
         return context
 
+    def build(self, conf_module):
+        context = self.context_for(conf_module)
+        # constraints = iter(context._instances).next()._constraints # XXX
+
+        # flat_constr = constraints.fork().flatten()
+        # for m in flat_constr._dict:
+        #     ctx = self.context_for(m)
+        #     for i in ctx._instances:
+        #         if
+        # try:
+        #     constraints = Constraints.merge(instance._constraints
+        #                                     for instance in context._instances)
+        # except Exception, e:
+        #     raise e
+
 
 class ModuleContext(object):
     """docstring for ModuleContext"""

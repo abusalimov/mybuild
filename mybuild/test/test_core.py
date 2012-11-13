@@ -78,8 +78,7 @@ def m1(mod, x=11):
 
 if __name__ == '__main__':
 
-    ctx = Context()
-    ctx.consider(conf)
+    Context().build(conf)
 
     unittest.main()
 
