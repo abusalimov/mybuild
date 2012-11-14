@@ -100,6 +100,37 @@ class ConstraintsTestCase(TestCase):
         with assert_pure(): self.assertIs(True, c.check(m, 'foo', value=42))
         with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=17))
 
+    def test_excluded_module(self):
+        @module
+        def m(self, foo, bar):
+            pass
+
+        assert_error = lambda: self.assertRaises(ConstraintError)
+        assert_pure  = lambda: self.assertInvariants()
+
+        # Test a newly created constraints object.
+        c = Constraints()
+
+        with assert_pure(), assert_error(): c.get(m)
+        with assert_pure(), assert_error(): c.get(m, 'foo')
+
+        with assert_pure(): self.assertIs(None, c.check(m))
+        with assert_pure(): self.assertIs(None, c.check(m, 'foo', value=42))
+        with assert_pure(): self.assertIs(None, c.check(m, 'foo', value=17))
+
+        # Test with a module definitely excluded.
+        c.constrain(m, value=False)
+
+        with assert_pure(): self.assertIs(False, c.get(m))
+        with assert_pure(), assert_error(): c.constrain(m, value=True)
+        with assert_pure(), assert_error(): c.get(m, 'foo')
+
+        with assert_pure(), assert_error(): c.constrain(m, 'foo', value=42)
+
+        with assert_pure(): self.assertIs(False, c.check(m))
+        with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=42))
+        with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=17))
+
     def test_module_without_constrains(self):
         @module
         def m(self):
