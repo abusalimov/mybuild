@@ -14,25 +14,31 @@ from mybuild.constraints import ConstraintError
 class ConstraintsTestCase(TestCase):
     """Tests for Constraints and friends."""
 
+    def setUp(self):
+        self.invariants = []
+
     @contextmanager
-    def assertLeftsUnchanged(self, fxns):
+    def assertInvariants(self, fxns=None):
+        if fxns is None:
+            fxns = self.invariants
+        fxns = tuple(fxns)
+
         def iter_eval():
             for fxn in fxns:
                 try:
                     res = fxn()
                 except Exception as e:
-                    res = type(e)
+                    res = type(e), e.args
                 yield res
 
         before = tuple(iter_eval())
 
         try:
             yield
+
         finally:
             after = tuple(iter_eval())
 
-            #for old, new in zip(before, after):
-            #self.assertEqual(old, new)
             self.assertEqual(before, after)
 
     def test_no_forks(self):
@@ -40,10 +46,9 @@ class ConstraintsTestCase(TestCase):
         def m(self, foo, bar):
             pass
 
-        # Test a fresh constraints object.
         c = Constraints()
 
-        invariants = [
+        self.invariants += [
             lambda: c.check(m),
             lambda: c.check(m, value=False),
             lambda: c.check(m, 'foo'),
@@ -55,7 +60,9 @@ class ConstraintsTestCase(TestCase):
         ]
 
         assert_error = lambda: self.assertRaises(ConstraintError)
-        assert_pure  = lambda: self.assertLeftsUnchanged(invariants)
+        assert_pure  = lambda: self.assertInvariants()
+
+        # Test a newly created constraints object.
 
         with assert_pure(), assert_error(): c.get(m)
         with assert_pure(), assert_error(): c.get(m, 'foo')
@@ -105,8 +112,6 @@ class ConstraintsTestCase(TestCase):
 
         self.assertIs(True, c.check(m))
 
-
-
     def test_identic_modules_with_static_constrains(self):
         @module
         def m(self, foo, bar):
@@ -118,15 +123,12 @@ class ConstraintsTestCase(TestCase):
         # Test with an exact value for the option.
         c.constrain(m, 'bar', value=2)
 
-
         self.assertIs(True, c.check(m))
 
         self.assertIs(True, c.check(m, 'bar', value=2))
         self.assertIs(None, c.check(m, 'foo'))
 
         c.constrain(m, 'foo', value=42)
-
-
 
     def test_different_modules_with_static_constrains(self):
         @module
