@@ -30,7 +30,8 @@ class Constraints(object):
         self.__class__ = FrozenConstraints
 
     def fork(self):
-        self.freeze()
+        if __debug__:
+            self.freeze()
         return Constraints(self._dict.fork())
 
     def merge_children(self, children, update_parent=True):
@@ -87,36 +88,34 @@ class Constraints(object):
         else:
             return constraint.check_option(option, value)
 
-    def check_optuple(self, optuple):
+    def check_mslice(self, mslice):
         """
         Returns tristate: boolean for a definite answer, None otherwise.
         In case when answers for elements differ, precedence is the following:
             False -> None -> True (like for AND, but with None alternative)
+        Undefined (Ellipsis) values of optuple are not considered.
         """
         try:
-            constraint = self._dict[optuple._module]
+            constraint = self._dict[mslice._module]
         except KeyError:
             return None
 
-        # if option is None:
-        #     return constraint.check(value)
-        # else:
-        #     return constraint.check_option(option, value)
+        return constraint.check_mslice(mslice)
 
     def constrain(self, module, option=None, value=True, negated=False,
             fork=False):
-        self = self if not fork else self.fork()
-        self_dict = self._dict
+        this = self if not fork else self.fork()
+        this_dict = this._dict
 
         try: # retrieve a privately owned constraint
-            constraint = self_dict[module]
+            constraint = self._dict[module]
 
         except KeyError: # if necessary, create it from scratch
-            constraint = self_dict[module] = ModuleConstraint(module)
+            constraint = this_dict[module] = ModuleConstraint(module)
 
         else: # or clone it from a parent
-            if module not in self_dict: # found in some parent
-                constraint = self_dict[module] = constraint.clone()
+            if fork or module not in this_dict: # found in some parent
+                constraint = this_dict[module] = constraint.clone()
 
         # Anyway, the 'constraint' is not shared with any other instance,
         # and we are free to modify it.
@@ -126,7 +125,28 @@ class Constraints(object):
         else:
             constraint.constrain_option(option, value, negated)
 
-        return self
+        return this
+
+    def constrain_mslice(self, mslice, negated=False, fork=False):
+        this = self if not fork else self.fork()
+        this_dict = this._dict
+
+        try: # retrieve a privately owned constraint
+            constraint = self._dict[module]
+
+        except KeyError: # if necessary, create it from scratch
+            constraint = this_dict[module] = ModuleConstraint(module)
+
+        else: # or clone it from a parent
+            if fork or module not in this_dict: # found in some parent
+                constraint = this_dict[module] = constraint.clone()
+
+        # Anyway, the 'constraint' is not shared with any other instance,
+        # and we are free to modify it.
+
+        constraint.constrain_mslice(mslice, negated)
+
+        return this
 
     def __repr__(self):
         return '<%s %r>' % (type(self).__name__, self._dict)
@@ -215,7 +235,7 @@ class ConstraintBase(object):
     def update(self, other):
         other_value = other._value
         if other_value is not Ellipsis:
-            self._set(other_value)
+            self.constrain(other_value)
 
     def get(self):
         value = self._value
@@ -291,8 +311,23 @@ class ModuleConstraint(ConstraintBase):
         return getattr(self._options, option).get()
 
     def check_option(self, option, other_value):
-        if self._value is not False:
-            return getattr(self._options, option).check(other_value)
+        if self._value is False:
+            return False
+        return getattr(self._options, option).check(other_value)
+
+    def check_mslice(self, mslice):
+        if self._value is False:
+            return False
+
+        check = True
+        for value, constraint in mslice._izipwith(self._options):
+            res = constraint.check(value)
+            if res is not True:
+                check = res
+            if check is False:
+                break
+
+        return check
 
     def constrain_option(self, option, new_value, negated=False):
         if self._value is not False:
@@ -300,6 +335,17 @@ class ModuleConstraint(ConstraintBase):
 
         if not negated:
             self.constrain(True)
+
+    def constrain_mslice(self, mslice, negated=False):
+        new_value = not negated
+        if self._value is False:
+            return False
+
+        commit_constraints = tuple(c.constrain(v, negated, defer=True)
+                                   for v,c in mslice._izipwith(self._options))
+
+        for commit in commit_constraints:
+            commit()
 
     def constrain(self, new_value, negated=False):
         assert isinstance(new_value, bool)
@@ -341,7 +387,7 @@ class OptionConstraint(ConstraintBase):
                                 self._exclusion_set.copy())
         return clone
 
-    def constrain(self, value, negated=False):
+    def constrain(self, value, negated=False, defer=False):
         assert value is not Ellipsis
 
         if not negated:
@@ -351,8 +397,9 @@ class OptionConstraint(ConstraintBase):
                                       'which was previously excluded: %r',
                                       value)
 
-            super(OptionConstraint, self).constrain(value)
-            self._exclusion_set = None
+            def commit():
+                super(OptionConstraint, self).constrain(value)
+                self._exclusion_set = None
 
         else: # negated, exclude the value
 
@@ -362,9 +409,23 @@ class OptionConstraint(ConstraintBase):
                                           value)
                 return # no need to exclude
 
-            if self._exclusion_set is None:
-                self._exclusion_set = set()
-            self._exclusion_set.add(value)
+            def commit():
+                if self._exclusion_set is None:
+                    self._exclusion_set = set()
+                self._exclusion_set.add(value)
+
+        if not defer:
+            commit()
+
+        else:
+            if __debug__:
+                def commit():
+                    try:
+                        self.constrain(value, negated)
+                    except ConstraintError:
+                        raise InternalError('Committing constraints '
+                                            'over a dirty state')
+            return commit
 
     def update(self, other):
         other_exclusion = other._exclusion_set
