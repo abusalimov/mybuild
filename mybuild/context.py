@@ -80,7 +80,7 @@ class Context(object):
 
     def build(self, conf_module):
         context = self.context_for(conf_module)
-        constraints = iter(context._instances).next()._constraints # XXX
+        # constraints = iter(context._instances).next()._constraints # XXX
 
         # flat_constr = constraints.fork().flatten()
         # for m in flat_constr._dict:

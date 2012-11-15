@@ -74,7 +74,7 @@ class Constraints(object):
         else:
             return constraint.get_option(option)
 
-    def check(self, module, option=None, value=True):
+    def check(self, module, option=None, value=Ellipsis):
         """
         Returns tristate: boolean for a definite answer, None otherwise.
         """
@@ -84,7 +84,7 @@ class Constraints(object):
             return None
 
         if option is None:
-            return constraint.check(value)
+            return constraint.check(True)
         else:
             return constraint.check_option(option, value)
 
@@ -120,16 +120,16 @@ class Constraints(object):
 
         return constraint
 
-    def constrain(self, module, option=None, value=True, negated=False,
+    def constrain(self, module, option=None, value=Ellipsis, negated=False,
             fork=False):
         this = self if not fork else self.fork()
 
         constraint = this._constraint_for(module)
 
         if option is None:
-            constraint.constrain(value, negated)
+            constraint.set(not negated)
         else:
-            constraint.constrain_option(option, value, negated)
+            constraint.set_option(option, value, negated)
 
         return this
 
@@ -139,8 +139,7 @@ class Constraints(object):
         this = self if not fork else self.fork()
 
         constraint = this._constraint_for(mslice._module)
-
-        constraint.constrain_mslice(mslice, negated, atomic)
+        constraint.set_mslice(mslice, negated, atomic)
 
         return this
 
@@ -156,16 +155,11 @@ class FrozenConstraints(Constraints):
     __slots__ = ()
 
     def __new__(cls, *args, **kwargs):
-        raise InternalError('Attempting to instantiate FrozenConstraints')
+        raise InternalError('Attempting to instantiate %s' % cls.__name__)
 
-    def constrain(self, module, option=None, value=True, negated=False,
-            fork=False):
-        if not fork:
-            raise InternalError('Attempting to constrain frozen constraints '
-                                'without forking')
-
-        return Constraints.constrain(self, module, option, value, negated,
-                                     fork=True)
+    def _constraint_for(self, module):
+        raise InternalError('Attempting to constrain %s without forking' %
+                            type(self).__name__)
 
 
 class IncrementalDict(dict):
@@ -231,7 +225,7 @@ class ConstraintBase(object):
     def update(self, other):
         other_value = other._value
         if other_value is not Ellipsis:
-            self.constrain(other_value)
+            self.set(other_value)
 
     def get(self):
         value = self._value
@@ -242,11 +236,13 @@ class ConstraintBase(object):
         return value
 
     def check(self, other_value):
+        assert other_value is not Ellipsis
+
         value = self._value
         if value is not Ellipsis:
             return value == other_value
 
-    def constrain(self, new_value):
+    def set(self, new_value):
         assert new_value is not Ellipsis
 
         old_value = self._value
@@ -297,8 +293,9 @@ class ModuleConstraint(ConstraintBase):
     def update(self, other):
         super(ModuleConstraint, self).update(other)
 
-        for self_option, other_option in izip(self._options, other._options):
-            self_option.update(other_option)
+        if self._value is not False:
+            for option, other_option in izip(self._options, other._options):
+                option.update(other_option)
 
     def get_option(self, option):
         if self._value is False:
@@ -316,7 +313,7 @@ class ModuleConstraint(ConstraintBase):
             return False
 
         check = True
-        for value, constraint in mslice._izipwith(self._options):
+        for constraint, value in mslice._izipwith(self._options, swap=True):
             res = constraint.check(value)
             if res is not True:
                 check = res
@@ -325,38 +322,37 @@ class ModuleConstraint(ConstraintBase):
 
         return check
 
-    def constrain_option(self, option, new_value, negated=False):
+    def set_option(self, option, new_value, negated=False):
         if self._value is not False:
-            getattr(self._options, option).constrain(new_value, negated)
+            getattr(self._options, option).set(new_value, negated)
 
         if not negated:
-            self.constrain(True)
+            self.set(True)
 
-    def constrain_mslice(self, mslice, negated=False, atomic=True):
+    def set_mslice(self, mslice, negated=False, atomic=True):
         option_constraints = tuple(mslice._izipwith(self._options, swap=True))
 
         if not option_constraints:
-            self.constrain(True, negated)
+            self.set(not negated)
             return
 
-        if atomic:
+        if atomic and self._value is not False:
             for constraint, value in option_constraints:
                 if constraint.check(value) is negated:
-                    constraint.constrain(value) # let it fall
+                    constraint.set(value, negated) # let it fall
                     assert False, "must not be reached"
 
         if not negated:
-            self.constrain(True)
+            self.set(True)
 
         for constraint, value in option_constraints:
-            constraint.constrain(value)
+            constraint.set(value)
 
-    def constrain(self, new_value, negated=False):
+    def set(self, new_value):
         assert isinstance(new_value, bool)
-        new_value ^= negated
 
         if self._value is not new_value:
-            super(ModuleConstraint, self).constrain(new_value)
+            super(ModuleConstraint, self).set(new_value)
             if new_value is False:
                 self._options = self._options._ellipsis
 
@@ -391,7 +387,7 @@ class OptionConstraint(ConstraintBase):
                                 self._exclusion_set.copy())
         return clone
 
-    def constrain(self, value, negated=False):
+    def set(self, value, negated=False):
         assert value is not Ellipsis
 
         if not negated:
@@ -401,7 +397,7 @@ class OptionConstraint(ConstraintBase):
                                       'which was previously excluded: %r',
                                       value)
 
-            super(OptionConstraint, self).constrain(value)
+            super(OptionConstraint, self).set(value)
             self._exclusion_set = None
 
         else: # negated, exclude the value
@@ -440,8 +436,8 @@ class OptionConstraint(ConstraintBase):
                 bool(self._exclusion_set))
 
     def __repr__(self):
-        return '<[~%r]>' % self._exclusion_set if self._exclusion_set else \
-            super(OptionConstraint, self).__repr__()
+        return ('<[~%r]>' % self._exclusion_set if self._exclusion_set else
+                super(OptionConstraint, self).__repr__())
 
 
 class ConstraintError(InstanceError):

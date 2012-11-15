@@ -50,8 +50,6 @@ class ConstraintsTestCase(TestCase):
 
         self.invariants += [
             lambda: c.check(m),
-            lambda: c.check(m, value=False),
-            lambda: c.check(m, 'foo'),
             lambda: c.check(m, 'foo', value=42),
             lambda: c.check(m, 'foo', value=17),
 
@@ -83,10 +81,10 @@ class ConstraintsTestCase(TestCase):
         with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=17))
 
         # Test with a module definitely included.
-        c.constrain(m, value=True)
+        c.constrain(m)
 
         with assert_pure(): self.assertIs(True, c.get(m))
-        with assert_pure(), assert_error(): c.constrain(m, value=False)
+        with assert_pure(), assert_error(): c.constrain(m, negated=True)
         with assert_pure(), assert_error(): c.get(m, 'foo')
 
         with assert_pure(): self.assertIs(True, c.check(m))
@@ -119,10 +117,10 @@ class ConstraintsTestCase(TestCase):
         with assert_pure(): self.assertIs(None, c.check(m, 'foo', value=17))
 
         # Test with a module definitely excluded.
-        c.constrain(m, value=False)
+        c.constrain(m, negated=True)
 
         with assert_pure(): self.assertIs(False, c.get(m))
-        with assert_pure(), assert_error(): c.constrain(m, value=True)
+        with assert_pure(), assert_error(): c.constrain(m)
         with assert_pure(), assert_error(): c.get(m, 'foo')
 
         with assert_pure(), assert_error(): c.constrain(m, 'foo', value=42)
@@ -157,7 +155,6 @@ class ConstraintsTestCase(TestCase):
         self.assertIs(True, c.check(m))
 
         self.assertIs(True, c.check(m, 'bar', value=2))
-        self.assertIs(None, c.check(m, 'foo'))
 
         c.constrain(m, 'foo', value=42)
 
@@ -178,13 +175,11 @@ class ConstraintsTestCase(TestCase):
 
         self.assertIs(True, c.check(m1))
         self.assertIs(True, c.check(m1, 'bar', value=2))
-        self.assertIs(None, c.check(m1, 'foo'))
         self.assertIs(None, c.check(m2))
 
         c.constrain(m2, 'foo', value=42)
         self.assertIs(True, c.check(m2))
         self.assertIs(True, c.check(m2, 'foo', value=42))
-        self.assertIs(None, c.check(m2, 'bar'))
 
 
 if __name__ == '__main__':
