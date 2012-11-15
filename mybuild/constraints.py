@@ -102,23 +102,29 @@ class Constraints(object):
 
         return constraint.check_mslice(mslice)
 
-    def constrain(self, module, option=None, value=True, negated=False,
-            fork=False):
-        this = self if not fork else self.fork()
-        this_dict = this._dict
+    def _constraint_for(self, module):
+        self_dict = self._dict
 
         try: # retrieve a privately owned constraint
-            constraint = self._dict[module]
+            constraint = self_dict[module]
 
         except KeyError: # if necessary, create it from scratch
-            constraint = this_dict[module] = ModuleConstraint(module)
+            constraint = self_dict[module] = ModuleConstraint(module)
 
         else: # or clone it from a parent
-            if fork or module not in this_dict: # found in some parent
-                constraint = this_dict[module] = constraint.clone()
+            if module not in self_dict: # found in some parent
+                constraint = self_dict[module] = constraint.clone()
 
         # Anyway, the 'constraint' is not shared with any other instance,
         # and we are free to modify it.
+
+        return constraint
+
+    def constrain(self, module, option=None, value=True, negated=False,
+            fork=False):
+        this = self if not fork else self.fork()
+
+        constraint = this._constraint_for(module)
 
         if option is None:
             constraint.constrain(value, negated)
@@ -129,20 +135,8 @@ class Constraints(object):
 
     def constrain_mslice(self, mslice, negated=False, fork=False):
         this = self if not fork else self.fork()
-        this_dict = this._dict
 
-        try: # retrieve a privately owned constraint
-            constraint = self._dict[module]
-
-        except KeyError: # if necessary, create it from scratch
-            constraint = this_dict[module] = ModuleConstraint(module)
-
-        else: # or clone it from a parent
-            if fork or module not in this_dict: # found in some parent
-                constraint = this_dict[module] = constraint.clone()
-
-        # Anyway, the 'constraint' is not shared with any other instance,
-        # and we are free to modify it.
+        constraint = this._constraint_for(mslice._module)
 
         constraint.constrain_mslice(mslice, negated)
 
@@ -338,8 +332,6 @@ class ModuleConstraint(ConstraintBase):
 
     def constrain_mslice(self, mslice, negated=False):
         new_value = not negated
-        if self._value is False:
-            return False
 
         commit_constraints = tuple(c.constrain(v, negated, defer=True)
                                    for v,c in mslice._izipwith(self._options))
