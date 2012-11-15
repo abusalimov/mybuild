@@ -133,12 +133,14 @@ class Constraints(object):
 
         return this
 
-    def constrain_mslice(self, mslice, negated=False, fork=False):
+    def constrain_mslice(self, mslice, negated=False, fork=False, atomic=True):
+        # No need to care about atomicity if we are going to fork ourselves.
+        atomic = atomic and not fork
         this = self if not fork else self.fork()
 
         constraint = this._constraint_for(mslice._module)
 
-        constraint.constrain_mslice(mslice, negated)
+        constraint.constrain_mslice(mslice, negated, atomic)
 
         return this
 
@@ -330,14 +332,24 @@ class ModuleConstraint(ConstraintBase):
         if not negated:
             self.constrain(True)
 
-    def constrain_mslice(self, mslice, negated=False):
-        new_value = not negated
+    def constrain_mslice(self, mslice, negated=False, atomic=True):
+        option_constraints = tuple(mslice._izipwith(self._options, swap=True))
 
-        commit_constraints = tuple(c.constrain(v, negated, defer=True)
-                                   for v,c in mslice._izipwith(self._options))
+        if not option_constraints:
+            self.constrain(True, negated)
+            return
 
-        for commit in commit_constraints:
-            commit()
+        if atomic:
+            for constraint, value in option_constraints:
+                if constraint.check(value) is negated:
+                    constraint.constrain(value) # let it fall
+                    assert False, "must not be reached"
+
+        if not negated:
+            self.constrain(True)
+
+        for constraint, value in option_constraints:
+            constraint.constrain(value)
 
     def constrain(self, new_value, negated=False):
         assert isinstance(new_value, bool)
@@ -350,7 +362,7 @@ class ModuleConstraint(ConstraintBase):
 
     def __nonzero__(self):
         return (super(ModuleConstraint, self).__nonzero__() or
-                bool(self._options))
+                any(self._options))
 
     def __repr__(self):
         value = self._value
@@ -379,7 +391,7 @@ class OptionConstraint(ConstraintBase):
                                 self._exclusion_set.copy())
         return clone
 
-    def constrain(self, value, negated=False, defer=False):
+    def constrain(self, value, negated=False):
         assert value is not Ellipsis
 
         if not negated:
@@ -389,9 +401,8 @@ class OptionConstraint(ConstraintBase):
                                       'which was previously excluded: %r',
                                       value)
 
-            def commit():
-                super(OptionConstraint, self).constrain(value)
-                self._exclusion_set = None
+            super(OptionConstraint, self).constrain(value)
+            self._exclusion_set = None
 
         else: # negated, exclude the value
 
@@ -401,23 +412,9 @@ class OptionConstraint(ConstraintBase):
                                           value)
                 return # no need to exclude
 
-            def commit():
-                if self._exclusion_set is None:
-                    self._exclusion_set = set()
-                self._exclusion_set.add(value)
-
-        if not defer:
-            commit()
-
-        else:
-            if __debug__:
-                def commit():
-                    try:
-                        self.constrain(value, negated)
-                    except ConstraintError:
-                        raise InternalError('Committing constraints '
-                                            'over a dirty state')
-            return commit
+            if self._exclusion_set is None:
+                self._exclusion_set = set()
+            self._exclusion_set.add(value)
 
     def update(self, other):
         other_exclusion = other._exclusion_set
