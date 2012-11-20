@@ -125,7 +125,7 @@ class Module(DynamicAttrsMixin):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
-@Module.register_attr('_atom')
+@Module.register_attr('_atom', factory_method='_new_instance')
 class ModuleAtom(expr.Atom):
     """Module-bound atom."""
     __slots__ = '_module'
@@ -142,7 +142,7 @@ class ModuleAtom(expr.Atom):
         return '%s' % (self._module._name,)
 
     @classmethod
-    def _new_type(cls, module_type, *args):
+    def _new_instance(cls, module_type, *args):
         return cls(module_type._module)
 
 
@@ -328,7 +328,8 @@ class OptionAtom(Option.Type, expr.Atom):
                     dict(__slots__=()))
 
     def __repr__(self):
-        return '%s(%s=%r)' % (self._module._name, self._option, self._value)
+        return '%s(%s=%r)' % (self._module_name,
+                              self._option_name, self._value)
 
 
 class Error(Exception):
