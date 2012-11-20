@@ -27,6 +27,23 @@ class ModelTestCase(TestCase):
         c.constrain(conf)
         
         #self.assertTrue(c.is_resolved())
+        
+    def test_with_default_options(self):
+        c = Constraints()
+        
+        @module
+        def m(self,
+              foo = option.bool(default=True),
+              ):
+            pass
+        
+        @module
+        def conf(self):
+            self.constrain(m())
+        
+        c.constrain(conf)
+        
+        #self.assertTrue(c.is_resolved())
     
     def test_with_dependences(self):
         c = Constraints()
@@ -39,6 +56,7 @@ class ModelTestCase(TestCase):
               ):
             pass
         
+        @module
         def m1(self, foo):
             pass
         
@@ -49,11 +67,7 @@ class ModelTestCase(TestCase):
         
         c.constrain(conf)
         #self.assertTrue(c.is_resolved())
-        
-        
-          
-      
-        
+   
 
 if __name__ == '__main__':
     unittest.main()
