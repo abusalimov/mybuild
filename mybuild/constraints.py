@@ -133,13 +133,22 @@ class Constraints(object):
 
         return this
 
-    def constrain_mslice(self, mslice, negated=False, fork=False, atomic=True):
-        # No need to care about atomicity if we are going to fork ourselves.
-        atomic = atomic and not fork
+    def constrain_mslice(self, mslice, negated=False, fork=False):
         this = self if not fork else self.fork()
+        this_dict = this._dict
 
-        constraint = this._constraint_for(mslice._module)
-        constraint.set_mslice(mslice, negated, atomic)
+        module = mslice._module
+
+        new_constraint = ModuleConstraint(module, mslice)
+
+        try:
+            constraint = this_dict[module]
+        except KeyError:
+            pass
+        else:
+            new_constraint.update(constraint)
+
+        this_dict[module] = new_constraint
 
         return this
 
@@ -269,10 +278,16 @@ class ModuleConstraint(ConstraintBase):
     """ModuleConstraint vector."""
     __slots__ = '_options'
 
-    def __init__(self, module):
+    def __init__(self, module, mslice=None):
         super(ModuleConstraint, self).__init__()
-        optuple = module._options
-        self._options = optuple._make(OptionConstraint() for _ in optuple)
+
+        if mslice is None:
+            mslice = module._options._ellipsis
+        else:
+            assert module is mslice._module
+            self.set(True)
+
+        self._options = mslice._make(OptionConstraint(v) for v in mslice)
 
     def clone(self):
         # Check for immutability.
@@ -377,9 +392,12 @@ class OptionConstraint(ConstraintBase):
     """A constraint which supports additional exclusion set."""
     __slots__ = '_exclusion_set'
 
-    def __init__(self):
+    def __init__(self, value=Ellipsis):
         super(OptionConstraint, self).__init__()
         self._exclusion_set = None
+
+        if value is not Ellipsis:
+            self.set(value)
 
     def clone(self):
         clone = super(OptionConstraint, self).clone()
