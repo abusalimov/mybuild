@@ -137,30 +137,39 @@ class ModuleContext(object):
         return getattr(self._options, option)
 
 
-class OptionContext(MutableSet):
-    """docstring for OptionContext"""
+class NotifyingMixin(object):
+    """docstring for NotifyingMixin"""
 
-    def __init__(self, option):
-        super(OptionContext, self).__init__()
-        self._option = option
-        self._set = set(option._values)
-        self._subscribers = []
+    def __init__(self):
+        super(NotifyingMixin, self).__init__()
+        self.__subscribers = []
+
+    def _notify(self, *args, **kwargs):
+        for fxn in self.__subscribers:
+            fxn(*args, **kwargs)
+
+    def subscribe(self, fxn):
+        self.__subscribers.append(fxn)
+
+
+class NotifyingSet(MutableSet, NotifyingMixin):
+    """docstring for NotifyingSet"""
+
+    def __init__(self, values):
+        super(NotifyingSet, self).__init__()
+        self._set = set(values)
 
     def add(self, value):
         if value in self:
             return
         self._set.add(value)
 
-        for s in self._subscribers:
-            s(value)
+        self._notify(value)
 
     def discard(self, value):
         if value not in self:
             return
         raise NotImplementedError
-
-    def subscribe(self, fxn):
-        self._subscribers.append(fxn)
 
     def __iter__(self):
         return iter(self._set)
@@ -170,8 +179,13 @@ class OptionContext(MutableSet):
         return value in self._set
 
     def __repr__(self):
-        return '<OptionContext %r>' % (self._set,)
+        return '<NotifyingSet %r>' % (self._set,)
 
+class OptionContext(NotifyingSet):
+    """docstring for OptionContext"""
+
+    def __init__(self, option):
+        super(OptionContext, self).__init__(option._values)
 
 @Module.register_attr('_instance_type')
 class Instance(Module.Type):
@@ -213,6 +227,7 @@ class Instance(Module.Type):
     def _post_new(cls, context, optuple, _constraints=None):
         if _constraints is None:
             _constraints = Constraints()
+            # _constraints.constrain_mslice(optuple)
 
         def new():
             try:
