@@ -78,23 +78,6 @@ class Context(object):
 
         return context
 
-    def build(self, conf_module):
-        context = self.context_for(conf_module)
-        # constraints = iter(context._instances).next()._constraints # XXX
-
-        # flat_constr = constraints.fork().flatten()
-        # for m in flat_constr._dict:
-        #     ctx = self._modules[m]
-        #     for mslice, inst_set in ctx._instances:
-        #         if flat_constr.check_mslice(mslice) is not False:
-
-
-        # try:
-        #     constraints = Constraints.merge(instance._constraints
-        #                                     for instance in context._instances)
-        # except Exception, e:
-        #     raise e
-
 
 class ModuleContext(object):
     """docstring for ModuleContext"""
@@ -179,7 +162,8 @@ class NotifyingSet(MutableSet, NotifyingMixin):
         return value in self._set
 
     def __repr__(self):
-        return '<NotifyingSet %r>' % (self._set,)
+        return '<%s %r>' % (type(self).__name__, self._set)
+
 
 class OptionContext(NotifyingSet):
     """docstring for OptionContext"""
@@ -272,13 +256,13 @@ class Instance(Module.Type):
             # disjuncion of disjunctions: (C1|C2) | ... | (CK|...|CN)
             # nothing special to do here, expand parens by flattening the list
             return tuple(chain.from_iterable(
-                self.visit(e, constraints.fork()) for e in expr.operands))
+                self.visit(e, constraints.new_branch()) for e in expr.operands))
 
         def visit_And(self, expr, constraints):
             # Important assumption:
             # 'expr.operands' first yields atomic expressions (atoms and
             # negations), and then compounds (disjunctions in this case).
-            # This allows us to defer forking the 'constraints' as much as
+            # This allows us to defer branching the 'constraints' as much as
             # possible, until it becomes really necessary.
 
             # conjuction of disjunctions: (C1|C2) & ... & (CK|...|CN)
@@ -341,10 +325,10 @@ class Instance(Module.Type):
         with log.debug('mybuild: deciding bool(%r)', expr):
             visit = self._build_visitor.visit
 
-            yes_choices = visit(expr, self._constraints.fork())
+            yes_choices = visit(expr, self._constraints.new_branch())
             self._log_build_choices('"yes"', yes_choices)
 
-            no_choices = visit(~expr, self._constraints.fork())
+            no_choices = visit(~expr, self._constraints.new_branch())
             self._log_build_choices('"no"', no_choices)
 
             ret = bool(yes_choices)
@@ -380,7 +364,7 @@ class Instance(Module.Type):
 
             octx = self._context.context_for(module, option)
 
-            octx.subscribe(partial(self._fork_and_spawn,
+            octx.subscribe(partial(self._branch_and_spawn,
                                    self._constraints, module, option))
             # after that one shouldn't touch self._constraints anymore
             self._constraints.freeze()
@@ -389,7 +373,7 @@ class Instance(Module.Type):
                 constrain = self._constraints.constrain
                 for value in values:
                     try:
-                        yield constrain(module, option, value, fork=True)
+                        yield constrain(module, option, value, branch=True)
                     except ConstraintError:
                         pass
 
@@ -400,18 +384,18 @@ class Instance(Module.Type):
             log.debug('mybuild: return %r', ret_value)
             return ret_value
 
-    def _fork_and_spawn(self, constraints, module, option, value):
-        log.debug('mybuild: fork %r with %r by %r.%s = %r',
+    def _branch_and_spawn(self, constraints, module, option, value):
+        log.debug('mybuild: branch %r with %r by %r.%s = %r',
             self._optuple, constraints, module, option, value)
 
         try:
             constraints = constraints.constrain(module, option, value,
-                fork=True)
+                branch=True)
         except ConstraintError as e:
-            log.debug('mybuild: fork error: %s', e)
+            log.debug('mybuild: branch error: %s', e)
             pass
         else:
-            log.debug('mybuild: fork OK')
+            log.debug('mybuild: branch OK')
             self._spawn(constraints)
 
     def _take_one_spawn_rest(self, constraints_iterable):
@@ -445,4 +429,47 @@ class Instance(Module.Type):
         return type('Instance_M%s' % (module_type._module_name,),
                     (cls, module_type),
                     dict(__slots__=(), _init_fxn=fxn))
+
+
+def build(conf_module):
+    context = Context()
+    conf_context = context.context_for(conf_module)
+
+    assert len(conf_context._instances) == 1
+    conf_instance_set = conf_context._instances.itervalues().next()
+
+    assert len(conf_instance_set) == 1
+    conf_instance = iter(conf_instance_set).next()
+
+    constraints = conf_instance._constraints # XXX
+
+    # flat_constr = constraints.branch().flatten()
+    # for m in flat_constr._dict:
+    #     ctx = self._modules[m]
+    #     for mslice, inst_set in ctx._instances:
+    #         if flat_constr.check_mslice(mslice) is not False:
+
+
+    # try:
+    #     constraints = Constraints.merge(instance._constraints
+    #                                     for instance in context._instances)
+    # except Exception, e:
+    #     raise e
+
+if __name__ == '__main__':
+    from mybuild import module, option
+
+    log.zones = {'mybuild'}
+    log.verbose = True
+    log.init_log()
+
+    @module
+    def conf(self):
+        self.constrain(m1)
+
+    @module
+    def m1(self):
+        pass
+
+    build(conf)
 

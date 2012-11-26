@@ -7,7 +7,7 @@ from unittest import TestCase
 # from mock import Mock, patch
 
 from mybuild import module
-from mybuild.context import Context
+from mybuild.context import build
 
 
 class ModuleTestCase(TestCase):
@@ -49,36 +49,36 @@ class ModuleTestCase(TestCase):
 
 ###############################################################################
 
-import mybuild.logs as log
-
-
-log.zones = {'mybuild'}
-log.verbose = True
-log.init_log()
-
-
-@module
-def conf(mod):
-    mod.constrain(m0(o=42))
-
-@module
-def m0(mod, o):
-    mod1 = mod.ask(m1)
-    t = "with m1" if mod1 else "no m1"
-    log.debug("mybuild: <m0> o=%s, %s, m1.x=%r" % (o, t, mod1.x))
-
-@module
-def m1(mod, x=11):
-    mod0 = mod.ask(m0)
-    if mod0.o < 43:
-        mod._context.consider(m0, "o", mod0.o + 1)
-    log.debug("myconstrain: <m1> x=%s, m0.o=%d" % (x, mod0.o))
-
-
-
 if __name__ == '__main__':
 
-    Context().build(conf)
+    import mybuild.logs as log
+
+
+    log.zones = {'mybuild'}
+    log.verbose = True
+    log.init_log()
+
+
+    @module
+    def conf(mod):
+        mod.constrain(m0(o=42))
+
+    @module
+    def m0(mod, o):
+        mod1 = mod.ask(m1)
+        t = "with m1" if mod1 else "no m1"
+        log.debug("mybuild: <m0> o=%s, %s, m1.x=%r" % (o, t, mod1.x))
+
+    @module
+    def m1(mod, x=11):
+        mod0 = mod.ask(m0)
+        if mod0.o < 43:
+            mod._context.consider(m0, "o", mod0.o + 1)
+        log.debug("mybuild: <m1> x=%s, m0.o=%d" % (x, mod0.o))
+
+
+
+    build(conf)
 
     unittest.main()
 

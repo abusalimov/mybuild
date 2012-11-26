@@ -72,7 +72,6 @@ class ConstraintsTestCase(TestCase):
         # Test with a single excluded option value.
         c.constrain(m, 'foo', value=17, negated=True)
 
-        with assert_pure(), assert_error(): c.constrain(m, 'foo', value=17)
         with assert_pure(), assert_error(): c.get(m)
         with assert_pure(), assert_error(): c.get(m, 'foo')
 
@@ -84,7 +83,6 @@ class ConstraintsTestCase(TestCase):
         c.constrain(m)
 
         with assert_pure(): self.assertIs(True, c.get(m))
-        with assert_pure(), assert_error(): c.constrain(m, negated=True)
         with assert_pure(), assert_error(): c.get(m, 'foo')
 
         with assert_pure(): self.assertIs(True, c.check(m))
@@ -120,14 +118,16 @@ class ConstraintsTestCase(TestCase):
         c.constrain(m, negated=True)
 
         with assert_pure(): self.assertIs(False, c.get(m))
-        with assert_pure(), assert_error(): c.constrain(m)
         with assert_pure(), assert_error(): c.get(m, 'foo')
-
-        with assert_pure(), assert_error(): c.constrain(m, 'foo', value=42)
 
         with assert_pure(): self.assertIs(False, c.check(m))
         with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=42))
         with assert_pure(): self.assertIs(False, c.check(m, 'foo', value=17))
+
+        # should die after this
+        with assert_pure(), assert_error(): c.constrain(m, 'foo', value=42)
+
+        self.assertFalse(c.is_alive())
 
     def test_module_without_constrains(self):
         @module

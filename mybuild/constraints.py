@@ -17,57 +17,285 @@ from core import *
 import logs as log
 
 
-class Constraints(object):
-    __slots__ = '_dict'
+class IncrementalDict(dict):
+    """Delegates lookup for a missing key to the parent dictionary."""
+    __slots__ = 'base' # a mapping (possibly with a 'base' too), or None
 
-    def __init__(self, _dict=None):
-        super(Constraints, self).__init__()
+    def __init__(self, base=None):
+        dict.__init__(self)
+        self.base = base
+
+    def __missing__(self, key):
+        """Looks up the chain of ancestors for the key."""
+
+        ancestor = self.base
+        while ancestor is not None:
+            if key in ancestor:
+                break
+
+            ancestor = getattr(ancestor, 'base', None)
+
+        else:
+            raise KeyError
+
+        return ancestor[key]
+
+    def new_branch(self):
+        cls = type(self)
+        return cls(base=self)
+
+    def iter_base_chain(self):
+        ancestor = self.base
+
+        while ancestor is not None:
+            current = ancestor
+            ancestor = getattr(ancestor, 'base', None)
+
+            yield current
+
+    def __repr__(self):
+        return (dict.__repr__(self) if self.base is None else
+                '%r <- %s' % (self.base, dict.__repr__(self)))
+
+
+class TreeNode(object):
+    """docstring for TreeNode"""
+    __slots__ = '__base', '__branches'
+
+    base = property(attrgetter('_'+'TreeNode'+'__base'))
+
+    def __init__(self, base=None):
+        super(TreeNode, self).__init__()
+
+        self.__base = None
+        self.__branches = None
+
+        self._set_base(base)
+
+    def new_branch(self):
+        cls = type(self)
+        return cls(base=self)
+
+    def _set_base(self, new_base):
+        old_base = self.__base
+
+        if new_base is old_base:
+            return
+
+        if old_base is not None:
+            old_base.__branches.remove(self)
+
+        self.__base = new_base
+
+        if new_base is not None:
+            sublings = new_base.__branches
+            if sublings is None:
+                sublings = new_base.__branches = set()
+            sublings.add(self)
+
+    def prune(self):
+        branches = self.__branches
+        if branches is not None:
+            for branch in branches.copy():
+                branch.prune()
+
+        self._set_base(None)
+
+    def has_branches(self):
+        return bool(self.__branches)
+
+    def iter_branches(self):
+        return iter(self.__branches or ())
+
+    @property
+    def sole_branch(self):
+        branches = self.__branches
+        if branches is None or len(branches) != 1:
+            return None
+
+        return iter(branches).next()
+
+    def reintegrate_sole_branch(self):
+        branch = self.sole_branch
+        if branch is None:
+            return None
+
+        sub_branches = branch.__branches
+
+        if sub_branches is not None:
+            for sub_branch in sub_branches:
+                sub_branch.__base = self
+
+            self.__branches = sub_branches
+
+        else:
+            self.__branches.clear()
+
+        branch.__base = None
+        branch.__branches = None
+
+        return branch
+
+
+class Constraints(TreeNode):
+    """Knowledge base on presence of certain modules and their options.
+
+    This class is designed to accumulate module requirements, providing various
+    operations on specifying, checking and getting constrained values. See
+    'constrain', 'check' and 'get' methods respectively, with their
+    derivatives.
+
+    Constraints object is responsible for tracking and preventing value
+    conflicts, thus keeping itself in a consistent state. For example, once a
+    client has excluded a certain module, he cannot then specify a value for
+    some option belonging to this module.
+
+    Modifying constraints object is a one-way action, that is once a constraint
+    has been set (committed) no one can undo it. Moreover, if such action
+    results in a constraints violation, the whole object is considered dead and
+    becomes unusable, i.e. no conflict resolution or rollback is performed.
+
+    Constraints are organized into a tree, where branches extend the base and
+    hold more precise or strict requirements. Once a new branch of a
+    constraints object is created the object is sealed (frozen) for further
+    modifications. In other words, only leaves of the tree are mutable, other
+    nodes are read-only, that prevents possible conflicts with their branches.
+    A branch can be removed (prunned) from the tree irreversibly destroying
+    each node of the branch. A leaf is automatically prunned in case of
+    constraints violation when modifying it.
+    """
+    __slots__ = '_modules', '_frozen'
+
+    def __init__(self, base=None, _dict=None):
+        super(Constraints, self).__init__(base)
+
+        base_dict = base._modules if base is not None else None
         if _dict is None:
-            _dict = IncrementalDict()
-        self._dict = _dict
+            _dict = IncrementalDict(base_dict)
+        assert _dict.base is base_dict
+
+        self._modules = _dict
+        self._frozen = False
 
     def freeze(self):
-        self.__class__ = FrozenConstraints
+        self._frozen = True
 
-    def fork(self):
+    def can_change(self):
+        return not self._frozen and self.is_alive() and not self.has_branches()
+
+    def is_alive(self):
+        """Tells whether the object is still usable."""
+        return True
+
+    def prune(self):
+        """Prevents further usage of the object.
+
+        After calling this method 'is_alive' will always return False.
+        """
+        super(Constraints, self).prune()
+        self._kill()
+
+    def _kill(self):
+        """Deletes slot attributes to prevent further using of the object."""
+        del self._modules
+        self.__class__ = DeadConstraints
+
+    def new_branch(self):
+        """
+        Create a new Constraints object with its 'base' set to this one.
+        """
         if __debug__:
             self.freeze()
-        return Constraints(self._dict.fork())
+        return super(Constraints, self).new_branch()
 
-    def merge_children(self, children, update_parent=True):
-        return self.merge(children, self, update_parent)
+    def reintegrate_sole_branch(self):
+        """
+        In case when this object has only one branch the latter is detached
+        from the tree and its contents is merged into this. After reintegrating
+        the branch becomes unusable and must not be referenced anymore.
+        Returns the sole branch (gutted), if any, None otherwise.
+        """
+        sole_branch = super(Constraints, self).reintegrate_sole_branch()
+
+        if sole_branch is not None:
+            self_dict = self._modules
+            self_dict.update(sole_branch._modules)
+
+            for new_branch in self.iter_branches():
+                new_branch._modules.base = self_dict
+
+            sole_branch._kill()
+
+        return sole_branch
+
+    def merge_children(self, branches):
+        """See 'Constraints.merge' method.
+        The resulting Constraints object becomes a new branch of this object.
+        """
+        return self.merge(branches, self)
 
     @classmethod
-    def merge(cls, children, until_parent=None, update_parent=True):
-        log.debug('mybuild: parent=%r, merging %r', until_parent, children)
+    def merge(cls, branches, stop_base=None):
+        """
+        Merges the given branches into a single Constraints object which
+        becomes a new direct branch of 'stop_base'.
 
-        parent_dict = until_parent._dict if until_parent is not None else None
-        new_dict = IncrementalDict(parent_dict)
+        Args:
+            branches:
+                Iterable containing objects of Constraints type. Each given
+                branch must be a child (either direct or indirect) of
+                'stop_base', if any, otherwise an error is raised.
+            stop_base (Constraints):
+                Common base of each of branches.
 
-        for child in children:
-            child.flatten(until_parent, update_parent)
-            for key, value in child._dict.iteritems():
+        Raises:
+            ConstraintViolationError:
+                In case of conflicts between children.
+            InternalError:
+                If one of the branches is not actually a child of the
+                'stop_base'.
+
+        Returns:
+            A new Constraints object whichs base is set to 'stop_base'.
+        """
+        log.debug('mybuild: base=%r, merging %r', stop_base, branches)
+
+        def to_flat_dict(from_dict, to_dict):
+            def iter_dict_chain():
+                yield from_dict
+                for e in from_dict.iter_base_chain():
+                    if e is to_dict:
+                        break
+                    yield e
+                else:
+                    if to_dict is not None:
+                        raise InternalError(
+                            "'stop_base' must be a base of this")
+
+            ret_dict = {}
+            for a_dict in reversed(iter_dict_chain()):
+                ret_dict.update(a_dict)
+
+            return ret_dict
+
+        base_dict = stop_base._modules if stop_base is not None else None
+        new_dict = IncrementalDict(base_dict)
+
+        for child in branches:
+            child_dict = child._modules
+            for key, value in to_flat_dict(child_dict, base_dict).iteritems():
                 if key in new_dict:
                     new_dict[key].update(value)
                 else:
                     new_dict[key] = value.clone()
 
-        return Constraints(new_dict)
-
-    def flatten(self, until_parent=None, update_parent=True):
-        self_dict = self._dict
-
-        for parent_dict in self_dict.iter_parents(until_parent._dict,
-                                                  update_parent):
-            for key, value in parent_dict.iteritems():
-                if key not in self_dict:
-                    self_dict[key] = value.clone()
+        return cls(stop_base, _dict=new_dict)
 
     def get(self, module, option=None):
         try:
-            constraint = self._dict[module]
+            constraint = self._modules[module]
         except KeyError:
-            raise ConstraintError('No decision is made yet')
+            raise ConstraintError('No constraints on this module')
 
         if option is None:
             return constraint.get()
@@ -76,10 +304,11 @@ class Constraints(object):
 
     def check(self, module, option=None, value=Ellipsis):
         """
-        Returns tristate: boolean for a definite answer, None otherwise.
+        Returns:
+            Tristate - boolean for a definite answer, None otherwise.
         """
         try:
-            constraint = self._dict[module]
+            constraint = self._modules[module]
         except KeyError:
             return None
 
@@ -90,29 +319,86 @@ class Constraints(object):
 
     def check_mslice(self, mslice):
         """
-        Returns tristate: boolean for a definite answer, None otherwise.
-        In case when answers for elements differ, precedence is the following:
-            False -> None -> True (like for AND, but with None alternative)
-        Undefined (Ellipsis) values of optuple are not considered.
+        Returns:
+            Tristate - boolean for a definite answer, None otherwise.
+            In case when answers for elements differ, precedence is from
+            negative through indefinite to positive, that is like for AND, but
+            with None alternative:
+                False -> None -> True
+        Note:
+            Undefined (Ellipsis) values of optuple are not considered.
         """
         try:
-            constraint = self._dict[mslice._module]
+            constraint = self._modules[mslice._module]
         except KeyError:
             return None
 
         return constraint.check_mslice(mslice)
 
-    def _constraint_for(self, module):
-        self_dict = self._dict
+    def constrain(self, module, option=None, value=Ellipsis, negated=False,
+            branch=False):
+        """Adds a new constraint.
 
-        try: # retrieve a privately owned constraint
+        If only a 'module' argument is given, constrains the module presence.
+        In case when an 'option' is not None, a 'value' must also be specified.
+
+        Args:
+            module (Module):
+                The module to work with.
+            option (str):
+                The name of one of the module's options (optional).
+            value:
+                Used only if the option is specified too (optional).
+            negated (bool):
+                Tells whether the meaning of the operation should be inverted,
+                that is for excluding modules or options.
+            branch (bool):
+                Whether to create a new branch or to constrain the current
+                object itself.
+
+        Raises:
+            ConstraintViolationError:
+                In case of conflicts with existing constraints. Note that once
+                such error is raised the object becomes totally destroyed and
+                must not be used anymore. See 'Constraints.prune' method.
+
+        Returns:
+            The actual Constraints object that was used,
+            that is self if 'branch' is False, or a branch of self otherwise.
+
+        """
+        assert branch or self.can_change()
+
+        this = self if not branch else self.new_branch()
+
+        constraint = this._constraint_for(module)
+
+        try:
+            if option is None:
+                constraint.set(not negated)
+            else:
+                constraint.set_option(option, value, negated)
+
+        except ConstraintViolationError:
+            this.prune()
+            raise
+
+        return this
+
+    def _constraint_for(self, module):
+        """Retrieves a privately owned constraint for the given module."""
+        assert self.can_change()
+
+        self_dict = self._modules
+
+        try:
             constraint = self_dict[module]
 
         except KeyError: # if necessary, create it from scratch
             constraint = self_dict[module] = ModuleConstraint(module)
 
-        else: # or clone it from a parent
-            if module not in self_dict: # found in some parent
+        else: # or clone it from a base
+            if module not in self_dict: # found in some base
                 constraint = self_dict[module] = constraint.clone()
 
         # Anyway, the 'constraint' is not shared with any other instance,
@@ -120,22 +406,15 @@ class Constraints(object):
 
         return constraint
 
-    def constrain(self, module, option=None, value=Ellipsis, negated=False,
-            fork=False):
-        this = self if not fork else self.fork()
+    def constrain_mslice(self, mslice, negated=False, branch=False):
+        """
+        Much like a plain 'Constraints.constrain' method, but works with a
+        whole mslice at a time.
+        """
+        assert branch or self.can_change()
 
-        constraint = this._constraint_for(module)
-
-        if option is None:
-            constraint.set(not negated)
-        else:
-            constraint.set_option(option, value, negated)
-
-        return this
-
-    def constrain_mslice(self, mslice, negated=False, fork=False):
-        this = self if not fork else self.fork()
-        this_dict = this._dict
+        this = self if not branch else self.new_branch()
+        this_dict = this._modules
 
         module = mslice._module
 
@@ -146,75 +425,43 @@ class Constraints(object):
         except KeyError:
             pass
         else:
-            new_constraint.update(constraint)
+            try:
+                new_constraint.update(constraint)
+
+            except ConstraintViolationError:
+                this.prune()
+                raise
 
         this_dict[module] = new_constraint
 
         return this
 
     def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self._dict)
+        return '<%s %r>' % (type(self).__name__, self._modules)
 
-
-class FrozenConstraints(Constraints):
-    """
-    Constraints instance becomes frozen on fork to keep its children in a
-    consistent state.
-    """
+class DeadConstraints(Constraints):
     __slots__ = ()
 
+    def __metaclass__(name, bases, attrs):
+        def stub_for(attr):
+            def stub(self):
+                raise InternalError('Referencing %s on %r' % (attr, self))
+            return stub
+
+        for a in dir(Constraints):
+            if not a.startswith('_') and a not in attrs:
+                attrs[a] = property(stub_for(a))
+
+        return type(name, bases, attrs)
+
     def __new__(cls, *args, **kwargs):
-        raise InternalError('Attempting to instantiate %s' % cls.__name__)
-
-    def _constraint_for(self, module):
-        raise InternalError('Attempting to constrain %s without forking' %
-                            type(self).__name__)
-
-
-class IncrementalDict(dict):
-    """Delegates lookup for a missing key to the parent dictionary."""
-    __slots__ = '_parent'
-
-    parent = property(attrgetter('_parent'))
-
-    def __init__(self, parent=None):
-        dict.__init__(self)
-        self._parent = parent
-
-    def __missing__(self, key):
-        """Looks up the parents chain for the key."""
-        parent = self._parent
-        while parent is not None:
-            if key in parent:
-                return parent[key]
-            parent = parent._parent
-        else:
-            raise KeyError
-
-    def fork(self):
-        cls = type(self)
-        return cls(parent=self)
-
-    def iter_parents(self, until_parent=None, update_parent=False):
-        parent = self._parent
-
-        while parent is not until_parent:
-            current = parent
-            try:
-                parent = parent._parent
-            except AttributeError:
-                assert parent is None
-                raise InternalError("'until_parent' must be a parent "
-                                    "of this dict")
-
-            yield current
-
-        if update_parent:
-            self._parent = until_parent
+        raise InternalError('Instantiating %s' % cls.__name__)
 
     def __repr__(self):
-        return (dict.__repr__(self) if self._parent is None else
-                '%r <- %s' % (self._parent, dict.__repr__(self)))
+        return object.__repr__(self)
+
+    def is_alive(self):
+        return False
 
 
 class ConstraintBase(object):
@@ -239,8 +486,8 @@ class ConstraintBase(object):
     def get(self):
         value = self._value
         if value is Ellipsis:
-            raise ConstraintError('Decision about an exact value '
-                                  'is not made yet')
+            raise ConstraintError(
+                'Decision about an exact value is not made yet')
 
         return value
 
@@ -256,9 +503,9 @@ class ConstraintBase(object):
 
         old_value = self._value
         if old_value is not Ellipsis and old_value != new_value:
-            raise ConstraintError('Reassigning already set value '
-                                  'to a different one: %r != %r',
-                                  old_value, new_value)
+            raise ConstraintViolationError(
+                'Reassigning already set value to a different one: %r != %r',
+                old_value, new_value)
 
         self._value = new_value
 
@@ -292,14 +539,14 @@ class ModuleConstraint(ConstraintBase):
     def clone(self):
         # Check for immutability.
         value = self._value
-        if value is False:
-            return self
         if value is True:
             for o in self._options:
                 if o._value is Ellipsis:
                     break
             else:
                 return self
+        elif value is False:
+            return self
 
         clone = super(ModuleConstraint, self).clone()
         clone._options = self._options._make(o.clone() for o in self._options)
@@ -314,8 +561,8 @@ class ModuleConstraint(ConstraintBase):
 
     def get_option(self, option):
         if self._value is False:
-            raise ConstraintError('Getting an option '
-                                  'of a definitely excluded module')
+            raise ConstraintError(
+                'Getting an option of a definitely excluded module')
         return getattr(self._options, option).get()
 
     def check_option(self, option, other_value):
@@ -344,32 +591,13 @@ class ModuleConstraint(ConstraintBase):
         if not negated:
             self.set(True)
 
-    def set_mslice(self, mslice, negated=False, atomic=True):
-        option_constraints = tuple(mslice._izipwith(self._options, swap=True))
-
-        if not option_constraints:
-            self.set(not negated)
-            return
-
-        if atomic and self._value is not False:
-            for constraint, value in option_constraints:
-                if constraint.check(value) is negated:
-                    constraint.set(value, negated) # let it fall
-                    assert False, "must not be reached"
-
-        if not negated:
-            self.set(True)
-
-        for constraint, value in option_constraints:
-            constraint.set(value)
-
     def set(self, new_value):
         assert isinstance(new_value, bool)
 
         if self._value is not new_value:
             super(ModuleConstraint, self).set(new_value)
             if new_value is False:
-                self._options = self._options._ellipsis
+                self._options = self._options._ellipsis  # to catch stupid bugs
 
     def __nonzero__(self):
         return (super(ModuleConstraint, self).__nonzero__() or
@@ -411,9 +639,9 @@ class OptionConstraint(ConstraintBase):
         if not negated:
             if self._exclusion_set is not None and \
                     value in self._exclusion_set:
-                raise ConstraintError('Setting a new value '
-                                      'which was previously excluded: %r',
-                                      value)
+                raise ConstraintViolationError(
+                    'Setting a new value which was previously excluded: %r',
+                    value)
 
             super(OptionConstraint, self).set(value)
             self._exclusion_set = None
@@ -422,13 +650,13 @@ class OptionConstraint(ConstraintBase):
 
             if self._value is not Ellipsis:
                 if self._value == value:
-                    raise ConstraintError('Excluding an already set value: %r',
-                                          value)
-                return # no need to exclude
+                    raise ConstraintViolationError(
+                        'Excluding an already set value: %r', value)
 
-            if self._exclusion_set is None:
-                self._exclusion_set = set()
-            self._exclusion_set.add(value)
+            else:
+                if self._exclusion_set is None:
+                    self._exclusion_set = set()
+                self._exclusion_set.add(value)
 
     def update(self, other):
         other_exclusion = other._exclusion_set
@@ -459,8 +687,11 @@ class OptionConstraint(ConstraintBase):
 
 
 class ConstraintError(InstanceError):
-    """
-    InstanceError subclass raised in case when the reason of an error is
-    constraints violation.
+    """Base class for constraints-related errors."""
+
+class ConstraintViolationError(ConstraintError):
+    """Fatal error which leads to dectruction of a Constraints object.
+
+    Raised in case when the reason of an error is constraints violation.
     """
 
