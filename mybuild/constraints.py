@@ -177,6 +177,11 @@ class Constraints(TreeNode):
         self._modules = _dict
         self._frozen = False
 
+    def _set_base(self, new_base):
+        if new_base is not None:
+            new_base.freeze()
+        super(Constraints, self)._set_base(new_base)
+
     def freeze(self):
         self._frozen = True
 
@@ -199,14 +204,6 @@ class Constraints(TreeNode):
         """Deletes slot attributes to prevent further using of the object."""
         del self._modules
         self.__class__ = DeadConstraints
-
-    def new_branch(self):
-        """
-        Create a new Constraints object with its 'base' set to this one.
-        """
-        if __debug__:
-            self.freeze()
-        return super(Constraints, self).new_branch()
 
     def reintegrate_sole_branch(self):
         """
