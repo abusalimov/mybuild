@@ -157,7 +157,7 @@ class Constraints(TreeNode):
 
     Constraints are organized into a tree, where branches extend the base and
     hold more precise or strict requirements. Once a new branch of a
-    constraints object is created the object is sealed (frozen) for further
+    constraints object is created the object is sealed for further
     modifications. In other words, only leaves of the tree are mutable, other
     nodes are read-only, that prevents possible conflicts with their branches.
     A branch can be removed (prunned) from the tree irreversibly destroying
@@ -177,16 +177,15 @@ class Constraints(TreeNode):
         self._modules = _dict
         self._frozen = False
 
-    def _set_base(self, new_base):
-        if new_base is not None:
-            new_base.freeze()
-        super(Constraints, self)._set_base(new_base)
-
     def freeze(self):
+        """Seal the object forever. Prevents any further modifications."""
         self._frozen = True
 
+    def is_frozen(self):
+        return self._frozen
+
     def can_change(self):
-        return not self._frozen and self.is_alive() and not self.has_branches()
+        return not self.is_frozen() and not self.has_branches()
 
     def is_alive(self):
         """Tells whether the object is still usable."""
@@ -204,6 +203,14 @@ class Constraints(TreeNode):
         """Deletes slot attributes to prevent further using of the object."""
         del self._modules
         self.__class__ = DeadConstraints
+
+    def new_branch(self, freeze=False):
+        """
+        Create a new Constraints object with its 'base' set to this one.
+        """
+        if freeze:
+            self.freeze()
+        return super(Constraints, self).new_branch()
 
     def reintegrate_sole_branch(self):
         """
