@@ -693,6 +693,122 @@ class OptionConstraint(ConstraintBase):
                 super(OptionConstraint, self).__repr__())
 
 
+class NotifyingConstraints(Constraints):
+    """
+    NotifyingConstraints supports relatively efficient modifying of an
+    arbitrary node of the constraints tree, even non-leaf. It also provides
+    facilities for notifying listeners about prunning of interesting branches.
+    """
+    __slots__ = '_root_modules'
+
+    def __init__(self, base=None):
+        super(NotifyingConstraints, self).__init__(base)
+
+        self._root_modules = base._root_modules if base is not None else {}
+        if self._modules.base is None:
+            self._modules.base = self._root_modules
+
+    def prune(self):
+        self_dict = self._modules
+
+        super(NotifyingConstraints, self).prune()
+
+        for constraint in self_dict.itervalues():
+            constraint.prune()
+
+    def _constraint_for(self, module, dry_run=False):
+        if dry_run:
+            return super(NotifyingConstraints, self)._constraint_for(
+                self, module, dry_run)
+
+        raise NotImplementedError
+        # self_dict = self._modules
+        # root_dict = self._root_modules
+        # new_proxy = NotifyingModuleConstraintProxy
+
+        # try:
+        #     constraint = self_dict[module]
+
+        # except KeyError:
+        #     constraint = root_dict[module] = new_proxy(self)
+
+        # if module not in self_dict:
+        #     constraint = self_dict[module] = new_proxy(self, base=constraint)
+
+        return constraint
+
+class NotifyingModuleConstraintProxy(TreeNode):
+    """
+    Provides ModuleConstraint-like interface also maintaining the state of
+    branches, if any.
+    """
+    __slots__ = '_owner', '_target'
+
+    _value   = property(attrgetter('_target._value'))
+    _options = property(attrgetter('_target._options'))
+
+    def __init__(self, owner, base=None, module=None):
+        super(NotifyingModuleConstraintProxy, self).__init__(base)
+        self._owner = owner
+
+        if base is not None:
+            self._target = base._target.clone()
+        elif module is not None:
+            self._target = ModuleConstraint(module)
+        else:
+            raise InternalError("Either 'base' or 'module' must be specified")
+
+    def clone(self):
+        raise InternalError('Cloning proxy constraint')
+
+    def _modify(self, fxn, dry_run, _silent=False):
+        """
+        Args:
+            fxn (func(target, dry_run)):
+                Modifier function which takes the following arguments:
+                    target (ConstraintBase):
+                        A target constraint object.
+                    dry_run (bool):
+                        Whether to perform real changes (False) or not (True).
+                The function returns nothing, and may throw
+                ConstraintViolationError.
+        """
+        try:
+            fxn(self, dry_run)
+
+        except ConstraintViolationError:
+            self._owner.prune()  # it will re-invoke our prune()
+            if not _silent:
+                raise
+
+        else:
+            for branch in self.iter_branches():
+                branch._modify(other, dry_run=True, _silent=True)
+
+    def update(self, other, dry_run=False):
+        other_target = other._target
+        self._modify(lambda target, dry_run:
+                     target.update(other_target, dry_run), dry_run)
+
+    def set(self, new_value, dry_run=False):
+        self._modify(lambda target, dry_run:
+                     target.set(new_value, dry_run), dry_run)
+
+    def set_option(self, option, new_value, negated=False, dry_run=False):
+        self._modify(lambda target, dry_run:
+                     target.set(option, new_value, negated, dry_run), dry_run)
+
+    get        = property(attrgetter('_target.get'))
+    get_option = property(attrgetter('_target.get_option'))
+
+    check        = property(attrgetter('_target.check'))
+    check_option = property(attrgetter('_target.check_option'))
+    check_mslice = property(attrgetter('_target.check_mslice'))
+
+    __nonzero__ = lambda self: self._target.__nonzero__()
+    __repr__    = lambda self: self._target.__repr__()
+
+
 class ConstraintError(InstanceError):
     """Base class for constraints-related errors."""
 
