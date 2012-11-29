@@ -473,10 +473,10 @@ class ConstraintBase(object):
         clone._value = self._value
         return clone
 
-    def update(self, other):
+    def update(self, other, dry_run=False):
         other_value = other._value
         if other_value is not Ellipsis:
-            self.set(other_value)
+            self.set(other_value, dry_run)
 
     def get(self):
         value = self._value
@@ -493,7 +493,7 @@ class ConstraintBase(object):
         if value is not Ellipsis:
             return value == other_value
 
-    def set(self, new_value):
+    def set(self, new_value, dry_run=False):
         assert new_value is not Ellipsis
 
         old_value = self._value
@@ -502,7 +502,8 @@ class ConstraintBase(object):
                 'Reassigning already set value to a different one: %r != %r',
                 old_value, new_value)
 
-        self._value = new_value
+        if not dry_run:
+            self._value = new_value
 
     def __nonzero__(self):
         """
@@ -550,12 +551,12 @@ class ModuleConstraint(ConstraintBase):
         clone._options = self._options._make(o.clone() for o in self._options)
         return clone
 
-    def update(self, other):
-        super(ModuleConstraint, self).update(other)
+    def update(self, other, dry_run=False):
+        super(ModuleConstraint, self).update(other, dry_run)
 
         if self._value is not False:
             for option, other_option in izip(self._options, other._options):
-                option.update(other_option)
+                option.update(other_option, dry_run)
 
     def get_option(self, option):
         if self._value is False:
@@ -582,19 +583,21 @@ class ModuleConstraint(ConstraintBase):
 
         return check
 
-    def set_option(self, option, new_value, negated=False):
+    def set_option(self, option, new_value, negated=False, dry_run=False):
         if self._value is not False:
-            getattr(self._options, option).set(new_value, negated)
+            option = getattr(self._options, option)
+            set_option = option.set if not negated else option.set_negated
+            set_option(new_value, dry_run)
 
         if not negated:
-            self.set(True)
+            self.set(True, dry_run)
 
-    def set(self, new_value):
+    def set(self, new_value, dry_run=False):
         assert isinstance(new_value, bool)
 
         if self._value is not new_value:
-            super(ModuleConstraint, self).set(new_value)
-            if new_value is False:
+            super(ModuleConstraint, self).set(new_value, dry_run)
+            if not dry_run and new_value is False:
                 self._options = self._options._ellipsis  # to catch stupid bugs
 
     def __nonzero__(self):
@@ -615,72 +618,73 @@ class ModuleConstraint(ConstraintBase):
 
 
 class OptionConstraint(ConstraintBase):
-    """A constraint which supports additional exclusion set."""
-    __slots__ = '_exclusion_set'
+    """A constraint which supports additional negation set."""
+    __slots__ = '_negation_set'
 
     def __init__(self, value=Ellipsis):
         super(OptionConstraint, self).__init__()
-        self._exclusion_set = None
+        self._negation_set = None
 
         if value is not Ellipsis:
             self.set(value)
 
     def clone(self):
         clone = super(OptionConstraint, self).clone()
-        clone._exclusion_set = (self._exclusion_set and
-                                self._exclusion_set.copy())
+        clone._negation_set = (self._negation_set and
+                                self._negation_set.copy())
         return clone
 
-    def set(self, value, negated=False):
+    def set(self, value, dry_run=False):
         assert value is not Ellipsis
 
-        if not negated:
-            if self._exclusion_set is not None and \
-                    value in self._exclusion_set:
+        if self._negation_set is not None and value in self._negation_set:
+            raise ConstraintViolationError(
+                'Setting a new value which was previously excluded: %r',
+                value)
+
+        super(OptionConstraint, self).set(value, dry_run)
+        if not dry_run:
+            self._negation_set = None
+
+    def set_negated(self, value, dry_run=False):
+        assert value is not Ellipsis
+
+        if self._value is not Ellipsis:
+            if self._value == value:
                 raise ConstraintViolationError(
-                    'Setting a new value which was previously excluded: %r',
-                    value)
+                    'Excluding an already set value: %r', value)
 
-            super(OptionConstraint, self).set(value)
-            self._exclusion_set = None
+        elif not dry_run:
+            if self._negation_set is None:
+                self._negation_set = set()
+            self._negation_set.add(value)
 
-        else: # negated, exclude the value
+    def update(self, other, dry_run=False):
+        if not dry_run:
+            other_negation = other._negation_set
+            if self._value is Ellipsis and other_negation is not None:
 
-            if self._value is not Ellipsis:
-                if self._value == value:
-                    raise ConstraintViolationError(
-                        'Excluding an already set value: %r', value)
+                self_negation = self._negation_set
+                if self_negation is None:
+                    self_negation = self._negation_set = set()
 
-            else:
-                if self._exclusion_set is None:
-                    self._exclusion_set = set()
-                self._exclusion_set.add(value)
+                self_negation.update(other_negation)
 
-    def update(self, other):
-        other_exclusion = other._exclusion_set
-        if self._value is Ellipsis and other_exclusion is not None:
-
-            self_exclusion = self._exclusion_set
-            if self_exclusion is None:
-                self_exclusion = self._exclusion_set = set()
-
-            self_exclusion.update(other_exclusion)
-
-        super(OptionConstraint, self).update(other)
+        super(OptionConstraint, self).update(other, dry_run)
 
     def check(self, value):
         ret = super(OptionConstraint, self).check(value)
 
         return False if (ret is None and
-                         self._exclusion_set is not None and
-                         value in self._exclusion_set) else ret
+                         self._negation_set is not None and
+                         value in self._negation_set) else ret
 
     def __nonzero__(self):
         return (super(OptionConstraint, self).__nonzero__() or
-                bool(self._exclusion_set))
+                bool(self._negation_set))
 
     def __repr__(self):
-        return ('<[~%r]>' % self._exclusion_set if self._exclusion_set else
+        return ('<[~%r]>' % self._negation_set if self._negation_set else
                 super(OptionConstraint, self).__repr__())
 
 
