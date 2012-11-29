@@ -31,10 +31,16 @@ class IncrementalDict(dict):
         ancestor = self.base
         while ancestor is not None:
             if key in ancestor:
+                # Found an ancestor which is suitable to handle the request.
                 break
 
-            ancestor = getattr(ancestor, 'base', None)
-
+            try:
+                ancestor = ancestor.base
+            except AttributeError:
+                # The the root dict may be a special one, like defaultdict.
+                # Give the last chance to it, or let it raise error
+                # independently.
+                break
         else:
             raise KeyError
 
@@ -95,7 +101,7 @@ class TreeNode(object):
 
     def prune(self):
         branches = self.__branches
-        if branches is not None:
+        if branches:
             for branch in branches.copy():
                 branch.prune()
 
@@ -410,7 +416,7 @@ class Constraints(TreeNode):
 
         return constraint
 
-    def constrain_mslice(self, mslice, negated=False, branch=False):
+    def constrain_mslice(self, mslice, branch=False):
         """
         Much like a plain 'Constraints.constrain' method, but works with a
         whole mslice at a time.
@@ -418,25 +424,10 @@ class Constraints(TreeNode):
         assert branch or self.can_change()
 
         this = self if not branch else self.new_branch()
-        this_dict = this._modules
 
-        module = mslice._module
-
-        new_constraint = ModuleConstraint(module, mslice)
-
-        try:
-            constraint = this_dict[module]
-        except KeyError:
-            pass
-        else:
-            try:
-                new_constraint.update(constraint)
-
-            except ConstraintViolationError:
-                this.prune()
-                raise
-
-        this_dict[module] = new_constraint
+        this.constrain(mslice._module)
+        for option, value in mslice._iterpairs():
+            this.constrain(mslice._module, option, value)
 
         return this
 
@@ -529,16 +520,19 @@ class ModuleConstraint(ConstraintBase):
     """ModuleConstraint vector."""
     __slots__ = '_options'
 
-    def __init__(self, module, mslice=None):
+    def __init__(self, module):
         super(ModuleConstraint, self).__init__()
 
-        if mslice is None:
-            mslice = module._options._ellipsis
-        else:
-            assert module is mslice._module
-            self.set(True)
+        options = module._options
+        self._options = options._make(OptionConstraint() for _ in options)
 
-        self._options = mslice._make(OptionConstraint(v) for v in mslice)
+        # if mslice is None:
+        #     mslice = module._options._ellipsis
+        # else:
+        #     assert module is mslice._module
+        #     self.set(True)
+
+        # self._options = mslice._make(OptionConstraint(v) for v in mslice)
 
     def clone(self):
         # Check for immutability.
