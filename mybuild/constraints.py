@@ -346,7 +346,7 @@ class Constraints(TreeNode):
         return constraint.check_mslice(mslice)
 
     def constrain(self, module, option=None, value=Ellipsis, negated=False,
-            branch=False):
+            branch=False, dry_run=False):
         """Adds a new constraint.
 
         If only a 'module' argument is given, constrains the module presence.
@@ -365,6 +365,9 @@ class Constraints(TreeNode):
             branch (bool):
                 Whether to create a new branch or to constrain the current
                 object itself.
+            dry_run (bool):
+                Performs only checks for violation, no constraints are actually
+                get modified. In case of an error behaves as usual.
 
         Raises:
             ConstraintViolationError:
@@ -381,7 +384,7 @@ class Constraints(TreeNode):
 
         this = self if not branch else self.new_branch()
 
-        constraint = this._constraint_for(module)
+        constraint = this._constraint_for(module, dry_run)
 
         try:
             if option is None:
@@ -395,28 +398,32 @@ class Constraints(TreeNode):
 
         return this
 
-    def _constraint_for(self, module):
+    def _constraint_for(self, module, dry_run=False):
         """Retrieves a privately owned constraint for the given module."""
         assert self.can_change()
 
         self_dict = self._modules
+        store_constraint = None
 
         try:
             constraint = self_dict[module]
 
         except KeyError: # if necessary, create it from scratch
-            constraint = self_dict[module] = ModuleConstraint(module)
+            constraint = store_constraint = ModuleConstraint(module)
 
         else: # or clone it from a base
             if module not in self_dict: # found in some base
-                constraint = self_dict[module] = constraint.clone()
+                constraint = store_constraint = constraint.clone()
+
+        if not dry_run and store_constraint is not None:
+            self_dict[module] = store_constraint
 
         # Anyway, the 'constraint' is not shared with any other instance,
         # and we are free to modify it.
 
         return constraint
 
-    def constrain_mslice(self, mslice, branch=False):
+    def constrain_mslice(self, mslice, branch=False, dry_run=False):
         """
         Much like a plain 'Constraints.constrain' method, but works with a
         whole mslice at a time.
@@ -425,9 +432,9 @@ class Constraints(TreeNode):
 
         this = self if not branch else self.new_branch()
 
-        this.constrain(mslice._module)
+        this.constrain(mslice._module, dry_run=dry_run)
         for option, value in mslice._iterpairs():
-            this.constrain(mslice._module, option, value)
+            this.constrain(mslice._module, option, value, dry_run=dry_run)
 
         return this
 
@@ -515,7 +522,6 @@ class ConstraintBase(object):
     def __repr__(self):
         value = self._value
         return '<[%r]>' % value if value is not Ellipsis else '<[?]>'
-
 
 class ModuleConstraint(ConstraintBase):
     """ModuleConstraint vector."""
@@ -615,7 +621,6 @@ class ModuleConstraint(ConstraintBase):
                 string += ': %s' % options_str
 
         return '<[%s]>' % string
-
 
 class OptionConstraint(ConstraintBase):
     """A constraint which supports additional negation set."""
