@@ -13,55 +13,9 @@ from itertools import izip
 from operator import attrgetter
 
 from core import *
+from chaindict import ChainDict
 
 import logs as log
-
-
-class IncrementalDict(dict):
-    """Delegates lookup for a missing key to the parent dictionary."""
-    __slots__ = 'base' # a mapping (possibly with a 'base' too), or None
-
-    def __init__(self, base=None):
-        dict.__init__(self)
-        self.base = base
-
-    def __missing__(self, key):
-        """Looks up the chain of ancestors for the key."""
-
-        ancestor = self.base
-        while ancestor is not None:
-            if key in ancestor:
-                # Found an ancestor which is suitable to handle the request.
-                break
-
-            try:
-                ancestor = ancestor.base
-            except AttributeError:
-                # The the root dict may be a special one, like defaultdict.
-                # Give the last chance to it, or let it raise error
-                # independently.
-                break
-        else:
-            raise KeyError
-
-        return ancestor[key]
-
-    def new_branch(self):
-        cls = type(self)
-        return cls(base=self)
-
-    def iter_base_chain(self):
-        ancestor = self.base
-
-        while ancestor is not None:
-            current = ancestor
-            ancestor = getattr(ancestor, 'base', None)
-
-            yield current
-
-    def __repr__(self):
-        return (dict.__repr__(self) if self.base is None else
-                '%r <- %s' % (self.base, dict.__repr__(self)))
 
 
 class TreeNode(object):
@@ -177,7 +131,7 @@ class Constraints(TreeNode):
 
         base_dict = base._modules if base is not None else None
         if _dict is None:
-            _dict = IncrementalDict(base_dict)
+            _dict = ChainDict(base_dict)
         assert _dict.base is base_dict
 
         self._modules = _dict
@@ -289,7 +243,7 @@ class Constraints(TreeNode):
             return ret_dict
 
         base_dict = stop_base._modules if stop_base is not None else None
-        new_dict = IncrementalDict(base_dict)
+        new_dict = ChainDict(base_dict)
 
         for child in branches:
             child_dict = child._modules
