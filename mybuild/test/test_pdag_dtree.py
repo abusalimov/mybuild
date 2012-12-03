@@ -85,6 +85,28 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(False, solution[A])
         self.assertIs(False, solution[B])
 
+    def test_0(self):
+        A,B,C = self.atoms('ABC')
+        nA,nB,nC = map(Not, (A,B,C))
+
+        # (A+B+C)&(~A+B+C)&(A+~B+C)&(A+B+~C)&(~A+~B+C)&(A+~B+~C)&(~A+B+~C)
+        pnode = And(
+            Or( A, B, C),
+            Or(nA, B, C),
+            Or( A,nB, C),
+            Or( A, B,nC),
+            Or( A,nB,nC),
+            Or(nA, B,nC),
+            Or(nA,nB, C),
+        )
+        dtree = Dtree(Pdag(A, B, C))
+
+        solution = dtree.solve({pnode:True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+
 
 if __name__ == '__main__':
 
