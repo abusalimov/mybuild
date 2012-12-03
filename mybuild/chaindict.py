@@ -14,8 +14,8 @@ class ChainDict(dict):
     """
     __slots__ = 'base' # a mapping (possibly with a 'base' too), or None
 
-    def __init__(self, base=None):
-        dict.__init__(self)
+    def __init__(self, base=None, initial={}):
+        dict.__init__(self, initial)
         self.base = base
 
     def __missing__(self, key):
