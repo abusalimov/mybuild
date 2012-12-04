@@ -85,7 +85,7 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(False, solution[A])
         self.assertIs(False, solution[B])
 
-    def test_0(self):
+    def test_6(self):
         A,B,C = self.atoms('ABC')
         nA,nB,nC = map(Not, (A,B,C))
 
@@ -112,7 +112,10 @@ if __name__ == '__main__':
 
     import mybuild.logs as log
 
-    log.zones = set(['pdag'])
+    log.zones = set([
+                    'pdag',
+                    'dtree',
+                    ])
     log.verbose = True
     log.init_log()
 

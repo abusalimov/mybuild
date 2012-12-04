@@ -18,6 +18,8 @@ from operator import attrgetter
 
 from chaindict import ChainDict
 
+import logs as log
+
 
 class Dtree(object):
 
@@ -42,7 +44,7 @@ class Dtree(object):
 
             root[pnode] = value
 
-        root.solve(sorted(nodes, key=lambda n: n not in atoms))
+        root.solve(atoms)
 
         ret = dict.fromkeys(nodes)
         ret.update(root._dict)
@@ -54,15 +56,17 @@ class DtreeNode(object):
     def __init__(self, base=None, _dict=None):
         super(DtreeNode, self).__init__()
 
+        base_dict = base._dict if base is not None else None
+
         if _dict is None:
-            _dict = ChainDict(base._dict) if base is not None else {}
-        elif _dict.base is not base:
+            _dict = ChainDict(base_dict) if base_dict is not None else {}
+        elif _dict.base is not base_dict:
             raise ValueError
 
         self._dict = _dict
         self._decisions = {}
 
-    def new_branch(self, _dict=None):
+    def _new_branch(self, _dict=None):
         cls = type(self)
         return cls(base=self, _dict=_dict)
 
@@ -88,19 +92,27 @@ class DtreeNode(object):
             if old_value != value:
                 raise DtreeConflictError
 
-    def solve(self, pnodes):
-        for pnode in pnodes:
-            self.eval(pnode)
+    def _itemset(self):
+        return set(self._dict.iteritems())
 
-    def eval(self, pnode):
+    def solve(self, pnodes):
+        with log.debug("dtree: solving %d nodes, %d unset", len(pnodes),
+                       len(filter(lambda n: self[n] is None, pnodes))):
+
+            for pnode in pnodes:
+                if self[pnode] is None:
+                    self._eval(pnode)
+
+            self._master_merge()
+
+    def _eval(self, pnode):
         """Attempt to use proof of contradiction."""
 
-        value = self[pnode]
+        with log.debug("dtree: evaluating %s", pnode):
 
-        if value is None:
             def create_branches():
                 for value in True, False:
-                    branch = self.new_branch()
+                    branch = self._new_branch()
                     try:
                         branch[pnode] = value
                     except DtreeConflictError:
@@ -111,44 +123,92 @@ class DtreeNode(object):
             branches = tuple(create_branches())
 
             if not branches:
+                log.debug("dtree: no alternatives")
                 raise DtreeConflictError
 
-            changeset = set(branches[0]._dict.iteritems())
+            changeset = branches[0]._itemset()
             if len(branches) == 2:
                 # intersect changesets from both branches
-                changeset &= set(branches[1]._dict.iteritems())
+                changeset &= branches[1]._itemset()
 
+                log.debug("dtree: two alternatives, %d common values",
+                          len(changeset))
                 self._decisions[pnode] = branches
 
             self._merge_changeset(changeset)
 
-            value = self[pnode]
-
-        return value
-
-    def _merge_to_master_decision(self):
+    def _master_merge(self):
         decisions = self._decisions
         if not decisions:
             return
 
-        master_branches = decisions.popitem()[1]
+        def merge_decision_into_master(master_branches, pnode, branches):
+            log.debug("dtree: merge decisions for %s into %d master branches",
+                      pnode, len(master_branches))
 
-        for pnode, branches in decisions.iteritems():
-            assert len(branches) == 2
+            for master in master_branches:
+                new_branches = master._decisions[pnode] = tuple(
+                    master._merge_as_new_branches(branches))
 
-        # self._merge_changeset(set(branch._dict.iteritems()))
+                if len(new_branches) == 1:
+                    master._merge_resolved_branches([pnode])
+                if new_branches:
+                    yield master
 
-    def _merge_branch(self, branch):
-        assert branch._dict.base is self._dict
-        assert not branch._decisions, "NIY"
+        master_pnode, master_branches = decisions.popitem()
 
-        self._merge_changeset(set(branch._dict.iteritems()))
+        with log.debug("dtree: master merge for %s", master_pnode):
+            while decisions:
+                master_branches = tuple(merge_decision_into_master(
+                    master_branches, *decisions.popitem()))
 
-    def _merge_changeset(self, changeset,
-                         decision_pnode=None, update_dict=True):
+                if not master_branches:
+                    raise DtreeConflictError
+
+            def master_merge_all(branches):
+                for master in branches:
+                    try:
+                        master._master_merge()
+                    except DtreeConflictError:
+                        pass
+                    else:
+                        yield master
+
+            master_branches = decisions[master_pnode] = tuple(
+                master_merge_all(master_branches))
+
+            if not master_branches:
+                raise DtreeConflictError
+
+            if len(master_branches) == 1:
+                log.debug("dtree: single master branch left")
+                master, = master_branches
+
+                master._dict.update(self._dict)
+                master._dict.base = None
+                self._dict = master._dict
+
+                self._decisions = master._decisions
+
+    def _merge_as_new_branches(self, branches):
+        for branch in branches:
+            try:
+                changeset = branch._itemset()
+                diffitems = changeset and self._diff_for(changeset)
+                new_branch = self._new_branch(
+                    _dict=ChainDict(self._dict, diffitems))
+
+                for pnode, value in diffitems:
+                    pnode.context_setting(new_branch, value)
+
+            except DtreeConflictError:
+                pass
+            else:
+                yield new_branch
+
+    def _merge_changeset(self, changeset, update_dict=True):
         self._merge_resolved_branches(
-            self._merge_changeset_resolve(changeset, set(),
-                                          decision_pnode, update_dict))
+            self._merge_changeset_resolve(changeset, set(), update_dict))
 
     def _merge_resolved_branches(self, resolved_pnodes):
         decisions = self._decisions
@@ -156,48 +216,23 @@ class DtreeNode(object):
         while resolved_pnodes:
             branch, = decisions.pop(resolved_pnodes.pop())
 
-            self._merge_changeset_resolve(set(branch._dict.iteritems()),
-                                          resolved_pnodes)
+            self._merge_changeset_resolve(branch._itemset(), resolved_pnodes)
 
     def _merge_changeset_resolve(self, changeset, resolved_pnodes,
-                                 decision_pnode=None, update_dict=True):
+                                 update_dict=True):
         if not changeset:
             return resolved_pnodes
 
-        selfdict = self._dict
-        selfitems = set(selfdict.iteritems())
-
-        # Contains _different_ pairs found in either dict, bot not in both.
-        # This means that conflicting items are retained.
-        diffitems = selfitems ^ changeset
-        diffdict = ChainDict(selfdict, diffitems)
-
-        if len(diffdict) < len(diffitems):
-            # There are some items with the same key, but different values.
-            raise DtreeConflictError
-
-        # Now diffitems holds a changeset for branches of ourselves, if any.
-        diffitems -= selfitems
+        diffitems = self._diff_for(changeset)
         if not diffitems:
             return resolved_pnodes
 
-        decisions = self._decisions
-        if decision_pnode is not None:
-            new_branch = self.new_branch(_dict=diffdict)
-
-            try:
-                decisions[decision_pnode] += new_branch
-            except KeyError:
-                decisions[decision_pnode] = new_branch
-            else:
-                assert len(decisions[decision_pnode]) <= 2
-
-            return
-
         if update_dict:
-            self._dict.update(diffdict)
+            self._dict.update(diffitems)
         else:
             assert all(self[pnode] is value for pnode, value in diffitems)
+
+        decisions = self._decisions
 
         for pnode, value in diffitems:
             if pnode in decisions:
@@ -211,17 +246,18 @@ class DtreeNode(object):
 
         # Finally propagate the new changeset to branches.
 
-        def merge_into_all(branches):
+        def merge_propagate(changeset, branches):
             for branch in branches:
                 try:
-                    branch._merge_changeset(diffitems, update_dict=False)
+                    branch._merge_changeset(changeset, update_dict=False)
                 except DtreeConflictError:
                     pass
                 else:
                     yield branch
 
         for pnode, branches in decisions.iteritems():
-            branches = decisions[pnode] = tuple(merge_into_all(branches))
+            branches = decisions[pnode] = tuple(merge_propagate(diffitems,
+                                                               branches))
 
             if not branches:
                 raise DtreeConflictError
@@ -229,6 +265,22 @@ class DtreeNode(object):
                 resolved_pnodes.add(pnode)
 
         return resolved_pnodes
+
+    def _diff_for(self, changeset):
+        selfitems = set(self._dict.iteritems())
+
+        # Contains _different_ pairs found in either dict, bot not in both.
+        # This means that conflicting items are retained.
+        diffitems = selfitems ^ changeset
+
+        if len(dict(diffitems)) < len(diffitems):
+            # There are some items with the same key, but different values.
+            raise DtreeConflictError
+
+        # Now diffitems holds only items that were not set in the self dict.
+        diffitems -= selfitems
+
+        return diffitems
 
 
 class DtreeError(Exception):
