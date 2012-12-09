@@ -14,22 +14,24 @@ class PdagDtreeTestCase(TestCase):
         def __str__(self):
             return self.name
 
-    def atoms(self, names):
-        return [self.NamedAtom(nm) for nm in names]
+    @classmethod
+    def atoms(cls, names):
+        return [cls.NamedAtom(nm) for nm in names]
 
     def test_1(self):
         A,B,C,D = self.atoms('ABCD')
 
         # (A|B) & (C|D) & (B|~C) & ~B
         pnode = And(Or(A,B), Or(C,D), Or(B, Not(C)), Not(B))
-        dtree = DtreeNode()
-        dtree[pnode] = True
+        dtree = Dtree(Pdag(A, B, C, D))
 
-        self.assertIs(True,  dtree[pnode])
-        self.assertIs(True,  dtree[A])
-        self.assertIs(False, dtree[B])
-        self.assertIs(False, dtree[C])
-        self.assertIs(True,  dtree[D])
+        solution = dtree.solve({pnode:True})
+
+        self.assertIs(True,  solution[pnode])
+        self.assertIs(True,  solution[A])
+        self.assertIs(False, solution[B])
+        self.assertIs(False, solution[C])
+        self.assertIs(True,  solution[D])
 
     def test_2(self):
         A,B = self.atoms('AB')
@@ -38,14 +40,7 @@ class PdagDtreeTestCase(TestCase):
         pnode = And(Or(A,B), Or(Not(A), B), Or(A, Not(B)))
         dtree = Dtree(Pdag(A, B))
 
-        # for k,v in dtree._root._dict.items():
-        #     print v, k, '***' if v is None else ''
-
-        # print '=' * 40
         solution = dtree.solve({pnode:True})
-
-        # for k,v in solution.items():
-        #     print v, k, '***' if v is None else ''
 
         self.assertIs(True, solution[pnode])
         self.assertIs(True, solution[A])
@@ -58,7 +53,7 @@ class PdagDtreeTestCase(TestCase):
         pnode = And(A, Not(A))
         dtree = Dtree(Pdag(A))
 
-        with self.assertRaises(DtreeConflictError):
+        with self.assertRaises(PdagContextError):
             dtree.solve({pnode:True})
 
     def test_4(self):
@@ -106,6 +101,60 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
+
+    def test_7(self):
+        A,B,C,D,E = self.atoms('ABCDE')
+        nA,nB,nC,nD,nE = map(Not, (A,B,C,D,E))
+
+        # the same as test_6 but for 5 variables
+        pnode = And(
+            Or( A, B, C, D, E),
+
+            Or(nA, B, C, D, E),
+            Or( A,nB, C, D, E),
+            Or( A, B,nC, D, E),
+            Or( A, B, C,nD, E),
+            Or( A, B, C, D,nE),
+
+            Or(nA,nB, C, D, E),
+            Or( A,nB,nC, D, E),
+            Or( A, B,nC,nD, E),
+            Or( A, B, C,nD,nE),
+            Or(nA, B, C, D,nE),
+
+            Or(nA, B,nC, D, E),
+            Or( A,nB, C,nD, E),
+            Or( A, B,nC, D,nE),
+            Or(nA, B, C,nD, E),
+            Or( A,nB, C, D,nE),
+
+            Or( A, B,nC,nD,nE),
+            Or(nA, B, C,nD,nE),
+            Or(nA,nB, C, D,nE),
+            Or(nA,nB,nC, D, E),
+            Or( A,nB,nC,nD, E),
+
+            Or( A,nB, C,nD,nE),
+            Or(nA, B,nC, D,nE),
+            Or(nA,nB, C,nD, E),
+            Or( A,nB,nC, D,nE),
+            Or(nA, B,nC,nD, E),
+
+            Or( A,nB,nC,nD,nE),
+            Or(nA, B,nC,nD,nE),
+            Or(nA,nB, C,nD,nE),
+            Or(nA,nB,nC, D,nE),
+            Or(nA,nB,nC,nD, E),
+        )
+        dtree = Dtree(Pdag(A, B, C, D, E))
+
+        solution = dtree.solve({pnode:True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+        self.assertIs(True, solution[D])
+        self.assertIs(True, solution[E])
 
 
 if __name__ == '__main__':
