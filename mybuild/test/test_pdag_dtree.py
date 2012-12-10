@@ -1,22 +1,32 @@
 import unittest
 from unittest import TestCase
 
+from itertools import izip_longest
+
 from mybuild.dtree import *
 from mybuild.pdag import *
 
+
+class NamedAtom(Atom):
+    def __init__(self, name):
+        super(NamedAtom, self).__init__()
+        self.name = name
+    def __str__(self):
+        return self.name
+
+class NamedAtomWithCost(NamedAtom):
+    def __init__(self, name, cost=0):
+        super(NamedAtomWithCost, self).__init__(name)
+        self.cost = cost
+    def __str__(self):
+        return '%s(%s)' % (super(NamedAtomWithCost, self).__str__(), self.cost)
+
 class PdagDtreeTestCase(TestCase):
 
-    class NamedAtom(Atom):
-        __slots__ = 'name'
-        def __init__(self, name):
-            super(PdagDtreeTestCase.NamedAtom, self).__init__()
-            self.name = name
-        def __str__(self):
-            return self.name
-
     @classmethod
-    def atoms(cls, names):
-        return [cls.NamedAtom(nm) for nm in names]
+    def atoms(cls, names, costs=()):
+        return [NamedAtomWithCost(name or '', cost)
+                for name, cost in izip_longest(names, costs, fillvalue=0)]
 
     def test_1(self):
         A,B,C,D = self.atoms('ABCD')
