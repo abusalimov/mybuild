@@ -137,7 +137,7 @@ class PdagNode(object):
     """docstring for PdagNode"""
     __slots__ = '_outgoing'
 
-    costs = (0, 1) # cost = pnode.costs[value] # value is either True or False
+    costs = (0, 0) # cost = pnode.costs[value] # value is either True or False
 
     def __init__(self):
         self._outgoing = set()
@@ -271,7 +271,7 @@ class Not(PdagNode):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
-            ctx[self] = not value
+            ctx.store(self, not value)
 
     def context_setting(self, ctx, value):
         assert self._operand is not None
@@ -290,6 +290,7 @@ class Not(PdagNode):
 class Atom(PdagNode):
     """To be extended by the client."""
     __slots__ = ()
+    costs = (0, 1)
 
     def context_setting(self, ctx, value):
         with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
