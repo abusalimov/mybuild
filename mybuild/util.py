@@ -18,6 +18,36 @@ def unique(iterable, key=id):
             seen_add(k)
             yield element
 
+def filter_bypass(function, exception, iterable):
+    if function is None:
+        return list(iterable)
+
+    def predicate(e):
+        try:
+            function(e)
+        except exception:
+            return False
+        else:
+            return True
+    return filter(predicate, iterable)
+
+def map_bypass(function, exception, *iterables):
+    return list(imap_bypass(function, exception, *iterables))
+
+def imap_bypass(function, exception, *iterables):
+    if function is None:
+        function = lambda *args: tuple(args)
+
+    iterables = map(iter, iterables)
+
+    while True:
+        args = [it.next() for it in iterables]
+        try:
+            e = function(*args)
+        except exception:
+            pass
+        else:
+            yield e
 
 class InstanceBoundTypeMixin(object):
     """

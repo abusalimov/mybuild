@@ -12,11 +12,15 @@ __all__ = [
 
 
 from itertools import izip
+from itertools import repeat
 from operator import attrgetter
+from operator import methodcaller
 
 from chaindict import ChainDict
 from pdag import PdagContext
 from pdag import PdagContextError
+from util import filter_bypass
+from util import map_bypass
 
 import logs as log
 
@@ -56,8 +60,22 @@ class DtreeNode(PdagContext):
         cls = type(self)
         return cls(base=self)
 
-    def _itemset(self):
-        return set(self._dict.iteritems())
+    def _new_branch_with(self, pnode, value):
+        branch = self._new_branch()
+        branch[pnode] = value
+        return branch
+
+    def _new_branch_from(self, changeset):
+        branch = self._new_branch()
+
+        diffitems = changeset and self._diff_for(changeset)
+        if diffitems:
+            branch._dict.update(diffitems)
+
+            for pnode, value in diffitems:
+                pnode.context_setting(branch, value)
+
+        return branch
 
     def solve(self, pnodes, initial_values):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
@@ -70,26 +88,17 @@ class DtreeNode(PdagContext):
 
             for pnode in pnodes:
                 if self[pnode] is None:
-                    self._branch_on(pnode)
+                    self._create_branches_on(pnode)
 
             self._master_merge()
 
-    def _branch_on(self, pnode):
+    def _create_branches_on(self, pnode):
         """Attempt to use proof of contradiction."""
 
         with log.debug("dtree: branching on %s", pnode):
 
-            def create_branches():
-                for value in True, False:
-                    branch = self._new_branch()
-                    try:
-                        branch[pnode] = value
-                    except PdagContextError:
-                        pass
-                    else:
-                        yield branch
-
-            branches = tuple(create_branches())
+            branches = map_bypass(self._new_branch_with, PdagContextError,
+                                  repeat(pnode), (True, False))
 
             if not branches:
                 log.debug("dtree: no alternatives")
@@ -112,41 +121,21 @@ class DtreeNode(PdagContext):
         if not branchmap:
             return
 
-        def merge_decision_into_master(master_branches, pnode, branches):
-            log.debug("dtree: merge branches for %s into %d master branches",
-                      pnode, len(master_branches))
-
-            for master in master_branches:
-                new_branches = master._branchmap[pnode] = tuple(
-                    master._merge_as_new_branches(branches))
-
-                if len(new_branches) == 1:
-                    master._pending_resolve.add(pnode)
-                    master._merge_resolved_branches()
-                if new_branches:
-                    yield master
-
         master_pnode, master_branches = branchmap.popitem()
 
         with log.debug("dtree: master merge for %s", master_pnode):
             while branchmap:
-                master_branches = tuple(merge_decision_into_master(
-                    master_branches, *branchmap.popitem()))
+                pnode, branches = branchmap.popitem()
+                master_branches = filter_bypass(
+                    methodcaller('_merge_as_branches_on', pnode, branches),
+                    PdagContextError, master_branches)
 
                 if not master_branches:
                     raise PdagContextError
 
-            def master_merge_all(branches):
-                for master in branches:
-                    try:
-                        master._master_merge()
-                    except PdagContextError:
-                        pass
-                    else:
-                        yield master
-
-            master_branches = branchmap[master_pnode] = tuple(
-                master_merge_all(master_branches))
+            master_branches = branchmap[master_pnode] = filter_bypass(
+                methodcaller('_master_merge'),
+                PdagContextError, master_branches)
 
             if not master_branches:
                 raise PdagContextError
@@ -161,22 +150,17 @@ class DtreeNode(PdagContext):
 
                 self._branchmap = master._branchmap
 
-    def _merge_as_new_branches(self, branches):
-        for branch in branches:
-            try:
-                changeset = branch._itemset()
-                diffitems = changeset and self._diff_for(changeset)
+    def _merge_as_branches_on(self, pnode, branches):
+        new_branches = self._branchmap[pnode] = map_bypass(
+            self._new_branch_from, PdagContextError,
+            (branch._itemset() for branch in branches))
 
-                new_branch = self._new_branch()
-                new_branch._dict.update(diffitems)
+        if not new_branches:
+            raise PdagContextError
 
-                for pnode, value in diffitems:
-                    pnode.context_setting(new_branch, value)
-
-            except PdagContextError:
-                pass
-            else:
-                yield new_branch
+        elif len(new_branches) == 1:
+            self._pending_resolve.add(pnode)
+            self._merge_resolved_branches()
 
     def _merge_changeset(self, changeset, update_dict=True):
         self._merge_changeset_resolve(changeset, update_dict)
@@ -212,8 +196,8 @@ class DtreeNode(PdagContext):
         for pnode, value in diffitems:
             # If the pnode has been used for branching then prune a bad one.
             if pnode in branchmap:
-                branches = branchmap[pnode] = tuple(b for b in branchmap[pnode]
-                                                    if b[pnode] == value)
+                branches = branchmap[pnode] = list(b for b in branchmap[pnode]
+                                                   if b[pnode] == value)
                 if not branches:
                     raise PdagContextError
 
@@ -222,29 +206,20 @@ class DtreeNode(PdagContext):
 
         # Finally propagate the new changeset to branches.
 
-        def merge_propagate(changeset, branches):
-            for branch in branches:
-                try:
-                    branch._merge_changeset(changeset, update_dict=False)
-                except PdagContextError:
-                    pass
-                else:
-                    yield branch
-
         resolved_pnodes = self._pending_resolve
+
         for pnode, branches in branchmap.iteritems():
-            branches = branchmap[pnode] = tuple(merge_propagate(diffitems,
-                                                                branches))
+            branches = branchmap[pnode] = filter_bypass(
+                methodcaller('_merge_changeset', changeset, update_dict=False),
+                PdagContextError, branches)
 
             if not branches:
                 raise PdagContextError
             if len(branches) == 1:
                 resolved_pnodes.add(pnode)
 
-        return
-
     def _diff_for(self, changeset):
-        selfitems = set(self._dict.iteritems())
+        selfitems = self._itemset()
 
         # Contains _different_ pairs found in either dict, bot not in both.
         # This means that conflicting items are retained.
@@ -258,5 +233,8 @@ class DtreeNode(PdagContext):
         diffitems -= selfitems
 
         return diffitems
+
+    def _itemset(self):
+        return set(self._dict.iteritems())
 
 
