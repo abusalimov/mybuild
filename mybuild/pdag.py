@@ -279,6 +279,37 @@ class Not(PdagNode):
         return '~%s' % self._operand
 
 
+class Implies(PdagNode):
+    __slots__ = '_if', '_then'
+
+    def __init__(self, if_, then):
+        super(Implies, self).__init__()
+
+        self._if = if_
+        self._new_incoming(if_)
+
+        self._then = then
+        self._new_incoming(then)
+
+    def _incoming_setting(self, incoming, ctx, value):
+        with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
+                       self.bind(ctx), incoming.bind(ctx)):
+
+            if (incoming is self._if) == value:
+                ctx.store(self, value)
+
+    # def context_setting(self, ctx, value):
+    #     assert self._operand is not None
+
+    #     with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+
+    #         ctx[self._operand] = not value
+    #         super(Not, self).context_setting(ctx, value)
+
+    # def __str__(self):
+    #     return '~%s' % self._operand
+
+
 class Atom(PdagNode):
     """To be extended by the client."""
     __slots__ = ()
