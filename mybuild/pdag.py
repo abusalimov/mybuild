@@ -161,17 +161,15 @@ class PdagNode(object):
 
 class LatticeOp(PdagNode):
     """Associative, commutative and idempotent operation."""
-    __slots__ = '_incoming'
+    __slots__ = '_operands'
 
-    def __init__(self, *incoming):
+    def __init__(self, *operands):
         super(LatticeOp, self).__init__()
-        self._incoming = set()
-        for operand in incoming:
-            self._new_incoming(operand)
 
-    def _new_incoming(self, incoming):
-        self._incoming.add(incoming)
-        super(LatticeOp, self)._new_incoming(incoming)
+        self._operands = set()
+        for operand in operands:
+            self._operands.add(operand)
+            self._new_incoming(operand)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -190,7 +188,7 @@ class LatticeOp(PdagNode):
 
             if value is self._identity:
                 log.debug("pdag: new value is identity")
-                for operand in self._incoming:
+                for operand in self._operands:
                     ctx[operand] = value
 
             else:
@@ -202,12 +200,12 @@ class LatticeOp(PdagNode):
     def _eval_operands(self, ctx):
         with log.debug("pdag: %s: %s, evaluating: [%s]",
                        type(self).__name__, self.bind(ctx),
-                       ', '.join(str(i.bind(ctx)) for i in self._incoming)):
+                       ', '.join(str(i.bind(ctx)) for i in self._operands)):
 
             zero = self._zero
 
             last_unset_operand = None
-            for operand in self._incoming:
+            for operand in self._operands:
                 value = ctx[operand]
 
                 if value is zero:
@@ -234,9 +232,9 @@ class LatticeOp(PdagNode):
                 log.debug("pdag: sole operand left, but self value is not zero")
 
     # def __repr__(self):
-    #     return self._repr_sign.join(map(repr, self._incoming)).join('()')
+    #     return self._repr_sign.join(map(repr, self._operands)).join('()')
     def __str__(self):
-        return self._repr_sign.join(map(str, self._incoming)).join('()')
+        return self._repr_sign.join(map(str, self._operands)).join('()')
 
 class And(LatticeOp):
     _identity = True
@@ -254,16 +252,10 @@ class Or(LatticeOp):
 class Not(PdagNode):
     __slots__ = '_operand'
 
-    def __init__(self, operand=None):
+    def __init__(self, operand):
         super(Not, self).__init__()
-        self._operand = None
-        if operand is not None:
-            self._new_incoming(operand)
-
-    def _new_incoming(self, incoming):
-        assert self._operand is None
-        self._operand = incoming
-        super(Not, self)._new_incoming(incoming)
+        self._operand = operand
+        self._new_incoming(operand)
 
     def _incoming_setting(self, incoming, ctx, value):
         assert incoming is self._operand
