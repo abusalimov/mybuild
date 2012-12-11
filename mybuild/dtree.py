@@ -34,8 +34,6 @@ class Dtree(object):
         self._pdag = pdag_
 
     def solve(self, initial_values):
-        from itertools import permutations
-
         nodes = self.pdag.nodes
         atoms = self.pdag.atoms
 
@@ -47,7 +45,7 @@ class Dtree(object):
         return ret
 
 class DtreeNode(PdagContext):
-    __slots__ = '_dict', '_cost', '_branchmap', '_pending_resolve'
+    __slots__ = '_dict', '_cost', '_branchmap'
 
     def __init__(self, base=None):
         super(DtreeNode, self).__init__()
@@ -55,7 +53,6 @@ class DtreeNode(PdagContext):
         self._dict = ChainDict(base._dict) if base is not None else {}
         self._cost = 0
         self._branchmap = {}
-        self._pending_resolve = set()
 
     def _new_branch(self):
         cls = type(self)
@@ -171,23 +168,23 @@ class DtreeNode(PdagContext):
             raise PdagContextError
 
         elif len(new_branches) == 1:
-            self._pending_resolve.add(pnode)
-            self._merge_resolved_branches()
+            self._merge_resolved_branches([pnode])
 
     def _merge_changeset(self, changeset, update_dict=True):
-        self._merge_changeset_resolve(changeset, update_dict)
-        self._merge_resolved_branches()
+        resolved_pnodes = set()
+        self._merge_changeset_resolve(changeset, resolved_pnodes, update_dict)
+        self._merge_resolved_branches(resolved_pnodes)
 
-    def _merge_resolved_branches(self):
+    def _merge_resolved_branches(self, resolved_pnodes):
         branchmap = self._branchmap
 
-        resolved_pnodes = self._pending_resolve
         while resolved_pnodes:
             branch, = branchmap.pop(resolved_pnodes.pop())
 
-            self._merge_changeset_resolve(branch._itemset())
+            self._merge_changeset_resolve(branch._itemset(), resolved_pnodes)
 
-    def _merge_changeset_resolve(self, changeset, update_dict=True):
+    def _merge_changeset_resolve(self, changeset, resolved_pnodes,
+                                 update_dict=True):
         diffitems = changeset and self._diff_for(changeset)
         if not diffitems:
             return
@@ -223,8 +220,6 @@ class DtreeNode(PdagContext):
             pnode.context_setting(self, value)
 
         # Finally propagate the new changeset to branches.
-
-        resolved_pnodes = self._pending_resolve
 
         for pnode, branches in branchmap.iteritems():
             branches = branchmap[pnode] = filter_bypass(
