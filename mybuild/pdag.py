@@ -79,6 +79,10 @@ class PdagContext(object):
             notify_pnode (bool):
                 Tells whether to call 'PdagNode.context_setting' or not.
 
+        Returns:
+            An old value (which is the same as new one), if any,
+            or None otherwise.
+
         Raises:
             PdagContextError:
                 When another value has already been set for this pnode.
@@ -99,6 +103,9 @@ class PdagContext(object):
         else:
             if old_value != value:
                 raise PdagContextError
+
+            return old_value
+
 
 class Pdag(object):
 
@@ -129,6 +136,8 @@ class Pdag(object):
 class PdagNode(object):
     """docstring for PdagNode"""
     __slots__ = '_outgoing'
+
+    costs = (0, 1) # cost = pnode.costs[value] # value is either True or False
 
     def __init__(self):
         self._outgoing = set()

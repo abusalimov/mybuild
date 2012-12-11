@@ -47,12 +47,13 @@ class Dtree(object):
         return ret
 
 class DtreeNode(PdagContext):
-    __slots__ = '_dict', '_branchmap', '_pending_resolve'
+    __slots__ = '_dict', '_cost', '_branchmap', '_pending_resolve'
 
     def __init__(self, base=None):
         super(DtreeNode, self).__init__()
 
         self._dict = ChainDict(base._dict) if base is not None else {}
+        self._cost = 0
         self._branchmap = {}
         self._pending_resolve = set()
 
@@ -74,8 +75,17 @@ class DtreeNode(PdagContext):
 
             for pnode, value in diffitems:
                 pnode.context_setting(branch, value)
+                branch._cost += pnode.costs[value]
 
         return branch
+
+    def store(self, pnode, value, notify_pnode=False):
+        old_value = super(DtreeNode, self).store(pnode, value, notify_pnode)
+
+        if old_value is None:
+            self._cost += pnode.costs[value]
+
+        return old_value
 
     def solve(self, pnodes, initial_values):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
@@ -148,6 +158,8 @@ class DtreeNode(PdagContext):
                 master._dict.base = None
                 self._dict = master._dict
 
+                self._cost += master._cost
+
                 self._branchmap = master._branchmap
 
     def _merge_as_branches_on(self, pnode, branches):
@@ -182,14 +194,20 @@ class DtreeNode(PdagContext):
 
         if update_dict:
             self._dict.update(diffitems)
+            self._cost += sum(pnode.costs[value] for pnode, value in diffitems)
 
         else:
-            # Not sure if this is ever useful.
+            # Propagating a changeset into a branch.
+            # Remove items that are now available in a base, adjust the cost.
             for pnode, value in changeset - diffitems:
                 assert self._dict[pnode] == value
                 del self._dict[pnode]
+                self._cost -= pnode.costs[value]
 
             assert all(self[pnode] == value for pnode, value in changeset)
+
+        assert self._cost == sum(pnode.costs[value]
+                                 for pnode, value in self._dict.iteritems())
 
         branchmap = self._branchmap
 
@@ -218,7 +236,7 @@ class DtreeNode(PdagContext):
             if len(branches) == 1:
                 resolved_pnodes.add(pnode)
 
-    def _diff_for(self, changeset):
+    def _diff_for(self, changeset, cost=None):
         selfitems = self._itemset()
 
         # Contains _different_ pairs found in either dict, bot not in both.
