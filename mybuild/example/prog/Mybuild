@@ -1,0 +1,28 @@
+
+package('myprog')
+
+mod (
+	'init1',
+
+	#implements = 
+	sources = ['init1.c'],
+)
+
+mod (
+	'init2',
+
+	#implements = 
+	sources = ['init2.c'],
+)
+
+mod (
+	'body',
+
+	sources = ['body.c'],
+)
+
+mod (
+	'prog',
+
+	depends = ['init1', 'body'],
+)
