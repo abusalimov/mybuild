@@ -14,6 +14,7 @@ __all__ = [
     "Or",
     "Not",
     "Implies",
+    "AtMostOne",
     "Atom",
 ]
 
@@ -186,17 +187,55 @@ class PdagNode(object):
         return PnodeInContext(self, ctx)
 
 
-class LatticeOp(PdagNode):
-    """Associative, commutative and idempotent operation."""
+class OperandSetNode(PdagNode):
     __slots__ = '_operands'
 
-    def __init__(self, *operands):
-        super(LatticeOp, self).__init__()
+    class OperandError(Exception):
+        pass
+
+    def __init__(self, operands):
+        super(OperandSetNode, self).__init__()
 
         self._operands = set()
         for operand in operands:
             self._operands.add(operand)
             self._new_incoming(operand)
+
+    def _single_unset_operand(self, ctx, break_on=None):
+        """
+        Returns:
+            Single operand left unset (if any), None if all operands are set.
+        Raises:
+            self.OperandError:
+                If more than one operands are still unset, or when 'break_on'
+                is not None and an operand with that value is encountered.
+        """
+        found_single = None
+
+        for operand in self._operands:
+            operand_value = ctx[operand]
+
+            if operand_value is None:
+                if found_single is not None:
+                    break
+
+                found_single = operand
+
+            elif operand_value is break_on:
+                break
+
+        else:
+            return found_single
+
+        raise self.OperandError
+
+
+class LatticeOpNode(OperandSetNode):
+    """Associative, commutative and idempotent operation."""
+    __slots__ = ()
+
+    def __init__(self, *operands):
+        super(LatticeOpNode, self).__init__(operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -231,44 +270,35 @@ class LatticeOp(PdagNode):
                        ', '.join(str(i.bind(ctx)) for i in self._operands)):
 
             zero = self._zero
+            try:
+                last_unset = self._single_unset_operand(ctx, break_on=zero)
 
-            last_unset_operand = None
-            for operand in self._operands:
-                value = ctx[operand]
-
-                if value is zero:
-                    log.debug("pdag: operand value is zero")
-                    self._store_self(ctx, zero)
-                    return
-
-                if value is None:
-                    if last_unset_operand is not None:
-                        log.debug("pdag: too many unset operands")
-                        return
-                    last_unset_operand = operand
-
-            if last_unset_operand is None:
-                log.debug("pdag: all operands are identity")
-                self._store_self(ctx, self._identity)
-
-            elif ctx[self] is zero:
-                log.debug("pdag: sole unset operand left: %s",
-                          last_unset_operand)
-                ctx[last_unset_operand] = zero
+            except self.OperandError:
+                log.debug("pdag: too many unset operands, or zero encountered")
 
             else:
-                log.debug("pdag: sole operand left, but self value is not zero")
+                if last_unset is None:
+                    log.debug("pdag: all operands are identity")
+                    self._store_self(ctx, self._identity)
+
+                elif ctx[self] is zero:
+                    log.debug("pdag: last unset operand: %s", last_unset)
+                    ctx[last_unset] = zero
 
     def __str__(self):
         return self._repr_sign.join(map(str, self._operands)).join('()')
 
-class And(LatticeOp):
+class And(LatticeOpNode):
+    __slots__ = ()
+
     _identity = True
     _zero     = False
 
     _repr_sign = '&'
 
-class Or(LatticeOp):
+class Or(LatticeOpNode):
+    __slots__ = ()
+
     _identity = False
     _zero     = True
 
@@ -357,6 +387,63 @@ class Implies(PdagNode):
 
     def __str__(self):
         return '%s => %s' % (self._if, self._then)
+
+
+class AtMostOne(OperandSetNode):
+    """
+    Allows at most a single operand to be True. Evaluates to True if a single
+    operand is True, and to False if *all* operands are also False.
+    """
+    __slots__ = ()
+
+    def __init__(self, *operands):
+        super(AtMostOne, self).__init__(operands)
+
+    def _incoming_setting(self, incoming, ctx, value):
+        with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
+                       self.bind(ctx), incoming.bind(ctx)):
+
+            if value:
+                self._store_self(ctx, True)
+
+                for operand in self._operands:
+                    if operand is not incoming:
+                        operand._store_self(ctx, False)
+
+            else:
+                self._eval_operands(ctx)
+
+    def context_setting(self, ctx, value):
+        with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+
+            if not value:
+                ctx.store_all(self._operands, False)
+
+            else:
+                self._eval_operands(ctx)
+
+            self._notify_outgoing(ctx, value)
+
+    def _eval_operands(self, ctx):
+        with log.debug("pdag: %s: %s, evaluating: [%s]",
+                       type(self).__name__, self.bind(ctx),
+                       ', '.join(str(i.bind(ctx)) for i in self._operands)):
+            try:
+                last_unset = self._single_unset_operand(ctx, break_on=True)
+
+            except self.OperandError:
+                log.debug("pdag: too many unset operands, or True encountered")
+
+            else:
+                if last_unset is None:
+                    log.debug("pdag: all operands are set to False")
+                    self._store_self(ctx, False)
+
+                else:
+                    log.debug("pdag: last unset operand: %s", last_unset)
+                    self_value = ctx[self]
+                    if self_value is not None:
+                        ctx[last_unset] = self_value
 
 
 class Atom(PdagNode):

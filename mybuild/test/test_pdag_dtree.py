@@ -29,13 +29,11 @@ class PdagDtreeTestCase(TestCase):
                 NamedAtom(name) for name, cost in izip_longest(names, costs)]
 
     def test_1(self):
-        A,B,C,D = self.atoms('ABCD')
+        A,B,C,D = atoms = self.atoms('ABCD')
 
         # (A|B) & (C|D) & (B|~C) & ~B
         pnode = And(Or(A,B), Or(C,D), Or(B, Not(C)), Not(B))
-        dtree = Dtree(Pdag(A, B, C, D))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True,  solution[pnode])
         self.assertIs(True,  solution[A])
@@ -44,54 +42,47 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True,  solution[D])
 
     def test_2(self):
-        A,B = self.atoms('AB')
+        A,B = atoms = self.atoms('AB')
 
         # (A|B) & (~A|B) & (A|~B)
         pnode = And(Or(A,B), Or(Not(A), B), Or(A, Not(B)))
-        dtree = Dtree(Pdag(A, B))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True, solution[pnode])
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
 
     def test_3(self):
-        A, = self.atoms('A')
+        A, = atoms = self.atoms('A')
 
         # A & ~A
         pnode = And(A, Not(A))
-        dtree = Dtree(Pdag(A))
 
         with self.assertRaises(PdagContextError):
-            dtree.solve({pnode:True})
+            Dtree(Pdag(*atoms)).solve({pnode:True})
 
     def test_4(self):
-        A,B = self.atoms('AB')
+        A,B = atoms = self.atoms('AB')
 
         # (A|B) & (~A | A&~A)
         pnode = And(Or(A, B), Or(Not(A), And(A, Not(A))))
-        dtree = Dtree(Pdag(A, B))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(False, solution[A])
         self.assertIs(True,  solution[B])
 
     def test_5(self):
-        A,B = self.atoms('AB')
+        A,B = atoms = self.atoms('AB')
 
         # (~A + A&B + B) & (~B + ~B&A)
         pnode = And(Or(Not(A), And(A,B), B), Or(Not(B), And(A, Not(B))))
-        dtree = Dtree(Pdag(A, B))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(False, solution[A])
         self.assertIs(False, solution[B])
 
     def test_6(self):
-        A,B,C = self.atoms('ABC')
+        A,B,C = atoms = self.atoms('ABC')
         nA,nB,nC = map(Not, (A,B,C))
 
         # (A+B+C)&(~A+B+C)&(A+~B+C)&(A+B+~C)&(~A+~B+C)&(A+~B+~C)&(~A+B+~C)
@@ -104,16 +95,15 @@ class PdagDtreeTestCase(TestCase):
             Or(nA, B,nC),
             Or(nA,nB, C),
         )
-        dtree = Dtree(Pdag(A, B, C))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
 
+    @unittest.skip("Outputs too much when logging is on")
     def test_7(self):
-        A,B,C,D,E = self.atoms('ABCDE')
+        A,B,C,D,E = atoms = self.atoms('ABCDE')
         nA,nB,nC,nD,nE = map(Not, (A,B,C,D,E))
 
         # the same as test_6 but for 5 variables
@@ -156,9 +146,7 @@ class PdagDtreeTestCase(TestCase):
             Or(nA,nB,nC, D,nE),
             Or(nA,nB,nC,nD, E),
         )
-        dtree = Dtree(Pdag(A, B, C, D, E))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
@@ -167,30 +155,60 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[E])
 
     def test_8(self):
-        A,B = self.atoms('AB')
+        A,B = atoms = self.atoms('AB')
 
         # (A=>B) & A
         pnode = And(Implies(A,B), A)
-        dtree = Dtree(Pdag(A,B))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True,  solution[pnode])
         self.assertIs(True,  solution[A])
         self.assertIs(True,  solution[B])
 
     def test_9(self):
-        A,B = self.atoms('AB')
+        A,B = atoms = self.atoms('AB')
 
         # (A=>B) & ~B
         pnode = And(Implies(A,B), Not(B))
-        dtree = Dtree(Pdag(A,B))
-
-        solution = dtree.solve({pnode:True})
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True})
 
         self.assertIs(True,  solution[pnode])
         self.assertIs(False, solution[A])
         self.assertIs(False, solution[B])
+
+    def test_10(self):
+        A,B,C = atoms = atoms = self.atoms('ABC')
+
+        pnode = AtMostOne(A,B,C)
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True, A:True})
+
+        self.assertIs(False, solution[B])
+        self.assertIs(False, solution[C])
+
+    def test_11(self):
+        A,B,C = atoms = atoms = self.atoms('ABC')
+
+        pnode = AtMostOne(A,B,C)
+        solution = Dtree(Pdag(*atoms)).solve({pnode:True, A:False, B:False})
+
+        self.assertIs(True, solution[C])
+
+    def test_12(self):
+        A,B,C = atoms = atoms = self.atoms('ABC')
+
+        pnode = AtMostOne(A,B,C)
+        solution = Dtree(Pdag(*atoms)).solve({pnode:False})
+
+        self.assertIs(False, solution[A])
+        self.assertIs(False, solution[B])
+        self.assertIs(False, solution[C])
+
+    def test_13(self):
+        A,B,C = atoms = atoms = self.atoms('ABC')
+
+        pnode = AtMostOne(A,B,C)
+        with self.assertRaises(PdagContextError):
+            Dtree(Pdag(*atoms)).solve({A:True, B:True})
 
 
 if __name__ == '__main__':
