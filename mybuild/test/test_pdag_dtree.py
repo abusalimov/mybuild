@@ -25,8 +25,8 @@ class PdagDtreeTestCase(TestCase):
 
     @classmethod
     def atoms(cls, names, costs=()):
-        return [NamedAtomWithCost(name or '', cost)
-                for name, cost in izip_longest(names, costs, fillvalue=0)]
+        return [NamedAtomWithCost(name or '', cost) if cost is not None else
+                NamedAtom(name) for name, cost in izip_longest(names, costs)]
 
     def test_1(self):
         A,B,C,D = self.atoms('ABCD')
@@ -165,6 +165,32 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[C])
         self.assertIs(True, solution[D])
         self.assertIs(True, solution[E])
+
+    def test_8(self):
+        A,B = self.atoms('AB')
+
+        # (A=>B) & A
+        pnode = And(Implies(A,B), A)
+        dtree = Dtree(Pdag(A,B))
+
+        solution = dtree.solve({pnode:True})
+
+        self.assertIs(True,  solution[pnode])
+        self.assertIs(True,  solution[A])
+        self.assertIs(True,  solution[B])
+
+    def test_9(self):
+        A,B = self.atoms('AB')
+
+        # (A=>B) & ~B
+        pnode = And(Implies(A,B), Not(B))
+        dtree = Dtree(Pdag(A,B))
+
+        solution = dtree.solve({pnode:True})
+
+        self.assertIs(True,  solution[pnode])
+        self.assertIs(False, solution[A])
+        self.assertIs(False, solution[B])
 
 
 if __name__ == '__main__':

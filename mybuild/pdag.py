@@ -13,6 +13,7 @@ __all__ = [
     "And",
     "Or",
     "Not",
+    "Implies",
     "Atom",
 ]
 
@@ -60,7 +61,7 @@ class PdagContext(object):
         """
         self.store(pnode, value, notify_pnode=True)
 
-    def store(self, pnode, value, notify_pnode=False):
+    def store(self, pnode, value, notify_pnode=True):
         """
         Set value of a given pnode.
 
@@ -106,6 +107,20 @@ class PdagContext(object):
 
             return old_value
 
+    def store_all(self, pnodes, value, notify_pnode=True):
+        if notify_pnode:
+            pnodes_to_notify = []
+            for pnode in pnodes:
+                if self.store(pnode, value, notify_pnode=False) is None:
+                    pnodes_to_notify.append(pnode)
+
+            for pnode in pnodes_to_notify:
+                pnode.context_setting(self, value)
+
+        else:
+            for pnode in pnodes:
+                self.store(pnode, value, notify_pnode=False)
+
 
 class Pdag(object):
 
@@ -149,11 +164,18 @@ class PdagNode(object):
         """Here 'value' is either True or False."""
         raise NotImplementedError
 
-    def context_setting(self, ctx, value):
+    def _notify_outgoing(self, ctx, value):
         log.debug("pdag: outgoing: [%s]",
                   ', '.join(str(out.bind(ctx)) for out in self._outgoing))
         for out in self._outgoing:
             out._incoming_setting(self, ctx, value)
+
+    def _store_self(self, ctx, value):
+        if ctx.store(self, value, notify_pnode=False) is None:
+            self._notify_outgoing(ctx, value)
+
+    def context_setting(self, ctx, value):
+        self._notify_outgoing(ctx, value)
 
     def bind(self, ctx):
         return PnodeInContext(self, ctx)
@@ -177,7 +199,7 @@ class LatticeOp(PdagNode):
 
             if value is self._zero:
                 log.debug("pdag: operand value is zero")
-                ctx.store(self, value)
+                self._store_self(ctx, value)
 
             else:
                 log.debug("pdag: operand value is identity")
@@ -188,14 +210,15 @@ class LatticeOp(PdagNode):
 
             if value is self._identity:
                 log.debug("pdag: new value is identity")
-                for operand in self._operands:
-                    ctx[operand] = value
+                ctx.store_all(self._operands, value)
+                # for operand in self._operands:
+                #     ctx[operand] = value
 
             else:
                 log.debug("pdag: new value is zero")
                 self._eval_operands(ctx)
 
-            super(LatticeOp, self).context_setting(ctx, value)
+            self._notify_outgoing(ctx, value)
 
     def _eval_operands(self, ctx):
         with log.debug("pdag: %s: %s, evaluating: [%s]",
@@ -210,7 +233,7 @@ class LatticeOp(PdagNode):
 
                 if value is zero:
                     log.debug("pdag: operand value is zero")
-                    ctx.store(self, zero)
+                    self._store_self(ctx, zero)
                     return
 
                 if value is None:
@@ -221,7 +244,7 @@ class LatticeOp(PdagNode):
 
             if last_unset_operand is None:
                 log.debug("pdag: all operands are identity")
-                ctx.store(self, self._identity)
+                self._store_self(ctx, self._identity)
 
             elif ctx[self] is zero:
                 log.debug("pdag: sole unset operand left: %s",
@@ -231,8 +254,6 @@ class LatticeOp(PdagNode):
             else:
                 log.debug("pdag: sole operand left, but self value is not zero")
 
-    # def __repr__(self):
-    #     return self._repr_sign.join(map(repr, self._operands)).join('()')
     def __str__(self):
         return self._repr_sign.join(map(str, self._operands)).join('()')
 
@@ -263,23 +284,27 @@ class Not(PdagNode):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
-            ctx.store(self, not value)
+            self._store_self(ctx, not value)
 
     def context_setting(self, ctx, value):
-        assert self._operand is not None
-
         with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
 
             ctx[self._operand] = not value
-            super(Not, self).context_setting(ctx, value)
+            self._notify_outgoing(ctx, value)
 
-    # def __repr__(self):
-    #     return '~%r' % self._operand
     def __str__(self):
         return '~%s' % self._operand
 
 
 class Implies(PdagNode):
+    """
+       if    then    self
+    -----   -----   -----
+     True    True    True
+     True   False   False
+    False    True    True
+    False   False    True
+    """
     __slots__ = '_if', '_then'
 
     def __init__(self, if_, then):
@@ -295,19 +320,38 @@ class Implies(PdagNode):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
-            if (incoming is self._if) == value:
-                ctx.store(self, value)
+            if (incoming is self._then) is value:
+                self._store_self(ctx, True)
 
-    # def context_setting(self, ctx, value):
-    #     assert self._operand is not None
+            else:
+                other_operand = self._then if value else self._if
 
-    #     with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+                self_value = ctx[self]
+                if self_value is not None:
+                    ctx[other_operand] = self_value ^ (not value)
 
-    #         ctx[self._operand] = not value
-    #         super(Not, self).context_setting(ctx, value)
+                else:
+                    other_value = ctx[other_operand]
+                    if other_value is not None:
+                        self._store_self(ctx, other_value ^ (not value))
 
-    # def __str__(self):
-    #     return '~%s' % self._operand
+    def context_setting(self, ctx, value):
+        with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+
+            if not value:
+                ctx[self._if] = True
+                ctx[self._then] = False
+
+            elif ctx[self._if] is True:
+                ctx[self._then] = True
+
+            elif ctx[self._then] is False:
+                ctx[self._if] = False
+
+            self._notify_outgoing(ctx, value)
+
+    def __str__(self):
+        return '%s => %s' % (self._if, self._then)
 
 
 class Atom(PdagNode):
