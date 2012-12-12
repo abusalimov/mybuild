@@ -128,6 +128,10 @@ class Pdag(object):
     nodes = property(attrgetter('_nodes'))
 
     def __init__(self, *atoms):
+        super(Pdag, self).__init__()
+        self._set_atoms(atoms)
+
+    def _set_atoms(self, atoms):
         self._atoms = atoms = frozenset(atoms)
         for atom in atoms:
             if not isinstance(atom, Atom):
@@ -159,6 +163,7 @@ class PdagNode(object):
 
     def _new_incoming(self, incoming):
         incoming._outgoing.add(self)
+        return incoming
 
     def _incoming_setting(self, incoming, ctx, value):
         """Here 'value' is either True or False."""

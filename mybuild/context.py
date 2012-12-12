@@ -22,11 +22,12 @@ from core import *
 from constraints import *
 from expr import *
 from util import singleton
+import pdag
 
 import logs as log
 
 
-class Context(object):
+class Context(pdag.Pdag):
     """docstring for Context"""
 
     def __init__(self):
@@ -78,8 +79,16 @@ class Context(object):
 
         return context
 
+    def atom_for(self, module, option=None, value=Ellipsis):
+        context = self.context_for(module)
 
-class ModuleContext(object):
+        if option is not None:
+            return context.atom_for(option, value)
+
+        return context
+
+
+class ModuleContext(pdag.Atom):
     """docstring for ModuleContext"""
 
     def __init__(self, context, module):
@@ -136,16 +145,20 @@ class NotifyingMixin(object):
 
 
 class NotifyingSet(MutableSet, NotifyingMixin):
-    """docstring for NotifyingSet"""
 
     def __init__(self, values):
         super(NotifyingSet, self).__init__()
-        self._set = set(values)
+        self._dict = {}
+
+        self |= values
+
+    def _create_value_for(self, key):
+        pass
 
     def add(self, value):
         if value in self:
             return
-        self._set.add(value)
+        self._dict[value] = self._create_value_for(value)
 
         self._notify(value)
 
@@ -155,21 +168,50 @@ class NotifyingSet(MutableSet, NotifyingMixin):
         raise NotImplementedError
 
     def __iter__(self):
-        return iter(self._set)
+        return iter(self._dict)
     def __len__(self):
-        return len(self._set)
+        return len(self._dict)
     def __contains__(self, value):
-        return value in self._set
+        return value in self._dict
 
     def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self._set)
+        return '<%s %r>' % (type(self).__name__, self._dict)
 
 
-class OptionContext(NotifyingSet):
+class OptionContext(NotifyingSet, pdag.PdagNode):
     """docstring for OptionContext"""
 
     def __init__(self, option):
         super(OptionContext, self).__init__(option._values)
+
+    def atom_for(self, value):
+        if value not in self:
+            self.add(value)
+        return self._dict[value]
+
+    def _create_value_for(self, value):
+        return self._new_incoming(ValueAtom())
+
+    def _iterrest(self, incoming):
+        return (value for value in self._dict.itervalues()
+                if value is not incoming)
+
+    def _incoming_setting(self, incoming, ctx, value):
+        if value is True:
+            if ctx[self] is True:
+                ctx.store_all(self._iterrest(incoming), False)
+
+        else:
+            pass # XXX
+
+    def context_setting(self, ctx, value):
+        pass # XXX
+
+
+class ValueAtom(pdag.Atom):
+    def __init__(self):
+        super(ValueAtom, self).__init__()
+
 
 @Module.register_attr('_instance_type')
 class Instance(Module.Type):
