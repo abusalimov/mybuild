@@ -5,7 +5,7 @@ Types used on a per-build basis.
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-09"
 
-__all__ = ["Context"]
+__all__ = ["Domain"]
 
 
 from collections import defaultdict
@@ -28,14 +28,24 @@ import pdag
 import logs as log
 
 
-class Context(pdag.Pdag):
-    """docstring for Context"""
+class Domain(object):
+    """docstring for Domain"""
 
     def __init__(self):
-        super(Context, self).__init__()
+        super(Domain, self).__init__()
         self._modules = {}
         self._job_queue = deque()
         self._reent_locked = False
+
+    def freeze(self):
+        if hasattr(self, '_pdag'):
+            raise RuntimeError("'freeze' must be called only once.")
+
+        # def iter_atoms():
+        #     for module_domain in self._module.itervalues():
+
+
+        self._pdag = pdag.Pdag(*iter_atoms())
 
     def post(self, fxn):
         with self.reent_lock(): # to flush the queue on block exit
@@ -60,75 +70,79 @@ class Context(pdag.Pdag):
             fxn = queue.popleft()
             fxn()
 
-    def consider(self, module, option=None, value=True):
-        context = self.context_for(module)
+    def consider(self, module, option=None, value=Ellipsis):
+        domain = self.domain_for(module)
         if option is not None:
-            context.consider_option(option, value)
+            domain.consider_option(option, value)
 
     def register(self, instance):
-        self.context_for(instance._module).register(instance)
+        self.domain_for(instance._module).register(instance)
 
-    def context_for(self, module, option=None):
+    def domain_for(self, module, option=None):
         try:
-            context = self._modules[module]
+            domain = self._modules[module]
         except KeyError:
             with self.reent_lock():
-                context = self._modules[module] = ModuleDomain(self, module)
+                domain = self._modules[module] = ModuleDomain(self, module)
 
         if option is not None:
-            context = context.context_for(option)
+            domain = domain.domain_for(option)
 
-        return context
+        return domain
 
     def atom_for(self, module, option=None, value=Ellipsis):
-        context = self.context_for(module)
-
-        if option is not None:
-            return context.atom_for(option, value)
-
-        return context
+        domain = self.domain_for(module, option)
+        return domain.atom if option is None else domain.atom_for(value)
 
 
 class ModuleDomain(object):
     """docstring for ModuleDomain"""
 
-    def __init__(self, context, module):
+    def __init__(self, domain, module):
         super(ModuleDomain, self).__init__()
 
-        self.context = context
+        self.domain = domain
         self._module = module
 
-        self._instances = defaultdict(set) # { optuple : { instances... } }
+        self.atom = module._atom_type()
 
-        self._options = module._options._make(OptionDomain(o)
-                                              for o in module._options)
-        self.pnode = pdag.EqGroup(module._atom_type(),
-                                  *(option.pnode for option in self._options))
+        self._instances = defaultdict(set) # { optuple : { instances... } }
+        self._options = module._options._make(OptionDomain(option)
+                                              for option in module._options)
 
         self._instantiate_product(self._options)
+
+    def init_pnode(self):
+        presence_pnode = pdag.EqGroup(self.atom,
+            *(option_domain.pnode for option_domain in self._options))
+        instances_pnode = pdag.And(
+            *(instance.pnode
+              for instance_set in self._instances.itervalues()
+              for instance in instance_set))
 
     def _instantiate_product(self, iterables):
         instantiate = self._module._instance_type._post_new
         make_optuple = self._options._make
 
         for new_tuple in product(*iterables):
-            instantiate(self.context, make_optuple(new_tuple))
+            instantiate(self.domain, make_optuple(new_tuple))
 
     def consider_option(self, option, value):
-        octx_to_extend = getattr(self._options, option)
-        if value in octx_to_extend:
+        domain_to_extend = getattr(self._options, option)
+        if value in domain_to_extend:
             return
 
-        log.debug('mybuild: extending %r with %r', octx_to_extend, value)
-        octx_to_extend.add(value)
+        log.debug('mybuild: extending %r with %r', domain_to_extend, value)
+        domain_to_extend.add(value)
 
-        self._instantiate_product(o if o is not octx_to_extend else (value,)
-                                  for o in self._options)
+        self._instantiate_product(
+            option_domain if option_domain is not domain_to_extend else (value,)
+            for option_domain in self._options)
 
     def register(self, instance):
         self._instances[instance._optuple].add(instance)
 
-    def context_for(self, option):
+    def domain_for(self, option):
         return getattr(self._options, option)
 
 @Module.register_attr('_atom_type')
@@ -176,8 +190,8 @@ class NotifyingSet(MutableSet, NotifyingMixin):
     def __contains__(self, value):
         return value in self._dict
 
-    def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self._dict)
+    def __str__(self):
+        return '<%s: %s>' % (type(self).__name__, self._dict.keys())
 
 
 class OptionDomain(NotifyingSet):
@@ -236,11 +250,11 @@ class Instance(Module.Type):
         def __getattr__(self, attr):
             return self._owner_instance._decide_option(self._optuple, attr)
 
-    def __init__(self, context, optuple, constraints):
+    def __init__(self, domain, optuple, constraints):
         """Private constructor. Use '_post_new' instead."""
         super(Instance, self).__init__()
 
-        self._context = context
+        self._domain = domain
         self._optuple = optuple
         self._constraints = constraints
 
@@ -254,24 +268,24 @@ class Instance(Module.Type):
                 log.debug("mybuild: succeeded %r", self)
 
     @classmethod
-    def _post_new(cls, context, optuple, _constraints=None):
+    def _post_new(cls, domain, optuple, _constraints=None):
         if _constraints is None:
             _constraints = Constraints()
             # _constraints.constrain_mslice(optuple)
 
         def new():
             try:
-                instance = cls(context, optuple, _constraints)
+                instance = cls(domain, optuple, _constraints)
             except InstanceError:
                 pass
             else:
-                context.register(instance)
+                domain.register(instance)
 
-        context.post(new)
+        domain.post(new)
 
     def ask(self, mslice):
         optuple = mslice._to_optuple()
-        exprify_eval(optuple, self._context.consider)
+        exprify_eval(optuple, self._domain.consider)
         return self._InstanceProxy(self, optuple)
 
     @singleton
@@ -357,7 +371,7 @@ class Instance(Module.Type):
             length, name, 's' if length != 1 else '', choices)
 
     def constrain(self, expr):
-        expr = exprify_eval(expr, self._context.consider)
+        expr = exprify_eval(expr, self._domain.consider)
 
         with log.debug('mybuild: constrain %r', expr):
             choices = self._build_visitor.visit(expr, self._constraints)
@@ -408,7 +422,7 @@ class Instance(Module.Type):
             # for case when the whole module has been previously excluded.
             self.constrain(module)
 
-            octx = self._context.context_for(module, option)
+            octx = self._domain.domain_for(module, option)
 
             octx.subscribe(partial(self._branch_and_spawn,
                                    self._constraints, module, option))
@@ -465,7 +479,7 @@ class Instance(Module.Type):
 
     def _spawn(self, constraints):
         log.debug('mybuild: spawn %r', constraints)
-        self._post_new(self._context, self._optuple, constraints)
+        self._post_new(self._domain, self._optuple, constraints)
 
     def __repr__(self):
         return '<Instance %r with %r>' % (self._optuple, self._constraints)
@@ -478,11 +492,11 @@ class Instance(Module.Type):
 
 
 def build(conf_module):
-    context = Context()
-    conf_context = context.context_for(conf_module)
+    domain = Domain()
+    conf_domain = domain.domain_for(conf_module)
 
-    assert len(conf_context._instances) == 1
-    conf_instance_set = conf_context._instances.itervalues().next()
+    assert len(conf_domain._instances) == 1
+    conf_instance_set = conf_domain._instances.itervalues().next()
 
     assert len(conf_instance_set) == 1
     conf_instance = iter(conf_instance_set).next()
@@ -498,7 +512,7 @@ def build(conf_module):
 
     # try:
     #     constraints = Constraints.merge(instance._constraints
-    #                                     for instance in context._instances)
+    #                                     for instance in domain._instances)
     # except Exception, e:
     #     raise e
 
