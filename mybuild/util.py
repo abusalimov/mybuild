@@ -49,6 +49,23 @@ def imap_bypass(function, exception, *iterables):
         else:
             yield e
 
+
+class NotifyingMixin(object):
+    """docstring for NotifyingMixin"""
+    __slots__ = '__subscribers'
+
+    def __init__(self):
+        super(NotifyingMixin, self).__init__()
+        self.__subscribers = []
+
+    def _notify(self, *args, **kwargs):
+        for fxn in self.__subscribers:
+            fxn(*args, **kwargs)
+
+    def subscribe(self, fxn):
+        self.__subscribers.append(fxn)
+
+
 class InstanceBoundTypeMixin(object):
     """
     Base class for per-instance types, that is types defined for each instance

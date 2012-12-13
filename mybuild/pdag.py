@@ -58,9 +58,9 @@ class PdagContext(object):
 
     def __setitem__(self, pnode, value):
         """
-        Calls 'store' method with 'notify_pnode=True'.
+        An alias for 'store' method with 'notify_pnode=True'.
         """
-        self.store(pnode, value, notify_pnode=True)
+        self.store(pnode, value)
 
     def store(self, pnode, value, notify_pnode=True):
         """
@@ -198,8 +198,12 @@ class OperandSetNode(PdagNode):
 
         self._operands = set()
         for operand in operands:
-            self._operands.add(operand)
-            self._new_incoming(operand)
+            self._new_operand(operand)
+
+    def _new_operand(self, operand):
+        """Generally subclasses should use this instead of '_new_incoming'."""
+        self._operands.add(operand)
+        return self._new_incoming(operand)
 
     def _single_unset_operand(self, ctx, break_on=None):
         """
@@ -408,7 +412,7 @@ class AtMostOne(OperandSetNode):
 
                 for operand in self._operands:
                     if operand is not incoming:
-                        operand._store_self(ctx, False)
+                        ctx[operand] = False
 
             else:
                 self._eval_operands(ctx)
@@ -444,6 +448,33 @@ class AtMostOne(OperandSetNode):
                     self_value = ctx[self]
                     if self_value is not None:
                         ctx[last_unset] = self_value
+
+
+class EqGroup(OperandSetNode):
+    """
+    Forces all operands to take the same value, and evaluates to that value.
+    May be considered as a common alias for its operands.
+    """
+    __slots__ = ()
+
+    def __init__(self, *operands):
+        super(EqGroup, self).__init__(operands)
+
+    def _incoming_setting(self, incoming, ctx, value):
+        with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
+                       self.bind(ctx), incoming.bind(ctx)):
+
+            self._store_self(ctx, value)
+
+            for operand in self._operands:
+                if operand is not incoming:
+                    ctx[operand] = value
+
+    def context_setting(self, ctx, value):
+        with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+
+            for operand in self._operands:
+                ctx[operand] = value
 
 
 class Atom(PdagNode):

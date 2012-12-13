@@ -22,6 +22,7 @@ from core import *
 from constraints import *
 from expr import *
 from util import singleton
+from util import NotifyingMixin
 import pdag
 
 import logs as log
@@ -72,7 +73,7 @@ class Context(pdag.Pdag):
             context = self._modules[module]
         except KeyError:
             with self.reent_lock():
-                context = self._modules[module] = ModuleContext(self, module)
+                context = self._modules[module] = ModuleDomain(self, module)
 
         if option is not None:
             context = context.context_for(option)
@@ -88,19 +89,21 @@ class Context(pdag.Pdag):
         return context
 
 
-class ModuleContext(pdag.Atom):
-    """docstring for ModuleContext"""
+class ModuleDomain(object):
+    """docstring for ModuleDomain"""
 
     def __init__(self, context, module):
-        super(ModuleContext, self).__init__()
+        super(ModuleDomain, self).__init__()
 
         self.context = context
         self._module = module
 
         self._instances = defaultdict(set) # { optuple : { instances... } }
 
-        self._options = module._options._make(OptionContext(o)
+        self._options = module._options._make(OptionDomain(o)
                                               for o in module._options)
+        self.pnode = pdag.EqGroup(module._atom_type(),
+                                  *(option.pnode for option in self._options))
 
         self._instantiate_product(self._options)
 
@@ -128,23 +131,22 @@ class ModuleContext(pdag.Atom):
     def context_for(self, option):
         return getattr(self._options, option)
 
+@Module.register_attr('_atom_type')
+class ModuleAtom(pdag.Atom):
+    __slots__ = ()
 
-class NotifyingMixin(object):
-    """docstring for NotifyingMixin"""
+    def __str__(self):
+        return self._module_name
 
-    def __init__(self):
-        super(NotifyingMixin, self).__init__()
-        self.__subscribers = []
-
-    def _notify(self, *args, **kwargs):
-        for fxn in self.__subscribers:
-            fxn(*args, **kwargs)
-
-    def subscribe(self, fxn):
-        self.__subscribers.append(fxn)
+    @classmethod
+    def _new_type(cls, module_type, *ignored):
+        return type('ModuleAtom_M%s' % (module_type._module_name,),
+                    (cls, module_type),
+                    dict(__slots__=()))
 
 
 class NotifyingSet(MutableSet, NotifyingMixin):
+    """Set with notification support. Backed by a dictionary."""
 
     def __init__(self, values):
         super(NotifyingSet, self).__init__()
@@ -178,11 +180,14 @@ class NotifyingSet(MutableSet, NotifyingMixin):
         return '<%s %r>' % (type(self).__name__, self._dict)
 
 
-class OptionContext(NotifyingSet, pdag.PdagNode):
-    """docstring for OptionContext"""
+class OptionDomain(NotifyingSet):
+    """docstring for OptionDomain"""
 
     def __init__(self, option):
-        super(OptionContext, self).__init__(option._values)
+        self._option = option
+        self.pnode = pdag.AtMostOne()
+
+        super(OptionDomain, self).__init__(option._values)
 
     def atom_for(self, value):
         if value not in self:
@@ -190,27 +195,26 @@ class OptionContext(NotifyingSet, pdag.PdagNode):
         return self._dict[value]
 
     def _create_value_for(self, value):
-        return self._new_incoming(ValueAtom())
+        atom = self._option._atom_type(value)
+        return self.pnode._new_operand(atom)
 
-    def _iterrest(self, incoming):
-        return (value for value in self._dict.itervalues()
-                if value is not incoming)
+@Option.register_attr('_atom_type')
+class OptionValueAtom(pdag.Atom):
+    __slots__ = '_value'
 
-    def _incoming_setting(self, incoming, ctx, value):
-        if value is True:
-            if ctx[self] is True:
-                ctx.store_all(self._iterrest(incoming), False)
+    def __init__(self, value):
+        super(OptionValueAtom, self).__init__()
+        self._value = value
 
-        else:
-            pass # XXX
+    def __str__(self):
+        return '(%s==%s)' % (self._option_name, self._value)
 
-    def context_setting(self, ctx, value):
-        pass # XXX
-
-
-class ValueAtom(pdag.Atom):
-    def __init__(self):
-        super(ValueAtom, self).__init__()
+    @classmethod
+    def _new_type(cls, option_type):
+        return type('OptionAtom_M%s_O%s' % (option_type._module_name,
+                                            option_type._option_name),
+                    (cls, option_type),
+                    dict(__slots__=()))
 
 
 @Module.register_attr('_instance_type')

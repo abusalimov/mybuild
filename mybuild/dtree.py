@@ -76,7 +76,7 @@ class DtreeNode(PdagContext):
 
         return branch
 
-    def store(self, pnode, value, notify_pnode=False):
+    def store(self, pnode, value, notify_pnode=True):
         old_value = super(DtreeNode, self).store(pnode, value, notify_pnode)
 
         if old_value is None:
