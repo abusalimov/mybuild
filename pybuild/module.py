@@ -31,7 +31,7 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
 	dom = itertools.chain((opt.default,), dom)
 
     for value in dom:
-	value_scope = cut(scope, opt, domain.Domain([value]))
+	value_scope = cut(scope, opt, opt.domain_class([value]))
 
 	try:
 	    return trigger_handle(cont, value_scope, trig, *args, **kwargs)
@@ -123,7 +123,7 @@ class Module(option.Boolean, scope.BaseScope):
 	return "<Module %s, depends %s, sources %s>" % (self.name, self.depends, self.sources)
 
     def canon_repr(self):
-	opts = map(lambda name, opt: name, self.items())
+	opts = map(lambda name_opt_pair: name_opt_pair[0], self.items())
 	return common.repr.mod_canon(self.name, opts)
 
     def __hash__(self):
