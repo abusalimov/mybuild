@@ -1,27 +1,27 @@
 
 package('myprog')
 
-mod (
+module (
 	'init1',
 
 	#implements = 
 	sources = ['init1.c'],
 )
 
-mod (
+module (
 	'init2',
 
 	#implements = 
 	sources = ['init2.c'],
 )
 
-mod (
+module (
 	'body',
 
 	sources = ['body.c'],
 )
 
-mod (
+module (
 	'prog',
 
 	depends = ['init1', 'body'],
