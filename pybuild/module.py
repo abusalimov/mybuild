@@ -11,6 +11,8 @@ from util import isvector
 
 from ops  import *
 
+import common.repr
+
 def trigger_handle(cont, scope, trig, *args, **kwargs):
     opt = None
     try:
@@ -122,7 +124,7 @@ class Module(option.Boolean, scope.BaseScope):
 
     def canon_repr(self):
 	opts = map(lambda name, opt: name, self.items())
-        return '<Module %s, opts = [%s]' % (self.name, ', '.join(opts))
+	return common.repr.mod_canon(self.name, opts)
 
     def __hash__(self):
 	return self.hash_value
