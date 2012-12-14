@@ -128,3 +128,16 @@ def exclude(name):
 def root_pkg():
     return Package('root', None)
 
+def prepare_build(root):
+    def find_mods(pkg, lst, pkg_nm):
+	for name, obj in pkg.items():
+	    if isinstance(obj, Package):
+		find_mods(obj, lst, '%s.%s' % (pkg_nm, name))
+	    elif isinstance(obj, Module):
+		lst.append('%s.%s = %s' % (pkg_nm, name, obj.canon_repr()))
+    ans = []
+    find_mods(root, ans, '')
+
+    print '\n'.join(sorted(ans))
+
+    return ans

@@ -45,7 +45,7 @@ def main(args):
 		    cfg.dirname = dirpath
 		    execfile(os.path.join(dirpath, file), glob, locl)
 
-    print root
+    prepare_build(root)
 
 if __name__ == '__main__':
     main(args)

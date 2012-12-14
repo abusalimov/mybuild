@@ -5,12 +5,12 @@ __date__ = "2012-12-12"
 from mybuild import module as mybuild_module, option
 from mybuild.constraints import Constraints
 
+import types
+
 def root_pkg():
-    import types
     return types.ModuleType('root')
 
 def package(name):
-    import types
     import sys
     import config
    
@@ -37,3 +37,17 @@ def module(name, *args, **kargs):
 	pass
 
     this_pkg.__dict__[name] = new_mod
+
+def prepare_build(root):
+    def find_mods(pkg, lst, pkg_nm):
+	for name, obj in pkg.__dict__.items():
+	    if isinstance(obj, types.ModuleType):
+		find_mods(obj, lst, '%s.%s' % (pkg_nm, name))
+	    elif isinstance(obj, mybuild_module):
+		lst.append('%s.%s = %s' % (pkg_nm, name, obj.canon_repr()))
+    ans = []
+    find_mods(root, ans, '')
+
+    print '\n'.join(sorted(ans))
+
+    return ans

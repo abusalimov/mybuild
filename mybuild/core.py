@@ -56,6 +56,9 @@ class Module(DynamicAttrsMixin):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
+    def canon_repr(self):
+        return '<Module %s, opts = [%s]' % (self._name, ', '.join(self._options._fields))
+
 @Module.register_attr('_atom', factory_method='_new_instance')
 class ModuleAtom(expr.Atom):
     """Module-bound atom."""

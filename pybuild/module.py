@@ -120,6 +120,10 @@ class Module(option.Boolean, scope.BaseScope):
     def __repr__(self):
 	return "<Module %s, depends %s, sources %s>" % (self.name, self.depends, self.sources)
 
+    def canon_repr(self):
+	opts = map(lambda name, opt: name, self.items())
+        return '<Module %s, opts = [%s]' % (self.name, ', '.join(opts))
+
     def __hash__(self):
 	return self.hash_value
 
