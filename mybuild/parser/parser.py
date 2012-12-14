@@ -5,9 +5,23 @@ __date__ = "2012-12-12"
 from mybuild import module as mybuild_module, option
 from mybuild.constraints import Constraints
 
+from pybuild.option import Integer, Boolean, List
+
 import common.pkg
 
 import types
+
+def LDScript(self):
+    return self
+
+def Generated(self, fn):
+    return self
+
+def NoRuntime(self):
+    return self
+
+def interface(name, *args, **kargs):
+    pass
 
 def root_pkg():
     return types.ModuleType('root')
@@ -15,6 +29,7 @@ def root_pkg():
 def package(name):
     import sys
     import config
+
    
     pkg = config.root
 
@@ -27,20 +42,23 @@ def package(name):
     this_pkg = pkg
 
 def module(name, *args, **kargs):
-    def mod_dec(name_overwrite):
-	def f(fn):
-	    fn.__name__ = name_overwrite
-	    return mybuild_module(fn)
+    def convert_opt(opt):
+	return '%s = option()' % (opt.name)
+    opts = ', '.join(map(lambda o: convert_opt(o), kargs.get('options', [])))
+    fn_decl = '''
+@mybuild_module
+def {MOD_NAME}(self, {OPTIONS}):
+    pass
+    '''.format(MOD_NAME=name, OPTIONS = opts)
 
-	return f
+    exec fn_decl in globals(), locals()
 
-    @mod_dec(name)
-    def new_mod(self):
-	pass
-
-    this_pkg.__dict__[name] = new_mod
+    this_pkg.__dict__[name] = locals()[name]
 
 def prepare_build(root):
-    modlist = common.pkg.modlist(root, types.ModuleType, mybuild_module, lambda pkg: pkg.__dict__.items())
+    def content_fn(pkg):
+	return [(name if not isinstance(obj, types.ModuleType) else obj.__name__, obj) 
+		for name, obj in pkg.__dict__.items()]
+    modlist = common.pkg.modlist(root, types.ModuleType, mybuild_module, content_fn)
     print '\n'.join(modlist)
     return modlist

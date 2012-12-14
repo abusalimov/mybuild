@@ -135,4 +135,5 @@ class DynamicAttrsMixin(object):
         for cls in type(self).__mro__:
             if isinstance(cls, self.__metaclass__):
                 for attr, factory in cls._registered_attrs.iteritems():
-                    setattr(self, attr, factory(*args, **kwargs))
+		    fout = factory(*args, **kwargs)
+                    setattr(self, attr, fout)

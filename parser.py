@@ -15,6 +15,7 @@ if __name__ == '__main__':
 
     if args.method == 'A':
 	from pybuild.parser import *
+	from pybuild.option import Integer, List
     elif args.method == 'E':
 	from mybuild.parser.parser import *
 
@@ -41,7 +42,7 @@ def main(args):
     for arg in args.DIR:
 	for dirpath, dirnames, filenames in os.walk(arg):
 	    for file in filenames:
-		if file.endswith('.my') or file == 'Mybuild':
+		if file.endswith('.py') or file == 'Pybuild':
 		    cfg.dirname = dirpath
 		    execfile(os.path.join(dirpath, file), glob, locl)
 
