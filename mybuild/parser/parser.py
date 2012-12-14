@@ -5,6 +5,10 @@ __date__ = "2012-12-12"
 from mybuild import module as mybuild_module, option
 from mybuild.constraints import Constraints
 
+def root_pkg():
+    import types
+    return types.ModuleType('root')
+
 def package(name):
     import types
     import sys

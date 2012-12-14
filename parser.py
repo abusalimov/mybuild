@@ -4,37 +4,48 @@ __date__ = "2012-12-14"
 
 import sys
 
-import mybuild
+if __name__ == '__main__':
+    import argparse
+    argparser = argparse.ArgumentParser('parser')
+    argparser.add_argument('--method', choices="AE", required = True, 
+	    help='Model method, either A (for Anton\'s) or E (for Eldar\'s')
+    argparser.add_argument('DIR', nargs='+', 
+	    help='Directory where Mybuilds will be searched')
+    args = argparser.parse_args()
 
-from mybuild.parser.parser import *
-
-def root_pkg():
-    import types 
-    return types.ModuleType('root')
+    if args.method == 'A':
+	from pybuild.parser import *
+    elif args.method == 'E':
+	from mybuild.parser.parser import *
 
 def config(root):
     import types 
     config = types.ModuleType('config')
     
     config.__dict__['root'] = root
+    config.__dict__['dirname'] = ''
+    config.__dict__['modlist'] = []
     return config
 
-def main(argv):
+def main(args):
+    import os
+
     glob = globals().copy()
     locl = {}
 
     root = root_pkg()
+    cfg  = config(root)
 
     sys.modules['config'] = config(root)
 
-    for arg in argv:
+    for arg in args.DIR:
 	for dirpath, dirnames, filenames in os.walk(arg):
 	    for file in filenames:
 		if file.endswith('.my') or file == 'Mybuild':
+		    cfg.dirname = dirpath
 		    execfile(os.path.join(dirpath, file), glob, locl)
 
-    print root.myprog.init1
+    print root
 
 if __name__ == '__main__':
-    import os
-    main(sys.argv[1:])
+    main(args)
