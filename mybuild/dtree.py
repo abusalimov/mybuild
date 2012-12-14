@@ -80,7 +80,12 @@ class DtreeNode(PdagContext):
         old_value = super(DtreeNode, self).store(pnode, value, notify_pnode)
 
         if old_value is None:
-            self._cost += pnode.costs[value]
+            if not self._branchmap:
+                self._cost += pnode.costs[value]
+            else:
+                # Not sure if it is even possible...
+                del self._dict[pnode]
+                self._merge_changeset({pnode:value}.items())
 
         return old_value
 
