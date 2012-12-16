@@ -5,7 +5,7 @@ Types used on a per-build basis.
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-09"
 
-__all__ = ["Domain"]
+__all__ = ["Context"]
 
 
 from collections import defaultdict
@@ -28,11 +28,11 @@ import pdag
 import logs as log
 
 
-class Domain(object):
-    """docstring for Domain"""
+class Context(object):
+    """docstring for Context"""
 
     def __init__(self):
-        super(Domain, self).__init__()
+        super(Context, self).__init__()
         self._modules = {}
         self._job_queue = deque()
         self._reent_locked = False
@@ -90,18 +90,35 @@ class Domain(object):
 
         return domain
 
-    def atom_for(self, module, option=None, value=Ellipsis):
-        domain = self.domain_for(module, option)
-        return domain.atom if option is None else domain.atom_for(value)
+    def atom_for(self, module, option=None, value=Ellipsis, negated=False):
+        cache = self._atom_cache
+        cache_key = module, option, value, negated
 
+        try:
+            return cache[cache_key]
+        except KeyError:
+            pass
+
+        if negated:
+            ret = pdag.Not(self.atom_for(module, option, value, negated=False))
+        else:
+            domain = self.domain_for(module, option)
+            ret = domain.atom if option is None else domain.atom_for(value)
+
+        cache[cache_key] = ret
+
+        return ret
 
 class ModuleDomain(object):
     """docstring for ModuleDomain"""
 
-    def __init__(self, domain, module):
+    context = property(attrgetter('_context'))
+    module  = property(attrgetter('_module'))
+
+    def __init__(self, context, module):
         super(ModuleDomain, self).__init__()
 
-        self.domain = domain
+        self._context = context
         self._module = module
 
         self.atom = module._atom_type()
@@ -125,7 +142,7 @@ class ModuleDomain(object):
         make_optuple = self._options._make
 
         for new_tuple in product(*iterables):
-            instantiate(self.domain, make_optuple(new_tuple))
+            instantiate(self._context, make_optuple(new_tuple))
 
     def consider_option(self, option, value):
         domain_to_extend = getattr(self._options, option)
@@ -492,7 +509,7 @@ class Instance(Module.Type):
 
 
 def build(conf_module):
-    domain = Domain()
+    domain = Context()
     conf_domain = domain.domain_for(conf_module)
 
     assert len(conf_domain._instances) == 1

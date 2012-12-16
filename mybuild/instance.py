@@ -7,10 +7,17 @@ __date__ = "2012-12-14"
 
 
 from collections import defaultdict
+from itertools import izip
 from operator import attrgetter
 
 
 class InstanceDomain(object):
+
+    context = property(attrgetter('_context'))
+    optuple = property(attrgetter('_optuple'))
+
+    _init_fxn = property(attrgetter('_optuple._module._init_fxn'))
+
     def __init__(self, context, optuple):
         super(InstanceDomain, self).__init__()
         self._context = context
@@ -21,8 +28,8 @@ class InstanceDomain(object):
 
         self.post_new(root_node)
 
-    def post_new(self, node, _decisions=None):
-        instance = Instance(self, node, _decisions)
+    def post_new(self, node):
+        instance = Instance(self, node)
 
         def new():
             with log.debug("mybuild: new %r", self):
@@ -36,18 +43,25 @@ class InstanceDomain(object):
 
         self._context.post(new)
 
+    def create_pnode(self):
+        return self._node.create_pnode(self._context)
+
+
 class InstanceNodeBase(object):
     __slots__ = '_parent', '_childmap'
 
     parent = property(attrgetter('_parent'))
 
-    def __init__(self):
+    def __init__(self, parent=None):
         super(TreeNode, self).__init__()
 
-        self._parent = None
+        self._parent = parent
         self._childmap = {}
 
-    def create_children(self, key, *values):
+    def get_child(self, key, value):
+        return self._childmap[key][value]
+
+    def _create_children(self, key, values):
         try:
             mapping = self._childmap[key]
         except KeyError:
@@ -56,30 +70,68 @@ class InstanceNodeBase(object):
         for value in values:
             if value in mapping:
                 raise ValueError
-            child = mapping[value] = self._new_child(key, value)
+            mapping[value] = self._new_child(key, value)
+
+        return (mapping[value] for value in values)
+
+    def create_child(self, key, value):
+        child, = self._create_children(key, (value,))
+        return child
 
     def _new_child(self, parent_key=None, parent_value=None):
         cls = type(self)
-        new = cls()
-        new._parent = self
-        return new
+        return cls(parent=self)
 
     def iter_children(self, key):
         return self._childmap[key].iteritems()
 
 
 class InstanceNode(InstanceNodeBase):
-    __slots__ = 'constraints', 'decisions'
+    __slots__ = '_constraints', '_decisions'
 
-    def __init__(self):
-        super(InstanceNode, self).__init__()
-        self.constraints = set()
-        self.decisions = {}
+    def __init__(self, parent=None):
+        super(InstanceNode, self).__init__(parent)
+        self._constraints = set()
+        self._decisions = {}
 
-    def _from_parent(self, parent_key=None, parent_value=None):
+    def _new_child(self, parent_key=None, parent_value=None):
         new = super(InstanceNode, self)._new_child(parent_key, parent_value)
-        new.decisions[parent_key] = parent_value
+
+        new._decisions.update(self._decisions)
+
+        assert parent_key not in new._decisions
+        new._decisions[parent_key] = parent_value
+
         return new
+
+    def constrain(self, expr):
+        self._node._constraints.add(expr)
+
+    def make_decisions(self, key, values):
+        """
+        Either retrieves an already taken decision (in case of replaying),
+        or creates a new child for each value from 'values' iterable returning
+        list of the resulting pairs.
+
+        Returns: (value, node) pairs iterable.
+        """
+
+        try:
+            value = self._decisions[key]
+
+        except KeyError:
+            values = tuple(values)
+            return izip(values, self._create_children(key, values))
+
+        else:
+            return ((value, self),)
+
+    def create_pnode(self, context):
+        # def iter_conjuncts():
+        #     for expr in self._constraints:
+        #         yield context.ato_for(expr)
+        pass
+
 
 class Instance(object):
 
@@ -97,103 +149,69 @@ class Instance(object):
         def __getattr__(self, attr):
             return self._owner._decide_option(self._optuple, attr)
 
-    def __init__(self, domain, node, _decisions=None):
+    _context = property(attrgetter('_domain.context'))
+    _optuple = property(attrgetter('_domain.optuple'))
+    _spawn   = property(attrgetter('_domain.post_new'))
+
+    def __init__(self, domain, node):
         super(Instance, self).__init__()
         self._domain = domain
         self._node = node
-        self._decisions = _decisions if _decisions is not None else {}
 
     def consider(self, expr):
-        pass # XXX
+        # self._context.consider
+        pass
 
     def constrain(self, expr):
         self.consider(expr)
-        self._node.constraints.add(expr)
+        self._node.constrain(expr)
 
     def _decide(self, mslice):
         dkey = mslice, None
-
-        try:
-            return self._decisions[dkey]
-
-        except KeyError:
-            node = self._node
-            node.create_children(dkey, False, True)
-
-            taken = self._take_one_spawn_rest(dkey, node.iter_children(dkey))
-            ret_value, self._node = taken
-
-            assert ret_value is self._decisions[dkey]
-            return ret_value
+        return self._make_decision(dkey, (False, True))
 
     def _decide_option(self, mslice, option):
         dkey = mslice, option
         module = mslice._module
 
-        try:
-            return self._decisions[dkey]
-
-        except KeyError:
+        def domain_gen():
             if not hasattr(mslice, option):
                 raise AttributeError("'%s' module has no attribute '%s'" %
                                      (module._name, option))
 
-            # Option without the module itself is meaningless.
-            self.constrain(module)
+            option_domain = self._context.domain_for(module, option)
 
-            option_domain = self._domain.context.domain_for(module, option)
+            # Need to save the currnet node here
+            # because _make_decision overwrites it with its child.
+            saved_self_node = self._node
+            option_domain.subscribe(lambda new_value:
+                self._spawn(saved_self_node.create_child(dkey, new_value)))
 
-            def on_domain_expand(new_value):
-                self._node.create_children(dkey, new_value)
+            for value in option_domain:
+                yield value
 
-                new_decisions = saved_decisions.copy()
-                new_decisions[decision_key] = new_value
+        return self._make_decision(dkey, domain_gen())
 
-                self._domain.post_new(node, new_decisions)
-
-                self._spawn(constraints)
-
-            option_domain.subscribe(on_domain_expand)
-
-            node = self._node
-            node.create_children(dkey, *option_domain)
-
-            taken = self._take_one_spawn_rest()
-
-            ret_value = self._constraints.get(module, option) # must not throw
-
-            log.debug('mybuild: return %r', ret_value)
-            return ret_value
-
-    def _take_one_spawn_rest(self, decision_key, value_node_iterable):
+    def _make_decision(self, dkey, domain):
         """
-        Returns: (value, node) tuple.
+        Returns: a value taken.
         """
+        value_node_pairs = iter(self._node.make_decisions(dkey, domain))
+
         try:
             # Retrieve the first one (if any) to return it.
-            value, node = value_node_iterable.next()
+            ret_value, self._node = value_node_pairs.next()
 
         except StopIteration:
             raise InstanceError('No viable choice to take')
 
-        log.debug('mybuild: take %s=%s', decision_key, value)
-        self._decisions[decision_key] = value
+        else:
+            log.debug('mybuild: take %s=%s', dkey, ret_value)
 
         # Spawn for the rest ones.
-        self._spawn_all(value_node_iterable)
+        spawn = self._spawn
+        for _, node in value_node_pairs:
+            spawn(node)
 
-        return value, node
-
-    def _spawn_all(self, decision_key, value_node_iterable):
-        for value, node in value_node_iterable:
-            self._spawn(decision_key, value, node)
-
-    def _spawn(self, decision_key, value, node):
-        log.debug('mybuild: spawn %s=%s', decision_key, value)
-
-        new_decisions = self._decisions.copy()
-        new_decisions[decision_key] = value
-
-        self._domain.post_new(node, new_decisions)
-
+        return ret_value
 
