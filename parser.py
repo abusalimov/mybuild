@@ -10,12 +10,8 @@ import types
 class BuildCtx(types.ModuleType):
     def __init__(self):
 	super(BuildCtx, self).__init__('build_ctx')
-    def __getattr__(self, attr):
-	if not hasattr(self, attr):
-	    setattr(self, attr, [])
-	return getattr(self, attr)
 
-def parse(ctx, mod_dirs, cfg_dir, method ='A'):
+def parse(ctx, mod_dirs, method ='A'):
     def imp_all(scope, modname, fromlist):
 	mod = __import__(modname, scope, scope, fromlist, -1)
 	for k in dir(mod):
@@ -36,7 +32,7 @@ def parse(ctx, mod_dirs, cfg_dir, method ='A'):
 	imp_all(glob, 'mybuild.parser.mod_rules', ['*'])
 	imp_all(glob, 'mybuild.parser.cfg_rules', ['*'])
 
-    for arg in [cfg_dir] + mod_dirs:
+    for arg in mod_dirs:
 	for dirpath, dirnames, filenames in os.walk(arg):
 	    for file in filenames:
 		if file.endswith('.py') or file == 'Pybuild':
@@ -50,12 +46,17 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser('parser')
     argparser.add_argument('--method', choices="AE", required = True, 
 	    help='Model method, either A (for Anton\'s) or E (for Eldar\'s')
-    argparser.add_argument('--config')
     argparser.add_argument('DIR', nargs='+', 
 	    help='Directory where Mybuilds will be searched')
     args = argparser.parse_args()
 
-    ctx = parse(BuildCtx, args.DIR, args.config, args.method)
+    if args.method == 'A':
+	from pybuild.method import method_pre_parse
+    elif args.method == 'E':
+	from mybuild.method import method_pre_parse
+
+    ctx = method_pre_parse(BuildCtx())
+    ctx = parse(ctx, args.DIR, args.method)
 
     print dir(ctx)
     print ctx.root

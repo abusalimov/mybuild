@@ -13,6 +13,9 @@ from mybuild.build import inchdr
 def method_pre_parse(ctx):
     ctx.scope = Scope()
     ctx.root = Package('root', None)
+    ctx.modlist = []
+    ctx.modconstr = []
+    ctx.ld_defs = []
 
     return ctx
 
@@ -28,8 +31,6 @@ def method_decide_build(ctx):
     cut_scope = cut_many(scope, modconstr)
 
     final = fixate(cut_scope)
-
-    ctx.bld.env.ld_defs = ctx.ld_defs
 
     return final
 
