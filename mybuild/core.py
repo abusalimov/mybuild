@@ -28,7 +28,7 @@ import expr
 from util import DynamicAttrsMixin
 from util import InstanceBoundTypeMixin
 
-from mybuild.common import repr
+# from mybuild.common import repr
 
 class Module(DynamicAttrsMixin):
     """A basic building block of Mybuild."""
@@ -58,8 +58,8 @@ class Module(DynamicAttrsMixin):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
-    def canon_repr(self):
-	return repr.mod_canon(self._name, self._options._fields)
+ #    def canon_repr(self):
+	# return repr.mod_canon(self._name, self._options._fields)
 
 @Module.register_attr('_atom', factory_method='_new_instance')
 class ModuleAtom(expr.Atom):

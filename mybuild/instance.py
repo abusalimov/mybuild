@@ -10,17 +10,18 @@ from collections import defaultdict
 from itertools import izip
 from operator import attrgetter
 
+from context import DomainBase
 
-class InstanceDomain(object):
+class InstanceDomain(DomainBase):
 
-    context = property(attrgetter('_context'))
     optuple = property(attrgetter('_optuple'))
+    module  = property(attrgetter('_module'))
 
     _init_fxn = property(attrgetter('_optuple._module._init_fxn'))
 
     def __init__(self, context, optuple):
-        super(InstanceDomain, self).__init__()
-        self._context = context
+        super(InstanceDomain, self).__init__(context)
+
         self._optuple = optuple
 
         self._instances = []

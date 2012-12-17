@@ -109,28 +109,39 @@ class Context(object):
 
         return ret
 
-class ModuleDomain(object):
-    """docstring for ModuleDomain"""
+    def pnode_from(self, expr):
+        pass
+
+class DomainBase(object):
+    """docstring for DomainBase"""
 
     context = property(attrgetter('_context'))
-    module  = property(attrgetter('_module'))
+
+    def __init__(self, context):
+        super(DomainBase, self).__init__()
+        self._context = context
+
+
+class ModuleDomain(DomainBase):
+    """docstring for ModuleDomain"""
+
+    module = property(attrgetter('_module'))
+    atom = property(attrgetter('_atom'))
 
     def __init__(self, context, module):
-        super(ModuleDomain, self).__init__()
+        super(ModuleDomain, self).__init__(context)
 
-        self._context = context
         self._module = module
+        self._atom = module._atom_type()
 
-        self.atom = module._atom_type()
-
-        self._instances = defaultdict(set) # { optuple : { instances... } }
+        self._instances = {} # { optuple : InstanceDomain }
         self._options = module._options._make(OptionDomain(option)
                                               for option in module._options)
 
         self._instantiate_product(self._options)
 
     def init_pnode(self):
-        presence_pnode = pdag.EqGroup(self.atom,
+        presence_pnode = pdag.EqGroup(self._atom,
             *(option_domain.pnode for option_domain in self._options))
         instances_pnode = pdag.And(
             *(instance.pnode
@@ -138,11 +149,14 @@ class ModuleDomain(object):
               for instance in instance_set))
 
     def _instantiate_product(self, iterables):
-        instantiate = self._module._instance_type._post_new
         make_optuple = self._options._make
+        instances = self._instances
 
         for new_tuple in product(*iterables):
-            instantiate(self._context, make_optuple(new_tuple))
+            new_optuple = make_optuple(new_tuple)
+
+            assert new_optuple not in instances
+            instances[new_optuple] = InstanceDomain(self._context, new_optuple)
 
     def consider_option(self, option, value):
         domain_to_extend = getattr(self._options, option)
@@ -155,9 +169,6 @@ class ModuleDomain(object):
         self._instantiate_product(
             option_domain if option_domain is not domain_to_extend else (value,)
             for option_domain in self._options)
-
-    def register(self, instance):
-        self._instances[instance._optuple].add(instance)
 
     def domain_for(self, option):
         return getattr(self._options, option)
@@ -238,7 +249,8 @@ class OptionValueAtom(pdag.Atom):
         self._value = value
 
     def __str__(self):
-        return '(%s==%s)' % (self._option_name, self._value)
+        return '(%s.%s==%s)' % (self._module_name,
+                                self._option_name, self._value)
 
     @classmethod
     def _new_type(cls, option_type):
