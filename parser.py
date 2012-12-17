@@ -5,36 +5,22 @@ __date__ = "2012-12-14"
 import os
 import sys
 import re
+import types 
 
-def parse(mod_dirs, cfg_dir, method ='A'):
-    #class BuildCtx(types.ModuleType):
-    def build_ctx(root):
-	import types 
-	config = types.ModuleType('build_ctx')
-	d = config.__dict__
-	init = [('root', root),
-		('dirname', ''),
-		('modlist', []),
-		('ld_defs', []),
-		('modconstr', []),
-		]
-	for name, initval in init:
-	    setattr(config, name, initval)
-	return config
+class BuildCtx(types.ModuleType):
+    def __init__(self):
+	super(BuildCtx, self).__init__('build_ctx')
+    def __getattr__(self, attr):
+	if not hasattr(self, attr):
+	    setattr(self, attr, [])
+	return getattr(self, attr)
 
+def parse(ctx, mod_dirs, cfg_dir, method ='A'):
     def imp_all(scope, modname, fromlist):
 	mod = __import__(modname, scope, scope, fromlist, -1)
 	for k in dir(mod):
 	    if not re.match('__.*__', k):
 		scope[k] = getattr(mod, k)
-
-    if method == 'A':
-	from pybuild.parser.parser import root_pkg, prepare_build
-    elif method == 'E':
-	from mybuild.parser.parser import root_pkg, prepare_build
-
-    root = root_pkg()
-    ctx  = build_ctx(root)
 
     sys.modules['build_ctx'] = ctx
 
@@ -69,4 +55,7 @@ if __name__ == '__main__':
 	    help='Directory where Mybuilds will be searched')
     args = argparser.parse_args()
 
-    parse(args.DIR, args.config, args.method)
+    ctx = parse(BuildCtx, args.DIR, args.config, args.method)
+
+    print dir(ctx)
+    print ctx.root

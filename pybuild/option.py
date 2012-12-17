@@ -44,15 +44,22 @@ class DefaultOption(Option):
 class List(Option):
     defdomain = []
     domain_class = domain.ListDom
+    def build_repr(self):
+	return None
     
 class Integer(DefaultOption):
     defdomain = range(0, 0x10000)
     domain_class = domain.IntegerDom
+    def build_repr(self):
+	return 'NUMBER'
 
 class String(DefaultOption):
-    pass
+    def build_repr(self):
+	return 'STRING'
 
 class Boolean(DefaultOption):
     defdomain = [True, False]
     domain_class = domain.BoolDom
+    def build_repr(self):
+	return 'BOOLEAN'
 
