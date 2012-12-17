@@ -18,55 +18,7 @@ from interface import Interface
 from parser.mod_rules import *
 from parser.cfg_rules import *
 
-def lds_region(name, base, size):
-    global __ld_defs
-    __ld_defs.append('LDS_REGION_BASE_%s=%s' % (name, base))
-    __ld_defs.append('LDS_REGION_SIZE_%s=%s' % (name, size))
-
-def lds_section_load(name, vma, lma):
-    global __ld_defs
-    __ld_defs.append('LDS_SECTION_VMA_%s=%s' % (name, vma))
-    __ld_defs.append('LDS_SECTION_LMA_%s=%s' % (name, lma))
-
-def lds_section(name, reg):
-    lds_section_load(name, reg, reg)
-
-
-def mybuild_main(argv):
-    import os
-    rootpkg = Package('root', None)
-    allmodlist = []
-    scope = Scope()
-
-    glob = globals()
-
-    glob['__package_tree'] = rootpkg
-    glob['__modlist'] = allmodlist
-
-    for arg in argv:
-	for dirpath, dirnames, filenames in os.walk(arg):
-	    for file in filenames:
-		if file.endswith('.py') or file == 'Pybuild':
-		    glob['__dirname'] = dirpath
-		    execfile(os.path.join(dirpath, file), glob)
-
-    conf = 'pyconf/conf.py'
-
-    glob['__scope'] = scope
-
-    modlst = map(lambda name: glob['__package_tree'][name], glob['__modlist'])
-    add_many(scope, modlst)
-
-    glob['__modconstr'] = []
-
-    execfile(conf, glob)
-
-    modconstr = map(lambda (name, dom): (rootpkg[name], dom), glob['__modconstr'])
-
-    cut_scope = cut_many(scope, modconstr)
-    final = fixate(cut_scope)
-
-    return final
+import mybuild.parser
 
 from waflib.TaskGen import feature, after
 from waflib import TaskGen, Task
@@ -125,17 +77,19 @@ def header_gen(self):
 
 def waf_layer(bld):
 
-    final = mybuild_main(['src'])   
+    scope = Scope()
 
-    lds_conf = 'pyconf/lds.py'
+    ctx = mybuild.parser.parse(['src'], 'pyconf')
 
-    glob = globals()
+    modlst = map(lambda name: ctx.root[name], ctx.modlist)
+    add_many(scope, modlst)
 
-    glob['__ld_defs'] = []
+    modconstr = map(lambda (name, dom): (ctx.root[name], dom), ctx.modconstr)
 
-    execfile(lds_conf, glob)
+    cut_scope = cut_many(scope, modconstr)
+    final = fixate(cut_scope)
 
-    bld.env._ld_defs = glob['__ld_defs']
+    bld.env.ld_defs = ctx.ld_defs
 
     for opt, dom in final.items():
 	need_header = isinstance(opt, Interface)

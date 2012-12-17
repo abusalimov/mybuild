@@ -1,4 +1,6 @@
 
+import os, re
+
 from .. package import Package, obj_in_pkg
 from .. module  import Module
 from .. interface import Interface
@@ -34,7 +36,7 @@ class LDScriptAnnotation(SourceAnnotation):
 	    features = 'includes',
 	    source = source,
 	    includes = bld.env.includes,
-	    defines = bld.env._ld_defs,
+	    defines = bld.env.ld_defs,
 	)
 	return tgt
 
