@@ -63,20 +63,16 @@ class InstanceNodeBase(object):
 
     def _create_children(self, key, values):
         try:
-            mapping = self._childmap[key]
+            vmap = self._childmap[key]
         except KeyError:
-            mapping = self._childmap[key] = {}
+            vmap = self._childmap[key] = {}
 
         for value in values:
-            if value in mapping:
+            if value in vmap:
                 raise ValueError
-            mapping[value] = self._new_child(key, value)
+            vmap[value] = self._new_child(key, value)
 
-        return (mapping[value] for value in values)
-
-    def create_child(self, key, value):
-        child, = self._create_children(key, (value,))
-        return child
+        return (vmap[value] for value in values)
 
     def _new_child(self, parent_key=None, parent_value=None):
         cls = type(self)
@@ -107,7 +103,7 @@ class InstanceNode(InstanceNodeBase):
     def constrain(self, expr):
         self._node._constraints.add(expr)
 
-    def make_decisions(self, key, values):
+    def make_decisions(self, module_or_expr, option=None, values=(True,False)):
         """
         Either retrieves an already taken decision (in case of replaying),
         or creates a new child for each value from 'values' iterable returning
@@ -115,6 +111,7 @@ class InstanceNode(InstanceNodeBase):
 
         Returns: (value, node) pairs iterable.
         """
+        key = module_or_expr, option
 
         try:
             value = self._decisions[key]
@@ -126,11 +123,31 @@ class InstanceNode(InstanceNodeBase):
         else:
             return ((value, self),)
 
+    def extend_decisions(self, module, option, value):
+        key = module, option
+        child, = self._create_children(key, (value,))
+        return value, child
+
     def create_pnode(self, context):
-        # def iter_conjuncts():
-        #     for expr in self._constraints:
-        #         yield context.ato_for(expr)
-        pass
+        def iter_conjuncts():
+            for expr in self._constraints:
+                yield context.pnode_from(expr)
+
+            for (module_or_expr, option), vmap in self._childmap.iteritems():
+                for value, child in vmap.iteritems():
+
+                    if option is not None:
+                        cond_pnode = context.atom_for(module_or_expr,
+                                                      option, value)
+
+                    else:
+                        cond_pnode = context.pnode_from(module_or_expr)
+                        if not value:
+                            cond_pnode = pdag.Not(cond_pnode)
+
+                    yield pdag.Implies(cond_pnode, child.create_pnode(context))
+
+        return pdag.And(iter_conjuncts())
 
 
 class Instance(object):
@@ -166,12 +183,10 @@ class Instance(object):
         self.consider(expr)
         self._node.constrain(expr)
 
-    def _decide(self, mslice):
-        dkey = mslice, None
-        return self._make_decision(dkey, (False, True))
+    def _decide(self, expr):
+        return self._make_decision(expr)
 
     def _decide_option(self, mslice, option):
-        dkey = mslice, option
         module = mslice._module
 
         def domain_gen():
@@ -179,38 +194,46 @@ class Instance(object):
                 raise AttributeError("'%s' module has no attribute '%s'" %
                                      (module._name, option))
 
-            option_domain = self._context.domain_for(module, option)
+            # Option without the module itself is meaningless.
+            self.constrain(mslice)
 
-            # Need to save the currnet node here
-            # because _make_decision overwrites it with its child.
-            saved_self_node = self._node
-            option_domain.subscribe(lambda new_value:
-                self._spawn(saved_self_node.create_child(dkey, new_value)))
+            # Need to read and save the currnet node here
+            # because '_make_decision' overwrites self._node it with its child.
+            saved_node = self._node
+            def on_domain_extend(new_value):
+                _, child_node = saved_node.extend_decisions(module, option,
+                                                            new_value)
+                self._spawn(child_node)
+
+            option_domain = self._context.domain_for(module, option)
+            option_domain.subscribe(on_domain_extend)
 
             for value in option_domain:
                 yield value
 
-        return self._make_decision(dkey, domain_gen())
+        return self._make_decision(module, option, domain_gen())
 
-    def _make_decision(self, dkey, domain):
+    def _make_decision(self, module_or_expr, option=None, domain=(True,False)):
         """
         Returns: a value taken.
         """
-        value_node_pairs = iter(self._node.make_decisions(dkey, domain))
+        decisions = iter(self._node.make_decisions(module_or_expr,
+                                                   option, domain))
 
         try:
             # Retrieve the first one (if any) to return it.
-            ret_value, self._node = value_node_pairs.next()
+            ret_value, self._node = decisions.next()
 
         except StopIteration:
             raise InstanceError('No viable choice to take')
 
         else:
-            log.debug('mybuild: take %s=%s', dkey, ret_value)
+            log.debug('mybuild: deciding %s%s=%s', module_or_expr,
+                      '.' + option if option else '', ret_value)
 
         # Spawn for the rest ones.
         spawn = self._spawn
-        for _, node in value_node_pairs:
+        for _, node in decisions:
             spawn(node)
 
         return ret_value
