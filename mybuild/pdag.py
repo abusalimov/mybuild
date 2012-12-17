@@ -187,6 +187,24 @@ class PdagNode(object):
         return PnodeInContext(self, ctx)
 
 
+class ConstNode(PdagNode):
+    """Constrains a node to take a constant value."""
+    __slots__ = ()
+
+    def context_setting(self, ctx, value):
+        if value is not self._value:
+            ctx.store(self, not value) # Let it fall.
+        self._notify_outgoing(ctx, value)
+
+class True_(ConstNode):
+    __slots__ = ()
+    _value = True
+
+class False_(ConstNode):
+    __slots__ = ()
+    _value = False
+
+
 class OperandSetNode(PdagNode):
     __slots__ = '_operands'
 
@@ -310,6 +328,14 @@ class Or(LatticeOpNode):
 
 
 class Not(PdagNode):
+    """
+    Logical negation.
+
+       op    self
+    -----   -----
+     True   False
+    False    True
+    """
     __slots__ = '_operand'
 
     def __init__(self, operand):
@@ -337,6 +363,8 @@ class Not(PdagNode):
 
 class Implies(PdagNode):
     """
+    Simple logical implication.
+
        if    then    self
     -----   -----   -----
      True    True    True
@@ -397,6 +425,13 @@ class AtMostOne(OperandSetNode):
     """
     Allows at most a single operand to be True. Evaluates to True if a single
     operand is True, and to False if *all* operands are also False.
+
+      op1     ...     opN    self
+    -----   -----   -----   -----
+     True   False   False    True
+    False   False   False    False
+
+    When there is no operands evaluates to False.
     """
     __slots__ = ()
 
@@ -454,6 +489,11 @@ class EqGroup(OperandSetNode):
     """
     Forces all operands to take the same value, and evaluates to that value.
     May be considered as a common alias for its operands.
+
+      op1     ...     opN    self
+    -----   -----   -----   -----
+     True    True    True    True
+    False   False   False    False
     """
     __slots__ = ()
 
@@ -476,6 +516,7 @@ class EqGroup(OperandSetNode):
             for operand in self._operands:
                 ctx[operand] = value
 
+            self._notify_outgoing(ctx, value)
 
 class Atom(PdagNode):
     """To be extended by the client."""
@@ -488,6 +529,7 @@ class Atom(PdagNode):
 
 
 class PnodeInContext(namedtuple('_PnodeInContext', 'node context')):
+    __slots__ = ()
     def __str__(self):
         node = self.node
         value = self.context[node]
