@@ -15,6 +15,9 @@ from domain    import BoolDom, ListDom, IntegerDom, Domain, ModDom
 from module    import Module
 from interface import Interface
 
+from parser.mod_rules import *
+from parser.cfg_rules import *
+
 def lds_region(name, base, size):
     global __ld_defs
     __ld_defs.append('LDS_REGION_BASE_%s=%s' % (name, base))
@@ -47,17 +50,11 @@ def mybuild_main(argv):
 		    glob['__dirname'] = dirpath
 		    execfile(os.path.join(dirpath, file), glob)
 
-    #print rootpkg
-    #print
-    #print glob['__modlist']
-
     conf = 'pyconf/conf.py'
 
     glob['__scope'] = scope
 
     modlst = map(lambda name: glob['__package_tree'][name], glob['__modlist'])
-    #print 
-    #print modlst
     add_many(scope, modlst)
 
     glob['__modconstr'] = []
@@ -66,13 +63,8 @@ def mybuild_main(argv):
 
     modconstr = map(lambda (name, dom): (rootpkg[name], dom), glob['__modconstr'])
 
-    #print 
-    #print modconstr
-
     cut_scope = cut_many(scope, modconstr)
     final = fixate(cut_scope)
-    #print
-    #print final
 
     return final
 

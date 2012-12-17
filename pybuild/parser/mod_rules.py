@@ -2,6 +2,7 @@
 from .. package import Package, obj_in_pkg
 from .. module  import Module
 from .. interface import Interface
+from .. option import *
 
 class Annotation():
     def __init__(self):
@@ -119,3 +120,4 @@ def module(name, *args, **kargs):
 
 def interface(name, *args, **kargs):
     _build_obj(Interface, name, args, kargs)
+

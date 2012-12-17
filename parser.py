@@ -15,8 +15,6 @@ if __name__ == '__main__':
 
     if args.method == 'A':
 	from pybuild.parser.mod_rules import *
-	from pybuild.option import Integer, List
-
 	from pybuild.parser.parser import root_pkg, prepare_build
 	
     elif args.method == 'E':
@@ -26,7 +24,7 @@ if __name__ == '__main__':
 def parse(args):
     def build_ctx(root):
 	import types 
-	config = types.ModuleType('config')
+	config = types.ModuleType('build_ctx')
 	
 	config.__dict__['root'] = root
 	config.__dict__['dirname'] = ''

@@ -2,9 +2,9 @@
 __author__ = "Anton Kozlov"
 __date__ = "2012-12-12"
 
-import common.pkg
+from mybuild.common import pkg
 
-from mybuild import module as mybuild_module
+from mybuild.mybuild import module as mybuild_module
 
 import types
 
@@ -15,6 +15,6 @@ def prepare_build(root):
     def content_fn(pkg):
 	return [(name if not isinstance(obj, types.ModuleType) else obj.__name__, obj) 
 		for name, obj in pkg.__dict__.items()]
-    modlist = common.pkg.modlist(root, types.ModuleType, mybuild_module, content_fn)
+    modlist = pkg.modlist(root, types.ModuleType, mybuild_module, content_fn)
     print '\n'.join(modlist)
     return modlist

@@ -1,10 +1,10 @@
 
 import types
 
-from mybuild import module as mybuild_module, option
-from mybuild.constraints import Constraints
+from mybuild.mybuild import module as mybuild_module, option
+from mybuild.mybuild.constraints import Constraints
 
-from pybuild.option import Integer, Boolean, List
+from mybuild.pybuild.option import Integer, Boolean, List
 
 def package(name):
     import sys
