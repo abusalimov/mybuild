@@ -14,39 +14,43 @@ if __name__ == '__main__':
     args = argparser.parse_args()
 
     if args.method == 'A':
-	from pybuild.parser import *
+	from pybuild.parser.mod_rules import *
 	from pybuild.option import Integer, List
+
+	from pybuild.parser.parser import root_pkg, prepare_build
+	
     elif args.method == 'E':
-	from mybuild.parser.parser import *
+	from mybuild.parser.mod_rules import *
+	from mybuild.parser.parser import root_pkg, prepare_build
 
-def config(root):
-    import types 
-    config = types.ModuleType('config')
-    
-    config.__dict__['root'] = root
-    config.__dict__['dirname'] = ''
-    config.__dict__['modlist'] = []
-    return config
+def parse(args):
+    def build_ctx(root):
+	import types 
+	config = types.ModuleType('config')
+	
+	config.__dict__['root'] = root
+	config.__dict__['dirname'] = ''
+	config.__dict__['modlist'] = []
+	return config
 
-def main(args):
     import os
 
     glob = globals().copy()
     locl = {}
 
     root = root_pkg()
-    cfg  = config(root)
+    ctx  = build_ctx(root)
 
-    sys.modules['config'] = config(root)
+    sys.modules['build_ctx'] = ctx
 
     for arg in args.DIR:
 	for dirpath, dirnames, filenames in os.walk(arg):
 	    for file in filenames:
 		if file.endswith('.py') or file == 'Pybuild':
-		    cfg.dirname = dirpath
+		    ctx.dirname = dirpath
 		    execfile(os.path.join(dirpath, file), glob, locl)
 
-    prepare_build(root)
+    return prepare_build(root)
 
 if __name__ == '__main__':
-    main(args)
+    parse(args)

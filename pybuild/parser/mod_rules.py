@@ -1,9 +1,7 @@
 
-from package import Package, obj_in_pkg
-from module  import Module
-from interface import Interface
-
-import common.pkg
+from .. package import Package, obj_in_pkg
+from .. module  import Module
+from .. interface import Interface
 
 class Annotation():
     def __init__(self):
@@ -98,39 +96,26 @@ def package(name):
     global package_name
     package_name = name
 
-    import config
-    config.root.built_subpack(name)
+    import build_ctx
+    ctx = build_ctx
+
+    ctx.root.built_subpack(name)
 
 
 def _build_obj(cls, name, args, kargs):
     global package_name
     
-    import config
-    config.modlist.append('.'.join ((package_name, name)))
-    obj_in_pkg(cls, config.root[package_name], name, *args, **kargs)
+    import build_ctx
+    ctx = build_ctx
+    ctx.modlist.append('.'.join ((package_name, name)))
+    obj_in_pkg(cls, ctx.root[package_name], name, *args, **kargs)
 
 def module(name, *args, **kargs):
-    import config
+    import build_ctx
+    ctx = build_ctx
     if kargs.has_key('sources'):
-	kargs['sources'] = map (lambda s: Source(config.dirname, s), kargs['sources'])
+	kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
     _build_obj(Module, name, args, kargs)
 
 def interface(name, *args, **kargs):
     _build_obj(Interface, name, args, kargs)
-
-def include(name, opts={}):
-    global __modconstr
-    __modconstr.append((name, BoolDom([True])))
-    for opt_name, value in opts.items():
-	__modconstr.append(("%s.%s" % (name, opt_name), Domain([value])))
-
-def exclude(name):
-    pass
-
-def root_pkg():
-    return Package('root', None)
-
-def prepare_build(root):
-    modlist = common.pkg.modlist(root, Package, Module, lambda pkg: pkg.items())
-    print '\n'.join(modlist)
-    return modlist
