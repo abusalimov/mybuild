@@ -20,11 +20,9 @@ from itertools import product
 from operator import attrgetter
 
 from core import *
-from constraints import *
-from expr import *
-from util import singleton
-from util import NotifyingMixin
+from instance import Instance
 import pdag
+from util import NotifyingMixin
 
 import logs as log
 
@@ -231,30 +229,41 @@ class OptionDomain(NotifyingSet):
         return self.pnode._new_operand(atom)
 
 
-def build(conf_module):
-    domain = Context()
-    conf_domain = domain.domain_for(conf_module)
+class InstanceDomain(DomainBase):
 
-    assert len(conf_domain._instances) == 1
-    conf_instance_set = conf_domain._instances.itervalues().next()
+    optuple = property(attrgetter('_optuple'))
+    module  = property(attrgetter('_module'))
 
-    assert len(conf_instance_set) == 1
-    conf_instance = iter(conf_instance_set).next()
+    _init_fxn = property(attrgetter('_optuple._module._init_fxn'))
 
-    constraints = conf_instance._constraints # XXX
+    def __init__(self, context, optuple):
+        super(InstanceDomain, self).__init__(context)
 
-    # flat_constr = constraints.branch().flatten()
-    # for m in flat_constr._dict:
-    #     ctx = self._modules[m]
-    #     for mslice, inst_set in ctx._instances:
-    #         if flat_constr.check_mslice(mslice) is not False:
+        self._optuple = optuple
 
+        self._instances = []
+        self._node = root_node = InstanceNode()
 
-    # try:
-    #     constraints = Constraints.merge(instance._constraints
-    #                                     for instance in domain._instances)
-    # except Exception, e:
-    #     raise e
+        self.post_new(root_node)
+
+    def post_new(self, node):
+        instance = Instance(self, node)
+
+        def new():
+            with log.debug("mybuild: new %r", self):
+                try:
+                    self._init_fxn(*optuple)
+                except InstanceError as e:
+                    log.debug("mybuild: unviable %r: %s", self, e)
+                else:
+                    log.debug("mybuild: succeeded %r", self)
+                    self._instances.append(instance)
+
+        self._context.post(new)
+
+    def create_pnode(self):
+        return self._node.create_pnode(self._context)
+
 
 if __name__ == '__main__':
     from mybuild import module, option
@@ -271,5 +280,5 @@ if __name__ == '__main__':
     def m1(self):
         pass
 
-    build(conf)
+    # build(conf)
 

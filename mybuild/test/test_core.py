@@ -7,7 +7,6 @@ from unittest import TestCase
 # from mock import Mock, patch
 
 from mybuild import module
-from mybuild.context import build
 
 
 class ModuleTestCase(TestCase):
@@ -78,7 +77,7 @@ if __name__ == '__main__':
 
 
 
-    build(conf)
+    # build(conf)
 
     unittest.main()
 

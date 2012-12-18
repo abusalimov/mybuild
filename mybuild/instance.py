@@ -6,46 +6,10 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-12-14"
 
 
-from collections import defaultdict
 from itertools import izip
 from operator import attrgetter
 
-from context import DomainBase
-
-class InstanceDomain(DomainBase):
-
-    optuple = property(attrgetter('_optuple'))
-    module  = property(attrgetter('_module'))
-
-    _init_fxn = property(attrgetter('_optuple._module._init_fxn'))
-
-    def __init__(self, context, optuple):
-        super(InstanceDomain, self).__init__(context)
-
-        self._optuple = optuple
-
-        self._instances = []
-        self._node = root_node = InstanceNode()
-
-        self.post_new(root_node)
-
-    def post_new(self, node):
-        instance = Instance(self, node)
-
-        def new():
-            with log.debug("mybuild: new %r", self):
-                try:
-                    self._init_fxn(*optuple)
-                except InstanceError as e:
-                    log.debug("mybuild: unviable %r: %s", self, e)
-                else:
-                    log.debug("mybuild: succeeded %r", self)
-                    self._instances.append(instance)
-
-        self._context.post(new)
-
-    def create_pnode(self):
-        return self._node.create_pnode(self._context)
+# do not import context due to bootstrapping issues
 
 
 class InstanceNodeBase(object):
@@ -138,6 +102,7 @@ class InstanceNode(InstanceNodeBase):
                 for value, child in vmap.iteritems():
 
                     if option is not None:
+                        # module_or_expr is definitely a plain module here
                         cond_pnode = context.atom_for(module_or_expr,
                                                       option, value)
 
