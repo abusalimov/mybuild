@@ -9,7 +9,8 @@ def lds_section(name, reg):
     pass
 
 def include(name, opts={}):
-    pass
+    import build_ctx
+    build_ctx.constr.append((name, opts))
 
 def exclude(name):
     pass

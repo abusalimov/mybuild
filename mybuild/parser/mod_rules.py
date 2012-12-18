@@ -10,13 +10,12 @@ def package(name):
     import sys
     import build_ctx 
 
-   
     pkg = build_ctx.root
 
     for subpkg in name.split('.'):
-	if not hasattr(pkg, name):
-	    pkg.__dict__[name] = types.ModuleType(subpkg)
-	pkg = getattr(pkg, name)
+	if not hasattr(pkg, subpkg):
+	    setattr(pkg, subpkg, types.ModuleType(subpkg))
+	pkg = getattr(pkg, subpkg)
 
     global this_pkg
     this_pkg = pkg
@@ -35,6 +34,9 @@ def {MOD_NAME}(self, {OPTIONS}):
 
     this_pkg.__dict__[name] = locals()[name]
 
+def library(name, *args, **kargs):
+    module(name, *args, **kargs)
+
 def LDScript(self):
     return self
 
@@ -43,6 +45,9 @@ def Generated(self, fn):
 
 def NoRuntime(self):
     return self
+
+def DefMacro(macro, src):
+    return src
 
 def interface(name, *args, **kargs):
     pass
