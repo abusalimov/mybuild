@@ -4,7 +4,7 @@ from .. module  import Module
 from .. interface import Interface
 from .. option import *
 
-from mybuild.source import *
+from mybuild.source import LDScript, Generated, NoRuntime, Source
 
 def package(name):
     global package_name

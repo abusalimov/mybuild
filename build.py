@@ -27,6 +27,8 @@ def waf_entry(bld):
 
     model = method_decide_build(ctx)
 
+    bld.out = []
+
     method_define_build(bld, model)
 
     bld(
@@ -34,6 +36,6 @@ def waf_entry(bld):
 	target = bld.env.target,
 	includes = bld.env.includes,
 	linkflags = bld.env.LDFLAGS,
-	use = 'generated objects ldscripts',
+	use = ['generated', 'ldscripts'] + bld.out,
     )
 

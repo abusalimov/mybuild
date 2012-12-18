@@ -57,7 +57,7 @@ def method_define_build(bld, model):
 	        header_opts.append(inchdr(repr, opt.qualified_name(), name, model[var].value()))
 
 	    for src in opt.sources:
-		src.build(bld, opt, model) 
+		bld.out.append(src.build(bld, opt, model))
 
 	if need_header:
 	    bld(features = 'module_header',
