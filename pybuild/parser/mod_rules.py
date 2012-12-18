@@ -4,7 +4,7 @@ from .. module  import Module
 from .. interface import Interface
 from .. option import *
 
-from mybuild.source import LDScript, Generated, NoRuntime, Source
+from mybuild.source import LDScript, Generated, NoRuntime, Source, StaticSource
 
 def package(name):
     global package_name
@@ -33,4 +33,11 @@ def module(name, *args, **kargs):
 
 def interface(name, *args, **kargs):
     _build_obj(Interface, name, args, kargs)
+
+def library(name, *args, **kargs):
+    import build_ctx
+    ctx = build_ctx
+    if kargs.has_key('sources'):
+	kargs['sources'] = map (lambda s: StaticSource(ctx.dirname, s), kargs['sources'])
+    _build_obj(Module, name, args, kargs)
 
