@@ -27,6 +27,9 @@ class Option:
     def qualified_name(self):
 	return '%s.%s' % (self.pkg.qualified_name(), self.name)
 
+    def build(self, bld, scope):
+	pass
+
 class DefaultOption(Option):
     def __init__(self, name, domain=None, pkg=None, default=None):
 	Option.__init__(self, name, domain, pkg)

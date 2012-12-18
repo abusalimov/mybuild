@@ -53,3 +53,5 @@ def LDScript(obj):
 def Generated(obj, rule):
     return annotated(obj, GeneratedAnnotation(rule))
 
+def DefMacro(define, obj):
+    return obj

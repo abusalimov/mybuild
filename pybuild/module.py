@@ -1,4 +1,5 @@
 
+import re
 import itertools
 
 from exception import *
@@ -12,6 +13,7 @@ from util import isvector
 from ops  import *
 
 from mybuild.common import repr as common_repr
+from mybuild.build import inchdr
 
 def trigger_handle(cont, scope, trig, *args, **kwargs):
     opt = None
@@ -84,7 +86,6 @@ class Module(option.Boolean, scope.BaseScope):
 	if v:
 	    for impl in self.implements:
 		implmod = find_fn(impl)
-		print implmod
 		scope = incut(scope, implmod, domain.ModDom([self]))
 
 	    for dep, opts in self.depends:
@@ -129,3 +130,60 @@ class Module(option.Boolean, scope.BaseScope):
     def __hash__(self):
 	return self.hash_value
 
+
+    def build(self, bld, scope):
+	if not scope[self].value():
+	    return 
+
+	srcs = []
+	header_inc = []
+	header_opts = []
+
+	for src in self.sources:
+	    fsrc = src.build(bld, self, scope)
+	    if re.match('.*\.[cS]', fsrc):
+		srcs.append(fsrc)
+	    elif re.match('.*\.h', fsrc):
+		header_inc.append(fsrc)
+
+	for name, var in self.items():
+	    repr = var.build_repr()
+	    if not repr:
+		continue
+	    header_opts.append(inchdr(repr, self.qualified_name(), name, scope[var].value()))
+
+	bld(features = 'module_header',
+	    mod_name = self.qualified_name(),
+	    header_opts = header_opts,
+	    header_inc = header_inc)
+
+	self.build_self(bld, srcs)
+
+    def build_self(self, bld, srcs):
+	tgt = self.qualified_name().replace('.', '_') + '.o'
+
+	bld(
+	    features = 'c', 
+	    #source = srcs,
+	    target = tgt,
+	    defines = ['__EMBUILD_MOD__'],
+	    includes = bld.env.includes,
+	    use = srcs,
+	)
+
+	bld.out.append(tgt)
+
+class StaticModule(Module):
+    def build_self(self, bld, srcs):
+	tgt = self.qualified_name().replace('.', '_') + '.o'
+
+	bld(
+	    features = 'c cstlib', 
+	    source = srcs,
+	    target = tgt,
+	    defines = ['__EMBUILD_MOD__'],
+	    includes = bld.env.includes,
+	)
+
+	bld.out.append(tgt)
+    

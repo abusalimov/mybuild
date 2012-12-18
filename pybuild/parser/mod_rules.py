@@ -1,10 +1,11 @@
 
 from .. package import Package, obj_in_pkg
-from .. module  import Module
+from .. module  import Module, StaticModule
 from .. interface import Interface
 from .. option import *
 
-from mybuild.source import LDScript, Generated, NoRuntime, Source, StaticSource
+from mybuild.source     import Source
+from mybuild.annotation import LDScript, Generated, NoRuntime, DefMacro
 
 def package(name):
     global package_name
@@ -38,6 +39,6 @@ def library(name, *args, **kargs):
     import build_ctx
     ctx = build_ctx
     if kargs.has_key('sources'):
-	kargs['sources'] = map (lambda s: StaticSource(ctx.dirname, s), kargs['sources'])
-    _build_obj(Module, name, args, kargs)
+	kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
+    _build_obj(StaticModule, name, args, kargs)
 

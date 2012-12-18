@@ -57,3 +57,15 @@ class Interface(DefaultOption, BaseScope):
     def __hash__(self):
 	return self.hash_value
 
+    
+    def build(self, bld, scope): 
+	header_inc = []
+
+	for impl in scope[self]:
+	    header_inc.append('module/%s.h' % (impl.qualified_name().replace('.','/'),)) #XXX
+
+	bld(features = 'module_header',
+	    mod_name = self.qualified_name(),
+	    header_opts = [],
+	    header_inc = header_inc)
+

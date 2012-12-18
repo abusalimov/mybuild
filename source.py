@@ -21,36 +21,22 @@ class Source(object):
 
     def build(self, bld, opt, scope):
 	f = self.fullpath()
-	cnt = 0
 	for ann in self.annotations():
 	    f = ann.build(bld, f, opt, scope)
-	if re.match('.*\.c', f):	
-	    return self.build_rule(f, bld, opt, scope)
-	    
-	return f
+
+	return self.build_rule(f, bld, opt, scope)
 
     def build_rule(self, src, bld, opt, scope):
-	tgt = src.replace('.c', '.o')
-	bld.objects(
-	    name = tgt,
-	    source = src,
-	    defines = ['__EMBUILD_MOD__'],
-	    includes = bld.env.includes,
-	)
-	return tgt
-
-class StaticSource(Source):
-    def build_rule(self, src, bld, opt, scope):
-	tgt = src.replace('.c', '.a')
-	bld.stlib(
-	    name = tgt,
-	    source = src,
-	    target = tgt,
-	    defines = ['__EMBUILD_MOD__'],
-	    includes = bld.env.includes,
-	)
-	return tgt
-
-
-
-
+	return src
+	#if not re.match('.*\.[cS]', src):
+	    #return src
+	#print src
+	#tgt = "%s.o" % (src,)
+	#bld(
+	    #features = 'c', 
+	    #source = src,
+	    #target = tgt,
+	    #defines = ['__EMBUILD_MOD__'],
+	    #includes = bld.env.includes,
+	#)
+	#return tgt 
