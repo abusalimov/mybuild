@@ -10,6 +10,7 @@ from itertools import izip
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
+import pdag
 
 
 class InstanceNodeBase(object):
@@ -18,7 +19,7 @@ class InstanceNodeBase(object):
     parent = property(attrgetter('_parent'))
 
     def __init__(self, parent=None):
-        super(TreeNode, self).__init__()
+        super(InstanceNodeBase, self).__init__()
 
         self._parent = parent
         self._childmap = {}
@@ -66,7 +67,7 @@ class InstanceNode(InstanceNodeBase):
         return new
 
     def constrain(self, expr):
-        self._node._constraints.add(expr)
+        self._constraints.add(expr)
 
     def make_decisions(self, module_or_expr, option=None, values=(True,False)):
         """
@@ -113,7 +114,7 @@ class InstanceNode(InstanceNodeBase):
 
                     yield pdag.Implies(cond_pnode, child.create_pnode(context))
 
-        return pdag.And(iter_conjuncts())
+        return pdag.And(*iter_conjuncts())
 
 
 class Instance(object):
@@ -141,9 +142,15 @@ class Instance(object):
         self._domain = domain
         self._node = node
 
-    def consider(self, expr):
-        # self._context.consider
-        pass
+    def consider(self, mslice):
+        optuple = mslice._to_optuple()
+        module = optuple._module
+
+        consider = self._context.consider
+
+        consider(module)
+        for option, value in optuple._iterpairs():
+            consider(module, option, value)
 
     def constrain(self, expr):
         self.consider(expr)
@@ -203,4 +210,7 @@ class Instance(object):
             spawn(node)
 
         return ret_value
+
+    def __str__(self):
+        return str(self._optuple)
 

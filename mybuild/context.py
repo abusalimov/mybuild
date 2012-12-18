@@ -20,7 +20,9 @@ from itertools import product
 from operator import attrgetter
 
 from core import *
+from dtree import Dtree
 from instance import Instance
+from instance import InstanceNode
 import pdag
 from util import NotifyingMixin
 
@@ -35,16 +37,7 @@ class Context(object):
         self._modules = {}
         self._job_queue = deque()
         self._reent_locked = False
-
-    def freeze(self):
-        if hasattr(self, '_pdag'):
-            raise RuntimeError("'freeze' must be called only once.")
-
-        # def iter_atoms():
-        #     for module_domain in self._module.itervalues():
-
-
-        self._pdag = pdag.Pdag(*iter_atoms())
+        self._atoms = {}
 
     def post(self, fxn):
         with self.reent_lock(): # to flush the queue on block exit
@@ -89,20 +82,19 @@ class Context(object):
 
         return domain
 
-    def atom_for(self, module, option=None, value=Ellipsis, negated=False):
-        cache = self._atom_cache
-        cache_key = module, option, value, negated
+    def atom_for(self, module, option=None, value=Ellipsis):
+        cache = self._atoms
+        cache_key = module, option, value
 
         try:
             return cache[cache_key]
         except KeyError:
             pass
 
-        if negated:
-            ret = pdag.Not(self.atom_for(module, option, value, negated=False))
+        if option is not None:
+            ret = self.domain_for(module, option).atom_for(value)
         else:
-            domain = self.domain_for(module, option)
-            ret = domain.atom if option is None else domain.atom_for(value)
+            ret = self.domain_for(module).atom
 
         cache[cache_key] = ret
 
@@ -110,8 +102,19 @@ class Context(object):
 
     def pnode_from(self, mslice):
         # TODO should accept arbitrary expr as well.
-        pass
+        optuple = mslice._to_optuple()
+        module = optuple._module
 
+        atom_for = self.atom_for
+
+        return pdag.And(atom_for(module),
+                        *(atom_for(module, option, value)
+                          for option, value in optuple._iterpairs()))
+
+    def create_pdag_with_constraint(self):
+        constraint = pdag.And(*(module.create_pnode()
+                                for module in self._modules.itervalues()))
+        return pdag.Pdag(*self._atoms.itervalues()), constraint
 
 class DomainBase(object):
     """docstring for DomainBase"""
@@ -141,14 +144,6 @@ class ModuleDomain(DomainBase):
 
         self._instantiate_product(self._options)
 
-    def init_pnode(self):
-        presence_pnode = pdag.EqGroup(self._atom,
-            *(option_domain.pnode for option_domain in self._options))
-        instances_pnode = pdag.And(
-            *(instance.pnode
-              for instance_set in self._instances.itervalues()
-              for instance in instance_set))
-
     def _instantiate_product(self, iterables):
         make_optuple = self._options._make
         instances = self._instances
@@ -167,12 +162,19 @@ class ModuleDomain(DomainBase):
         log.debug('mybuild: extending %r with %r', domain_to_extend, value)
         domain_to_extend.add(value)
 
-        self._instantiate_product(
-            option_domain if option_domain is not domain_to_extend else (value,)
+        self._instantiate_product(option_domain
+            if option_domain is not domain_to_extend else (value,)
             for option_domain in self._options)
 
     def domain_for(self, option):
         return getattr(self._options, option)
+
+    def create_pnode(self):
+        # TODO don't like it
+        pdag.EqGroup(self._atom, *(option.create_pnode()
+                                   for option in self._options))
+        return pdag.And(*(instance.create_pnode()
+                          for instance in self._instances.itervalues()))
 
 
 class NotifyingSet(MutableSet, NotifyingMixin):
@@ -215,18 +217,18 @@ class OptionDomain(NotifyingSet):
 
     def __init__(self, option):
         self._option = option
-        self.pnode = pdag.AtMostOne()
-
         super(OptionDomain, self).__init__(option._values)
 
     def atom_for(self, value):
         if value not in self:
-            self.add(value)
+            raise ValueError
         return self._dict[value]
 
     def _create_value_for(self, value):
-        atom = self._option._atom_type(value)
-        return self.pnode._new_operand(atom)
+        return self._option._atom_type(value)
+
+    def create_pnode(self):
+        return pdag.AtMostOne(*self._dict.itervalues())
 
 
 class InstanceDomain(DomainBase):
@@ -250,19 +252,21 @@ class InstanceDomain(DomainBase):
         instance = Instance(self, node)
 
         def new():
-            with log.debug("mybuild: new %r", self):
+            with log.debug("mybuild: new %s", instance):
                 try:
-                    self._init_fxn(*optuple)
+                    self._init_fxn(instance, *self._optuple)
                 except InstanceError as e:
-                    log.debug("mybuild: unviable %r: %s", self, e)
+                    log.debug("mybuild: unviable %s: %s", instance, e)
                 else:
-                    log.debug("mybuild: succeeded %r", self)
+                    log.debug("mybuild: succeeded %s", instance)
                     self._instances.append(instance)
 
         self._context.post(new)
 
     def create_pnode(self):
-        return self._node.create_pnode(self._context)
+        context = self._context
+        constraints = self._node.create_pnode(context)
+        return pdag.Implies(context.pnode_from(self._optuple), constraints)
 
 
 if __name__ == '__main__':
@@ -278,7 +282,20 @@ if __name__ == '__main__':
 
     @module
     def m1(self):
-        pass
+        self.constrain(m2(foo=17))
 
-    # build(conf)
+    @module
+    def m2(self, foo=42):
+        self.constrain(m2)
+
+    context = Context()
+    context.consider(conf)
+
+    conf_atom = context.atom_for(conf)
+    pdag, constraint = context.create_pdag_with_constraint()
+    dtree = Dtree(pdag)
+    solution = dtree.solve({constraint:True, conf_atom:True})
+
+    from pprint import pprint
+    pprint(solution)
 

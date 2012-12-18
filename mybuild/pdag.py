@@ -136,7 +136,8 @@ class Pdag(object):
         self._atoms = atoms = frozenset(atoms)
         for atom in atoms:
             if not isinstance(atom, Atom):
-                raise TypeError
+                raise TypeError("Atom expected, got '%s' object instead" %
+                                type(atom))
         self._nodes = frozenset(self._hull(atoms))
 
     @classmethod

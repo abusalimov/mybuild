@@ -33,7 +33,9 @@ class Module(object):
         pass
 
     def __init__(self, fxn):
+        self._init_fxn = fxn
         self._name = fxn.__name__
+
         module_type = type('Module_M%s' % self._name,
                            (self.Type,),
                            dict(__slots__=(),
@@ -52,14 +54,14 @@ class Module(object):
     def _to_pnode(self):
         return self._atom
 
-    def __repr__(self):
+    def __str__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
 
 class ModuleAtom(pdag.Atom):
     __slots__ = ()
 
-    def __str__(self):
+    def __repr__(self):
         return self._module_name
 
     @classmethod
@@ -89,9 +91,9 @@ class Optuple(Module.Type):
     def _to_optuple(self):
         return self
 
-    def __repr__(self):
+    def __str__(self):
         return '%s(%s)' % (self._module._name,
-                           ', '.join('%s=%r' % pair
+                           ', '.join('%s=%s' % pair
                                      for pair in self._iterpairs()))
 
     def __eq__(self, other):
@@ -113,26 +115,26 @@ class Optuple(Module.Type):
 
         if va is not None:
             raise TypeError(
-                'Arbitrary arguments are not supported: *%r' % va)
+                'Arbitrary arguments are not supported: *%s' % va)
         if kw is not None:
             raise TypeError(
-                'Arbitrary keyword arguments are not supported: **%r' % kw)
+                'Arbitrary keyword arguments are not supported: **%s' % kw)
 
         if not args:
             raise TypeError(
                 'Module function must accept at least one argument')
         if len(args) == len(defaults):
             raise TypeError(
-                'The first argument cannot have a default value: %r' % args[0])
+                'The first argument cannot have a default value: %s' % args[0])
 
         option_args = args[1:]
         for arg in option_args:
             if not isinstance(arg, basestring):
                 raise TypeError(
-                    'Tuple parameter unpacking is not supported: %r' % arg)
+                    'Tuple parameter unpacking is not supported: %s' % arg)
             if arg.startswith('_'):
                 raise TypeError(
-                    'Option name cannot start with an underscore: %r' % arg)
+                    'Option name cannot start with an underscore: %s' % arg)
 
         head = [Option() for _ in xrange(len(defaults), len(option_args))]
         tail = [option if isinstance(option, Option) else Option(option)
@@ -229,7 +231,7 @@ class OptionValueAtom(pdag.Atom):
         super(OptionValueAtom, self).__init__()
         self._value = value
 
-    def __str__(self):
+    def __repr__(self):
         return '(%s.%s==%s)' % (self._module_name,
                                 self._option_name, self._value)
 
