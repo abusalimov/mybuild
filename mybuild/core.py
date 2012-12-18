@@ -19,17 +19,14 @@ __all__ = [
 
 from collections import namedtuple
 from inspect import getargspec
-from itertools import chain
 from itertools import izip
-from itertools import repeat
 from operator import attrgetter
 
 import pdag
-from util import DynamicAttrsMixin
 from util import InstanceBoundTypeMixin
 
 
-class Module(DynamicAttrsMixin):
+class Module(object):
     """A basic building block of Mybuild."""
 
     class Type(InstanceBoundTypeMixin):
@@ -37,13 +34,14 @@ class Module(DynamicAttrsMixin):
 
     def __init__(self, fxn):
         self._name = fxn.__name__
-        module_type = type('Module_M%s' % (self._name,),
+        module_type = type('Module_M%s' % self._name,
                            (self.Type,),
                            dict(__slots__=(),
                                 _module=self,
                                 _module_name=self._name))
 
-        self._init_attrs(module_type, fxn)
+        self._atom_type = ModuleAtom._new_type(module_type)
+        self._options = Optuple._new_type_options(module_type, fxn)
 
     def __call__(self, **kwargs):
         return self._options._ellipsis._replace(**kwargs)
@@ -57,7 +55,7 @@ class Module(DynamicAttrsMixin):
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
-@Module.register_attr('_atom_type')
+
 class ModuleAtom(pdag.Atom):
     __slots__ = ()
 
@@ -65,13 +63,12 @@ class ModuleAtom(pdag.Atom):
         return self._module_name
 
     @classmethod
-    def _new_type(cls, module_type, *ignored):
-        return type('ModuleAtom_M%s' % (module_type._module_name,),
+    def _new_type(cls, module_type):
+        return type('ModuleAtom_M%s' % module_type._module_name,
                     (cls, module_type),
                     dict(__slots__=()))
 
 
-@Module.register_attr('_options')
 class Optuple(Module.Type):
     """Option tuple mixin type."""
     __slots__ = ()
@@ -109,7 +106,7 @@ class Optuple(Module.Type):
 
     @classmethod
     def _options_from_fxn(cls, fxn):
-        """Converts a function argspec into a (options, defaults) tuple."""
+        """Converts a function argspec into a list of Option objects."""
 
         args, va, kw, defaults = getargspec(fxn)
         defaults = defaults or ()
@@ -129,25 +126,27 @@ class Optuple(Module.Type):
                 'The first argument cannot have a default value: %r' % args[0])
 
         option_args = args[1:]
-        for a in option_args:
-            if not isinstance(a, basestring):
+        for arg in option_args:
+            if not isinstance(arg, basestring):
                 raise TypeError(
-                    'Tuple parameter unpacking is not supported: %r' % a)
-            if a.startswith('_'):
+                    'Tuple parameter unpacking is not supported: %r' % arg)
+            if arg.startswith('_'):
                 raise TypeError(
-                    'Option name cannot start with an underscore: %r' % a)
+                    'Option name cannot start with an underscore: %r' % arg)
 
-        head = (Option() for _ in xrange(len(defaults), len(option_args)))
-        tail = (o if isinstance(o, Option) else Option(o) for o in defaults)
+        head = [Option() for _ in xrange(len(defaults), len(option_args))]
+        tail = [option if isinstance(option, Option) else Option(option)
+                for option in defaults]
 
-        return tuple(o.set(_name=a)
-                     for o,a in izip(chain(head, tail), option_args))
+        return map(lambda option, name: option.set(_name=name),
+                   head + tail, option_args)
 
     @classmethod
-    def _new_type(cls, module_type, fxn):
+    def _new_type_options(cls, module_type, fxn):
         options = cls._options_from_fxn(fxn)
 
-        optuple_base = namedtuple('OptupleBase', (o._name for o in options))
+        optuple_base = namedtuple('OptupleBase',
+                                  (option._name for option in options))
 
         bogus_attrs = set(a for a in dir(optuple_base)
                           if not a.startswith('_'))
@@ -155,20 +154,20 @@ class Optuple(Module.Type):
         for attr in bogus_attrs:
             setattr(optuple_base, attr, property())
 
-        new_type = type('Optuple_M%s' % (module_type._module_name,),
+        new_type = type('Optuple_M%s' % module_type._module_name,
                         (cls, optuple_base, module_type),
                         dict(__slots__=()))
 
         optuple_base._fields = new_type._make(optuple_base._fields)
-        new_type._ellipsis = new_type._make(repeat(Ellipsis, len(options)))
-        new_type._options = new_type._make(o.set(_module=module_type._module)
-                                            ._init_types(module_type)
-                                           for o in options)
+        new_type._ellipsis = new_type._make(Ellipsis for _ in options)
+        new_type._options = new_type._make(
+            option.set(_module=module_type._module)._init_types(module_type)
+            for option in options)
 
         return new_type._options
 
 
-class Option(DynamicAttrsMixin):
+class Option(object):
 
     class Type(Module.Type):
         pass
@@ -192,7 +191,10 @@ class Option(DynamicAttrsMixin):
                            dict(__slots__=(),
                                 _option=self,
                                 _option_name=self._name))
-        self._init_attrs(option_type)
+
+        assert not hasattr(self, '_atom_type'), 'Must be called only once'
+        self._atom_type = OptionValueAtom._new_type(option_type)
+
         return self
 
     def set(self, **flags):
@@ -219,7 +221,7 @@ class Option(DynamicAttrsMixin):
     def bool(cls, default=False):
         return cls(True, False, default=default, allow_others=False)
 
-@Option.register_attr('_atom_type')
+
 class OptionValueAtom(pdag.Atom):
     __slots__ = '_value'
 
