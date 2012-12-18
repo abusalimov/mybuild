@@ -71,7 +71,7 @@ class InstanceNode(InstanceNodeBase):
     def constrain(self, expr):
         self._constraints.add(expr)
 
-    def make_decisions(self, module_or_expr, option=None, values=(True,False)):
+    def make_decisions(self, module_expr, option=None, values=(True,False)):
         """
         Either retrieves an already taken decision (in case of replaying),
         or creates a new child for each value from 'values' iterable returning
@@ -79,7 +79,7 @@ class InstanceNode(InstanceNodeBase):
 
         Returns: (value, node) pairs iterable.
         """
-        key = module_or_expr, option
+        key = module_expr, option
 
         try:
             value = self._decisions[key]
@@ -96,29 +96,44 @@ class InstanceNode(InstanceNodeBase):
         child, = self._create_children(key, (value,))
         return value, child
 
-    def create_constraint(self, context):
+    def _cond_pnode(self, context, module_expr, option, value):
+        if option is not None:
+            # module_expr is definitely a plain module here
+            pnode = context.atom_for(module_expr, option, value)
+
+        else:
+            pnode = context.create_pnode_from(module_expr)
+            if not value:
+                pnode = pdag.Not(pnode)
+
+        return pnode
+
+    def create_pnode(self, context):
         def iter_conjuncts():
             for expr in self._constraints:
                 yield context.create_pnode_from(expr)
 
-            for (module_or_expr, option), vmap in self._childmap.iteritems():
+            for (module_expr, option), vmap in self._childmap.iteritems():
                 for value, child in vmap.iteritems():
 
-                    if option is not None:
-                        # module_or_expr is definitely a plain module here
-                        cond_pnode = context.atom_for(module_or_expr,
-                                                      option, value)
-
-                    else:
-                        cond_pnode = context.create_pnode_from(module_or_expr)
-                        if not value:
-                            cond_pnode = pdag.Not(cond_pnode)
-
-                    yield pdag.Implies(cond_pnode,
-                                       child.create_constraint(context))
+                    yield pdag.Implies(
+                        self._cond_pnode(context, module_expr, option, value),
+                        child.create_pnode(context))
 
         return pdag.And(*iter_conjuncts())
 
+    def create_pnode_for_decisions(self, context):
+        def iter_conjuncts():
+            for (module_expr, option), value in self._decisions.iteritems():
+                yield self._cond_pnode(context, module_expr, option, value)
+
+        return pdag.And(*iter_conjuncts())
+
+    def __repr__(self):
+        decisions = self._decisions
+        return ', '.join('%s%s=%s' %
+                (module, '.' + option if option else '', value)
+            for (module, option), value in decisions.iteritems()).join('<>')
 
 class Instance(object):
 
@@ -190,11 +205,11 @@ class Instance(object):
 
         return self._make_decision(module, option, domain_gen())
 
-    def _make_decision(self, module_or_expr, option=None, domain=(True,False)):
+    def _make_decision(self, module_expr, option=None, domain=(True,False)):
         """
         Returns: a value taken.
         """
-        decisions = iter(self._node.make_decisions(module_or_expr,
+        decisions = iter(self._node.make_decisions(module_expr,
                                                    option, domain))
 
         try:
@@ -205,7 +220,7 @@ class Instance(object):
             raise InstanceError('No viable choice to take')
 
         else:
-            log.debug('mybuild: deciding %s%s=%s', module_or_expr,
+            log.debug('mybuild: deciding %s%s=%s', module_expr,
                       '.' + option if option else '', ret_value)
 
         # Spawn for the rest ones.
@@ -215,6 +230,9 @@ class Instance(object):
 
         return ret_value
 
-    def __str__(self):
-        return str(self._optuple)
+    def __repr__(self):
+        # optuple_str = str(self._optuple)
+        # node_str = str(self._node)
+        # return '%s%s%s' % (optuple_str, node_str and ' ', node_str)
+        return '%r %r' % (self._optuple, self._node)
 

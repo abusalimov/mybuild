@@ -252,6 +252,10 @@ class OperandSetNode(PdagNode):
 
         raise self.OperandError
 
+    def __repr__(self):
+        return '%s(%s)' % (type(self).__name__,
+                           ', '.join(map(repr, self._operands)))
+
 
 class LatticeOpNode(OperandSetNode):
     """Associative, commutative and idempotent operation."""
@@ -268,7 +272,7 @@ class LatticeOpNode(OperandSetNode):
                 log.debug("pdag: operand value is zero")
                 self._store_self(ctx, value)
 
-            else:
+            elif ctx[self] is not self._identity:
                 log.debug("pdag: operand value is identity")
                 self._eval_operands(ctx)
 
@@ -308,8 +312,8 @@ class LatticeOpNode(OperandSetNode):
                     log.debug("pdag: last unset operand: %s", last_unset)
                     ctx[last_unset] = zero
 
-    def __str__(self):
-        return self._repr_sign.join(map(str, self._operands)).join('()')
+    def __repr__(self):
+        return self._repr_sign.join(map(repr, self._operands)).join('()')
 
 class And(LatticeOpNode):
     __slots__ = ()
@@ -317,7 +321,7 @@ class And(LatticeOpNode):
     _identity = True
     _zero     = False
 
-    _repr_sign = '&'
+    _repr_sign = ' & '
 
 class Or(LatticeOpNode):
     __slots__ = ()
@@ -325,7 +329,7 @@ class Or(LatticeOpNode):
     _identity = False
     _zero     = True
 
-    _repr_sign = '|'
+    _repr_sign = ' | '
 
 
 class Not(PdagNode):
@@ -358,8 +362,8 @@ class Not(PdagNode):
             ctx[self._operand] = not value
             self._notify_outgoing(ctx, value)
 
-    def __str__(self):
-        return '~%s' % self._operand
+    def __repr__(self):
+        return '(~%r)' % self._operand
 
 
 class Implies(PdagNode):
@@ -418,8 +422,8 @@ class Implies(PdagNode):
 
             self._notify_outgoing(ctx, value)
 
-    def __str__(self):
-        return '%s => %s' % (self._if, self._then)
+    def __repr__(self):
+        return '(%r => %r)' % (self._if, self._then)
 
 
 class AtMostOne(OperandSetNode):
@@ -531,10 +535,10 @@ class Atom(PdagNode):
 
 class PnodeInContext(namedtuple('_PnodeInContext', 'node context')):
     __slots__ = ()
-    def __str__(self):
+    def __repr__(self):
         node = self.node
         value = self.context[node]
-        return '%s=%s' % (node, value) if value is not None else str(node)
+        return '%r=%r' % (node, value) if value is not None else repr(node)
 
 
 class PdagContextError(ValueError):

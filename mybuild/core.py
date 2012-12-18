@@ -54,8 +54,8 @@ class Module(object):
     def _to_pnode(self):
         return self._atom
 
-    def __str__(self):
-        return '%s(%s)' % (self._name, ', '.join(self._options._fields))
+    def __repr__(self):
+        return '%s(%r)' % (self._name, ', '.join(self._options._fields))
 
 
 class ModuleAtom(pdag.Atom):
@@ -91,9 +91,9 @@ class Optuple(Module.Type):
     def _to_optuple(self):
         return self
 
-    def __str__(self):
+    def __repr__(self):
         return '%s(%s)' % (self._module._name,
-                           ', '.join('%s=%s' % pair
+                           ', '.join('%s=%r' % pair
                                      for pair in self._iterpairs()))
 
     def __eq__(self, other):
@@ -232,7 +232,7 @@ class OptionValueAtom(pdag.Atom):
         self._value = value
 
     def __repr__(self):
-        return '(%s.%s==%s)' % (self._module_name,
+        return '(%s.%s==%r)' % (self._module_name,
                                 self._option_name, self._value)
 
     @classmethod

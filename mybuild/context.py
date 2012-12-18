@@ -111,8 +111,9 @@ class Context(object):
     def create_pdag_with_constraint(self):
         constraint = pdag.And(*(module.create_constraint()
                                 for module in self._modules.itervalues()))
-        return pdag.Pdag(*chain(*(module.iter_atoms()
-                                  for module in self._modules.itervalues()))), constraint
+        atoms = chain(*(module.iter_atoms()
+                        for module in self._modules.itervalues()))
+        return pdag.Pdag(*atoms), constraint
 
 
 class DomainBase(object):
@@ -211,8 +212,8 @@ class NotifyingSet(MutableSet, NotifyingMixin):
     def __contains__(self, value):
         return value in self._dict
 
-    def __str__(self):
-        return '<%s: %s>' % (type(self).__name__, self._dict.keys())
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self._dict.keys())
 
 
 class OptionDomain(NotifyingSet):
@@ -273,10 +274,16 @@ class InstanceDomain(DomainBase):
         return iter(self._atoms)
 
     def create_constraint(self):
-        pdag.EqGroup(self._context.create_pnode_from(self._optuple),
-                     pdag.AtMostOne(*self._atoms))
+        context = self._context
 
-        return self._node.create_constraint(context)
+        constraint = pdag.EqGroup(context.create_pnode_from(self._optuple),
+                                  pdag.AtMostOne(*self._atoms))
+
+        return pdag.And(pdag.Implies(constraint,
+                                     self._node.create_pnode(context)),
+            *(pdag.Implies(atom,
+                atom.instance._node.create_pnode_for_decisions(context))
+              for atom in self._atoms))
 
 
 class InstanceAtom(pdag.Atom):
@@ -289,13 +296,13 @@ class InstanceAtom(pdag.Atom):
         self._instance = instance
 
     def __repr__(self):
-        return '<%s>' % str(self._instance)
+        return repr(self._instance)
 
 
 if __name__ == '__main__':
     from mybuild import module, option
 
-    log.zones = {'mybuild'}
+    log.zones = ['mybuild', 'pdag']
     log.verbose = True
     log.init_log()
 
@@ -322,8 +329,17 @@ if __name__ == '__main__':
     conf_atom = context.atom_for(conf)
     pdag, constraint = context.create_pdag_with_constraint()
     dtree = Dtree(pdag)
-    solution = dtree.solve({constraint:True, conf_atom:True})
+    # solution = dtree.solve({constraint:True, conf_atom:True,
+    #                        context.atom_for(m3):False})
 
-    from pprint import pprint
-    pprint(solution)
+    from collections import OrderedDict
+    solution = dtree.solve(OrderedDict([(constraint, True),
+                                        (conf_atom, True),
+                                        (context.atom_for(m3), False)]))
+
+    # from pprint import pprint
+    # pprint(solution)
+    for pnode, value in solution.iteritems():
+        if isinstance(pnode, InstanceAtom):
+            print value, pnode
 
