@@ -12,10 +12,7 @@ from collections import defaultdict
 from collections import deque
 from collections import MutableSet
 from contextlib import contextmanager
-from functools import partial
 from itertools import chain
-from itertools import izip
-from itertools import izip_longest
 from itertools import product
 from operator import attrgetter
 
@@ -37,7 +34,7 @@ class Context(object):
         self._modules = {}
         self._job_queue = deque()
         self._reent_locked = False
-        self._atoms = {}
+        self._atom_cache = {}
 
     def post(self, fxn):
         with self.reent_lock(): # to flush the queue on block exit
@@ -83,7 +80,7 @@ class Context(object):
         return domain
 
     def atom_for(self, module, option=None, value=Ellipsis):
-        cache = self._atoms
+        cache = self._atom_cache
         cache_key = module, option, value
 
         try:
@@ -91,30 +88,32 @@ class Context(object):
         except KeyError:
             pass
 
+        domain = self._modules[module]
+
         if option is not None:
-            ret = self.domain_for(module, option).atom_for(value)
+            ret = domain.domain_for(option).atom_for(value)
         else:
-            ret = self.domain_for(module).atom
+            ret = domain.atom
 
         cache[cache_key] = ret
 
         return ret
 
-    def pnode_from(self, mslice):
+    def create_pnode_from(self, mslice):
         # TODO should accept arbitrary expr as well.
         optuple = mslice._to_optuple()
         module = optuple._module
 
-        atom_for = self.atom_for
-
-        return pdag.And(atom_for(module),
-                        *(atom_for(module, option, value)
+        return pdag.And(self.atom_for(module),
+                        *(self.atom_for(module, option, value)
                           for option, value in optuple._iterpairs()))
 
     def create_pdag_with_constraint(self):
-        constraint = pdag.And(*(module.create_pnode()
+        constraint = pdag.And(*(module.create_constraint()
                                 for module in self._modules.itervalues()))
-        return pdag.Pdag(*self._atoms.itervalues()), constraint
+        return pdag.Pdag(*chain(*(module.iter_atoms()
+                                  for module in self._modules.itervalues()))), constraint
+
 
 class DomainBase(object):
     """docstring for DomainBase"""
@@ -138,7 +137,7 @@ class ModuleDomain(DomainBase):
         self._module = module
         self._atom = module._atom_type()
 
-        self._instances = {} # { optuple : InstanceDomain }
+        self._instances = []
         self._options = module._options._make(OptionDomain(option)
                                               for option in module._options)
 
@@ -151,8 +150,7 @@ class ModuleDomain(DomainBase):
         for new_tuple in product(*iterables):
             new_optuple = make_optuple(new_tuple)
 
-            assert new_optuple not in instances
-            instances[new_optuple] = InstanceDomain(self._context, new_optuple)
+            instances.append(InstanceDomain(self._context, new_optuple))
 
     def consider_option(self, option, value):
         domain_to_extend = getattr(self._options, option)
@@ -169,12 +167,17 @@ class ModuleDomain(DomainBase):
     def domain_for(self, option):
         return getattr(self._options, option)
 
-    def create_pnode(self):
+    def iter_atoms(self):
+        return chain((self._atom,),
+                     *(obj.iter_atoms()
+                       for obj in chain(self._options, self._instances)))
+
+    def create_constraint(self):
         # TODO don't like it
         pdag.EqGroup(self._atom, *(option.create_pnode()
                                    for option in self._options))
-        return pdag.And(*(instance.create_pnode()
-                          for instance in self._instances.itervalues()))
+        return pdag.And(*(instance.create_constraint()
+                          for instance in self._instances))
 
 
 class NotifyingSet(MutableSet, NotifyingMixin):
@@ -227,8 +230,11 @@ class OptionDomain(NotifyingSet):
     def _create_value_for(self, value):
         return self._option._atom_type(value)
 
+    def iter_atoms(self):
+        return self._dict.itervalues()
+
     def create_pnode(self):
-        return pdag.AtMostOne(*self._dict.itervalues())
+        return pdag.AtMostOne(*self.iter_atoms())
 
 
 class InstanceDomain(DomainBase):
@@ -243,7 +249,7 @@ class InstanceDomain(DomainBase):
 
         self._optuple = optuple
 
-        self._instances = []
+        self._atoms = []
         self._node = root_node = InstanceNode()
 
         self.post_new(root_node)
@@ -259,14 +265,31 @@ class InstanceDomain(DomainBase):
                     log.debug("mybuild: unviable %s: %s", instance, e)
                 else:
                     log.debug("mybuild: succeeded %s", instance)
-                    self._instances.append(instance)
+                    self._atoms.append(InstanceAtom(instance))
 
         self._context.post(new)
 
-    def create_pnode(self):
-        context = self._context
-        constraints = self._node.create_pnode(context)
-        return pdag.Implies(context.pnode_from(self._optuple), constraints)
+    def iter_atoms(self):
+        return iter(self._atoms)
+
+    def create_constraint(self):
+        pdag.EqGroup(self._context.create_pnode_from(self._optuple),
+                     pdag.AtMostOne(*self._atoms))
+
+        return self._node.create_constraint(context)
+
+
+class InstanceAtom(pdag.Atom):
+    __slots__ = '_instance'
+
+    instance = property(attrgetter('_instance'))
+
+    def __init__(self, instance):
+        super(InstanceAtom, self).__init__()
+        self._instance = instance
+
+    def __repr__(self):
+        return '<%s>' % str(self._instance)
 
 
 if __name__ == '__main__':
@@ -282,11 +305,16 @@ if __name__ == '__main__':
 
     @module
     def m1(self):
-        self.constrain(m2(foo=17))
+        if self._decide(m3):
+            self.constrain(m2(foo=17))
 
     @module
     def m2(self, foo=42):
-        self.constrain(m2)
+        self.constrain(m3)
+
+    @module
+    def m3(self):
+        pass
 
     context = Context()
     context.consider(conf)

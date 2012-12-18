@@ -12,6 +12,8 @@ from operator import attrgetter
 # do not import context due to bootstrapping issues
 import pdag
 
+import logs as log
+
 
 class InstanceNodeBase(object):
     __slots__ = '_parent', '_childmap'
@@ -94,10 +96,10 @@ class InstanceNode(InstanceNodeBase):
         child, = self._create_children(key, (value,))
         return value, child
 
-    def create_pnode(self, context):
+    def create_constraint(self, context):
         def iter_conjuncts():
             for expr in self._constraints:
-                yield context.pnode_from(expr)
+                yield context.create_pnode_from(expr)
 
             for (module_or_expr, option), vmap in self._childmap.iteritems():
                 for value, child in vmap.iteritems():
@@ -108,11 +110,12 @@ class InstanceNode(InstanceNodeBase):
                                                       option, value)
 
                     else:
-                        cond_pnode = context.pnode_from(module_or_expr)
+                        cond_pnode = context.create_pnode_from(module_or_expr)
                         if not value:
                             cond_pnode = pdag.Not(cond_pnode)
 
-                    yield pdag.Implies(cond_pnode, child.create_pnode(context))
+                    yield pdag.Implies(cond_pnode,
+                                       child.create_constraint(context))
 
         return pdag.And(*iter_conjuncts())
 
@@ -157,6 +160,7 @@ class Instance(object):
         self._node.constrain(expr)
 
     def _decide(self, expr):
+        self.consider(expr)
         return self._make_decision(expr)
 
     def _decide_option(self, mslice, option):
