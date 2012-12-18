@@ -24,11 +24,10 @@ from itertools import izip
 from itertools import repeat
 from operator import attrgetter
 
-import expr
+import pdag
 from util import DynamicAttrsMixin
 from util import InstanceBoundTypeMixin
 
-# from mybuild.common import repr
 
 class Module(DynamicAttrsMixin):
     """A basic building block of Mybuild."""
@@ -52,34 +51,24 @@ class Module(DynamicAttrsMixin):
     def _to_optuple(self):
         return self._options._ellipsis
 
-    def _to_expr(self):
+    def _to_pnode(self):
         return self._atom
 
     def __repr__(self):
         return '%s(%s)' % (self._name, ', '.join(self._options._fields))
 
- #    def canon_repr(self):
-	# return repr.mod_canon(self._name, self._options._fields)
+@Module.register_attr('_atom_type')
+class ModuleAtom(pdag.Atom):
+    __slots__ = ()
 
-@Module.register_attr('_atom', factory_method='_new_instance')
-class ModuleAtom(expr.Atom):
-    """Module-bound atom."""
-    __slots__ = '_module'
-
-    def __init__(self, module):
-        super(ModuleAtom, self).__init__()
-        self._module = module
-
-    def eval(self, fxn, *args, **kwargs):
-        ret = fxn(self._module, *args, **kwargs)
-        return self if ret is None else ret
-
-    def __repr__(self):
-        return '%s' % (self._module._name,)
+    def __str__(self):
+        return self._module_name
 
     @classmethod
-    def _new_instance(cls, module_type, *args):
-        return cls(module_type._module)
+    def _new_type(cls, module_type, *ignored):
+        return type('ModuleAtom_M%s' % (module_type._module_name,),
+                    (cls, module_type),
+                    dict(__slots__=()))
 
 
 @Module.register_attr('_options')
@@ -113,10 +102,10 @@ class Optuple(Module.Type):
     def __hash__(self):
         return self._type_hash() ^ tuple.__hash__(self)
 
-    def _to_expr(self):
+    def _to_pnode(self):
         atoms = tuple(o._atom(v) for v,o in self._izipwith(self._options))
         return (expr.And._from_iterable(atoms) if atoms else
-                self._module._to_expr())
+                self._module._to_pnode())
 
     @classmethod
     def _options_from_fxn(cls, fxn):
@@ -230,31 +219,17 @@ class Option(DynamicAttrsMixin):
     def bool(cls, default=False):
         return cls(True, False, default=default, allow_others=False)
 
-@Option.register_attr('_atom')
-class OptionAtom(Option.Type, expr.Atom):
-    """A single bound option."""
+@Option.register_attr('_atom_type')
+class OptionValueAtom(pdag.Atom):
     __slots__ = '_value'
 
-    value  = property(attrgetter('_value'))
-    option = property(attrgetter('_option'))
-
     def __init__(self, value):
-        super(OptionAtom, self).__init__()
+        super(OptionValueAtom, self).__init__()
         self._value = value
 
-    def __eq__(self, other):
-        return self._type_eq(other) and self._value == other._value
-    def __hash__(self):
-        return self._type_hash() ^ hash(self._value)
-
-    def eval(self, fxn, *args, **kwargs):
-        ret = fxn(self._module, option=self._option_name, value=self.value,
-                *args, **kwargs)
-        return self if ret is None else ret
-
-    @classmethod
-    def _replace(cls, new_value):
-        return cls(new_value)
+    def __str__(self):
+        return '(%s.%s==%s)' % (self._module_name,
+                                self._option_name, self._value)
 
     @classmethod
     def _new_type(cls, option_type):
@@ -262,10 +237,6 @@ class OptionAtom(Option.Type, expr.Atom):
                                             option_type._option_name),
                     (cls, option_type),
                     dict(__slots__=()))
-
-    def __repr__(self):
-        return '%s(%s=%r)' % (self._module_name,
-                              self._option_name, self._value)
 
 
 class Error(Exception):

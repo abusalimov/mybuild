@@ -17,6 +17,7 @@ from itertools import chain
 from itertools import izip
 from itertools import izip_longest
 from itertools import product
+from operator import attrgetter
 
 from core import *
 from constraints import *
@@ -109,8 +110,10 @@ class Context(object):
 
         return ret
 
-    def pnode_from(self, expr):
+    def pnode_from(self, mslice):
+        # TODO should accept arbitrary expr as well.
         pass
+
 
 class DomainBase(object):
     """docstring for DomainBase"""
@@ -173,19 +176,6 @@ class ModuleDomain(DomainBase):
     def domain_for(self, option):
         return getattr(self._options, option)
 
-@Module.register_attr('_atom_type')
-class ModuleAtom(pdag.Atom):
-    __slots__ = ()
-
-    def __str__(self):
-        return self._module_name
-
-    @classmethod
-    def _new_type(cls, module_type, *ignored):
-        return type('ModuleAtom_M%s' % (module_type._module_name,),
-                    (cls, module_type),
-                    dict(__slots__=()))
-
 
 class NotifyingSet(MutableSet, NotifyingMixin):
     """Set with notification support. Backed by a dictionary."""
@@ -239,25 +229,6 @@ class OptionDomain(NotifyingSet):
     def _create_value_for(self, value):
         atom = self._option._atom_type(value)
         return self.pnode._new_operand(atom)
-
-@Option.register_attr('_atom_type')
-class OptionValueAtom(pdag.Atom):
-    __slots__ = '_value'
-
-    def __init__(self, value):
-        super(OptionValueAtom, self).__init__()
-        self._value = value
-
-    def __str__(self):
-        return '(%s.%s==%s)' % (self._module_name,
-                                self._option_name, self._value)
-
-    @classmethod
-    def _new_type(cls, option_type):
-        return type('OptionAtom_M%s_O%s' % (option_type._module_name,
-                                            option_type._option_name),
-                    (cls, option_type),
-                    dict(__slots__=()))
 
 
 def build(conf_module):
