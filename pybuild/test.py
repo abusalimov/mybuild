@@ -93,7 +93,8 @@ class TestCase(unittest.TestCase):
         module_package(package, 'amba')
 
         def uart_trigger(scope, find_fn):
-            if scope.value(find_fn('uart.amba_pp')):
+            opt = find_fn('uart.amba_pp')
+            if opt.value(scope):
                 return cut(scope, package['amba'], BoolDom([True]))
             return scope
 
@@ -118,7 +119,8 @@ class TestCase(unittest.TestCase):
         module_package(package, 'bad_module')
 
         def uart_trigger(scope, find_fn):
-            if scope.value(find_fn('uart.amba_pp')):
+            opt = find_fn('uart.amba_pp')
+            if opt.value(scope):
                 return cut(scope, find_fn('amba'), BoolDom([True]))
             return cut(scope, find_fn('bad_module'), BoolDom([True]))
 
@@ -128,7 +130,7 @@ class TestCase(unittest.TestCase):
         scope = add_many(scope, map(lambda s: package[s], ['uart', 'amba', 'bad_module']))
 
         self.assertRaises(CutConflictException, 
-                cut_many, scope, [(package['uart'],          BoolDom([True])), 
+                cut_many, scope, [(package['uart'],       BoolDom([True])), 
                                   (package['bad_module'], BoolDom([False]))])
 
     def test_interface(self):

@@ -1,14 +1,17 @@
+
+from exception import *
+
 class Domain(frozenset):
     def value(self):
-        if len(self) == 1:
-            for v in self:
-                return v
-        return None
-    
+        if len(self) > 1:
+            raise MultiValueException(self)
+        elif len(self) < 1:
+            raise CutConflictException(self)
+        return self.force_value()
+
     def force_value(self):
         for v in sorted(self):
             return v
-        raise CutConflictException(self)
 
 class ListDom():
     def __init__(self, it):

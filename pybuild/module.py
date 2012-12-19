@@ -76,9 +76,9 @@ class Module(option.Boolean, scope.BaseScope):
 
     def cut_trigger(self, cont, scope, old_domain):
         dom = scope[self]
-        v = dom.value()
         if len(dom) > 1: 
             return cont(scope)
+        v = dom.value()
 
         def find_fn(name):
             return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)

@@ -14,7 +14,8 @@ class DefImplMod(Module):
 
     def cut_trigger(self, cont, scope, old_domain):
         domain = scope[self]
-        if domain.force_value():
+
+        if domain.value():
             raise CutConflictException(self)
 
         return cont(scope)

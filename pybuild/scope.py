@@ -1,8 +1,6 @@
 
 import operator
 
-from exception import *
-
 class Inherit():
     def __init__(self, super=None):
         self.super = super
@@ -47,14 +45,6 @@ class BaseScope(dict):
         return True
 
 class Scope(BaseScope):
-    def value(self, opt):
-        d = self[opt]
-        if len(d) > 1:
-            raise MultiValueException(opt)
-        elif len(d) < 1:
-            raise CutConflictException(opt)
-        return d.force_value()
-
     def __repr__(self):
         return 'Scope {' + \
             reduce (operator.add, map(lambda x: "\t%s: %s" % x, self.items()), "")

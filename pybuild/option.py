@@ -24,6 +24,17 @@ class Option:
 
         return scope
 
+    def value(self, scope):
+        dom = scope[self]
+        try:
+            value = dom.value()
+        except Exception, excp:
+            excp.opt = self
+            raise
+
+        return value
+
+
     def qualified_name(self):
         return '%s.%s' % (self.pkg.qualified_name(), self.name)
 
