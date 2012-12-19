@@ -46,13 +46,14 @@ class Dtree(object):
         return ret
 
 class DtreeNode(DictBasedPdagContext):
-    __slots__ = '_cost', '_branchmap'
+    __slots__ = '_cost', '_branchmap', '_unset_pnodes'
 
     def __init__(self, base=None):
         super(DtreeNode, self).__init__(ChainDict(base._dict)
                                         if base is not None else {})
         self._cost = 0
         self._branchmap = {}
+        self._unset_pnodes = set()
 
     def _new_branch(self):
         cls = type(self)
@@ -90,7 +91,7 @@ class DtreeNode(DictBasedPdagContext):
         return old_value
 
     def _do_eval_unset(self, pnodes):
-        pass
+        self._unset_pnodes.update(pnodes)
 
     def solve(self, pnodes, initial_values):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
@@ -101,8 +102,9 @@ class DtreeNode(DictBasedPdagContext):
 
             self._merge_changeset(initial_changeset)
 
-            for pnode in self.ifilter_unset(pnodes):
-                self._create_branches_on(pnode)
+            unset_pnodes = self._unset_pnodes
+            while unset_pnodes:
+                self._create_branches_on(unset_pnodes.pop())
 
             self._master_merge()
 
