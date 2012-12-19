@@ -17,6 +17,7 @@ from operator import attrgetter
 from operator import methodcaller
 
 from chaindict import ChainDict
+import pdag
 from pdag import DictBasedPdagContext
 from pdag import PdagContextError
 from util import filter_bypass
@@ -88,18 +89,20 @@ class DtreeNode(DictBasedPdagContext):
 
         return old_value
 
+    def _do_eval_unset(self, pnodes):
+        pass
+
     def solve(self, pnodes, initial_values):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
 
-            for pnode, value in initial_values.iteritems():
-                if not isinstance(value, bool):
-                    raise TypeError
+            initial_changeset = set(initial_values.iteritems())
+            initial_changeset.update((pnode, pnode.const_pnodes)
+                for pnode in pnodes if isinstance(pnode, pdag.ConstNode))
 
-                self[pnode] = value
+            self._merge_changeset(initial_changeset)
 
-            for pnode in pnodes:
-                if self[pnode] is None:
-                    self._create_branches_on(pnode)
+            for pnode in self.ifilter_unset(pnodes):
+                self._create_branches_on(pnode)
 
             self._master_merge()
 

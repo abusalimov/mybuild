@@ -63,6 +63,10 @@ class PdagContext(object):
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def _do_eval_unset(self, pnodes):
+        raise NotImplementedError
+
     def store(self, pnode, value, notify_on_set=True):
         """
         Set value of a given pnode.
@@ -118,20 +122,17 @@ class PdagContext(object):
             for pnode in pnodes:
                 self._check_and_set(pnode, value)
 
-    def eval_unset(self, pnode, pnodes_to_eval):
+    def eval_unset(self, pnodes):
         """
         Requires given nodes to be evaluated.
 
         Args:
-            pnode:
-                A node which needs other ones to be evaluated. In case when it
-                doesn't have a value in this context, the method does nothing.
-            pnodes_to_eval:
+            pnodes:
                 Iterable of nodes which must obtain values in order to satisfy
                 the value of the first argument. Usually these are operands of
                 'pnode'. May contain not only unset nodes.
         """
-        pass
+        self._do_eval_unset(self.ifilter_unset(pnodes))
 
     def ifilter_unset(self, pnodes):
         return (pnode for pnode in pnodes if self[pnode] is None)
@@ -327,7 +328,8 @@ class OperandSetNode(PdagNode):
 
             if value is None:
                 if found_single is not None:
-                    ctx.eval_unset(self, self._operands)
+                    if ctx[self] is not None:
+                        ctx.eval_unset(self._operands)
                     break
 
                 found_single = operand
@@ -485,7 +487,7 @@ class Implies(PdagNode):
 
             if incoming_is_then is value:
                 self._store_self(ctx, True)
-                ctx.eval_unset(self, (other_operand,))
+                ctx.eval_unset((other_operand,))
 
             else:
                 self_value = ctx[self]
@@ -511,7 +513,7 @@ class Implies(PdagNode):
                 ctx[self._if] = False
 
             else:
-                ctx.eval_unset(self, (self._if, self._then))
+                ctx.eval_unset((self._if, self._then))
 
             self._notify_outgoing(ctx, value)
 

@@ -11,15 +11,15 @@ class NamedAtom(Atom):
     def __init__(self, name):
         super(NamedAtom, self).__init__()
         self.name = name
-    def __str__(self):
+    def __repr__(self):
         return self.name
 
 class NamedAtomWithCost(NamedAtom):
     def __init__(self, name, cost=0):
         super(NamedAtomWithCost, self).__init__(name)
         self.cost = cost
-    def __str__(self):
-        return '%s(%s)' % (super(NamedAtomWithCost, self).__str__(), self.cost)
+    def __repr__(self):
+        return '%s(%s)' % (self.name, self.cost)
 
 class PdagDtreeTestCase(TestCase):
 
