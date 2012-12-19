@@ -2,7 +2,7 @@
 import os
 
 CPPFLAGS  = ['-D__EMBOX__']
-CPPFLAGS += ['-D__impl_x(path)=<%s/path>' % (os.getcwd(),)]
+CPPFLAGS += ['-D__impl_x(path)=<%s/src/path>' % (os.getcwd(),)]
 CPPFLAGS += ['-nostdinc']
 #CPPFLAGS += ['-MMD', '-MP#', '-MT', '$@', '-MF', '$(@:.o=.d)
 #CPPFLAGS += -I$(SRC_DIR)/include -I$(SRC_DIR)/arch/$(ARCH)/include

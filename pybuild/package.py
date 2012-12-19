@@ -3,6 +3,7 @@ class Package(dict):
     def __init__(self, name, pkg=None):
         self.name = name
         self.pkg = pkg  
+        self.hash = hash(self.qualified_name())
 
     def __getitem__(self, key):
         splt = key.split('.', 1)
@@ -21,7 +22,9 @@ class Package(dict):
             dict.__setitem__(self, splt[0], Package(splt[0], self))
 
         if len(splt) > 1:
-            self[splt[0]].built_subpack(splt[1])
+            return self[splt[0]].built_subpack(splt[1])
+
+        return self
 
     def qualified_name(self):
         if self.pkg == None:
@@ -48,6 +51,9 @@ class Package(dict):
             except KeyError:
                 pass
         raise KeyError(name)
+
+    def __hash__(self):
+        return self.hash
 
 def obj_in_pkg(cls, package, name, *args, **kargs): 
     kargs['pkg'] = package

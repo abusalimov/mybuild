@@ -38,7 +38,7 @@ class Option:
     def qualified_name(self):
         return '%s.%s' % (self.pkg.qualified_name(), self.name)
 
-    def build(self, bld, scope):
+    def build(self, ctx):
         pass
 
 class DefaultOption(Option):

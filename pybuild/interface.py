@@ -59,13 +59,13 @@ class Interface(DefaultOption, BaseScope):
         return self.hash_value
 
     
-    def build(self, bld, scope): 
+    def build(self, ctx): 
         header_inc = []
 
-        for impl in scope[self]:
+        for impl in ctx.model[self]:
             header_inc.append('module/%s.h' % (impl.qualified_name().replace('.','/'),)) #XXX
 
-        bld(features = 'module_header',
+        ctx.bld(features = 'module_header',
             mod_name = self.qualified_name(),
             header_opts = [],
             header_inc = header_inc)

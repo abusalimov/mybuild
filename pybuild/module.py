@@ -73,6 +73,10 @@ class Module(option.Boolean, scope.BaseScope):
             implmod = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], impl)
             scope[implmod] |= domain.ModDom([self])
         return scope
+    
+
+    def find_fn(self, name):
+        return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
 
     def cut_trigger(self, cont, scope, old_domain):
         dom = scope[self]
@@ -80,25 +84,22 @@ class Module(option.Boolean, scope.BaseScope):
             return cont(scope)
         v = dom.value()
 
-        def find_fn(name):
-            return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
-
         if v:
             for impl in self.implements:
-                implmod = find_fn(impl)
+                implmod = self.find_fn(impl)
                 scope = incut(scope, implmod, domain.ModDom([self]))
 
             for dep, opts in self.depends:
-                depmod = find_fn(dep)
+                depmod = self.find_fn(dep)
                 scope = incut(scope, depmod, domain.BoolDom([True]))
                 for opt, d in opts.items():
                     scope = incut(scope, self.pkg[dep + '.' + opt], d)
 
             if self.include_trigger:
-                return trigger_handle(cont, scope, self.include_trigger, find_fn)
+                return trigger_handle(cont, scope, self.include_trigger, self.find_fn)
         else:
             for impl in self.implements:
-                implmod = find_fn(impl)
+                implmod = self.find_fn(impl)
                 scope = incut(scope, implmod, scope[implmod] - domain.ModDom([self]))
 
         return cont(scope)
@@ -131,8 +132,9 @@ class Module(option.Boolean, scope.BaseScope):
         return self.hash_value
 
 
-    def build(self, bld, scope):
-        if not scope[self].value():
+    def build(self, ctx):
+        print self, ctx.model[self]
+        if not self.value(ctx.model):
             return 
 
         srcs = []
@@ -140,7 +142,7 @@ class Module(option.Boolean, scope.BaseScope):
         header_opts = []
 
         for src in self.sources:
-            fsrc = src.build(bld, self, scope)
+            fsrc = src.build(ctx, self)
             if re.match('.*\.o', fsrc):
                 srcs.append(fsrc)
             elif re.match('.*\.h', fsrc):
@@ -150,39 +152,39 @@ class Module(option.Boolean, scope.BaseScope):
             repr = var.build_repr()
             if not repr:
                 continue
-            header_opts.append(inchdr(repr, self.qualified_name(), name, scope[var].value()))
+            header_opts.append(inchdr(repr, self.qualified_name(), name, ctx.model[var].value()))
 
-        bld(features = 'module_header',
+        ctx.bld(features = 'module_header',
             mod_name = self.qualified_name(),
             header_opts = header_opts,
             header_inc = header_inc)
 
-        self.build_self(bld, srcs)
+        self.build_self(ctx, srcs)
 
-    def build_self(self, bld, srcs):
+    def build_self(self, ctx, srcs):
         tgt = self.qualified_name().replace('.', '_') 
 
-        bld(
+        ctx.bld(
             features = 'c', 
             target = tgt,
             defines = ['__EMBUILD_MOD__'],
-            includes = bld.env.includes,
+            includes = ctx.bld.env.includes,
             use = srcs,
         )
 
-        bld.out.append(tgt)
+        ctx.bld.out.append(tgt)
 
 class StaticModule(Module):
-    def build_self(self, bld, srcs):
+    def build_self(self, ctx, srcs):
         tgt = self.qualified_name().replace('.', '_')
 
-        bld(
+        ctx.bld(
             features = 'c cstlib', 
             target = tgt,
             defines = ['__EMBUILD_MOD__'],
-            includes = bld.env.includes,
+            includes = ctx.bld.env.includes,
             use = srcs,
         )
 
-        bld.out.append(tgt)
+        ctx.bld.out.append(tgt)
     

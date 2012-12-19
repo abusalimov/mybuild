@@ -25,23 +25,23 @@ class Source(object):
         anns = getattr(self.filename, 'annots', [])
         return anns
 
-    def build(self, bld, opt, scope):
+    def build(self, ctx, opt):
         f = BuildSpec(self.fullpath())
 
         for ann in self.annotations():
-            f = ann.build(bld, f, opt, scope)
+            f = ann.build(ctx, f, opt)
 
-        return self.build_rule(f, bld, opt, scope)
+        return self.build_rule(f, ctx, opt)
 
-    def build_rule(self, spec, bld, opt, scope):
+    def build_rule(self, spec, ctx, opt):
         if not re.match('.*\.[cS]', spec.src):
             return spec.src 
         tgt = "%s.o" % (spec.src,)
-        bld(
+        ctx.bld(
             features = 'c', 
             source = spec.src,
             target = tgt,
             defines = ['__EMBUILD_MOD__'] + spec.defines,
-            includes = bld.env.includes + spec.includes,
+            includes = ctx.bld.env.includes + spec.includes,
         )
         return tgt 

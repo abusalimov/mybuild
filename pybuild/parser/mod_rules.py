@@ -14,8 +14,7 @@ def package(name):
     import build_ctx
     ctx = build_ctx
 
-    ctx.root.built_subpack(name)
-
+    ctx.pkglist.add(ctx.root.built_subpack(name))
 
 def _build_obj(cls, name, args, kargs):
     global package_name

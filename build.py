@@ -29,7 +29,11 @@ def waf_entry(bld):
 
     bld.out = []
 
-    method_define_build(bld, model)
+    ctx.model = model 
+    del ctx.scope
+    ctx.bld   = bld
+
+    method_define_build(ctx)
 
     bld(
         features = 'c cprogram',

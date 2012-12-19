@@ -12,6 +12,7 @@ def method_pre_parse(ctx):
     ctx.scope = Scope()
     ctx.root = Package('root', None)
     ctx.modlist = []
+    ctx.pkglist = set()
     ctx.modconstr = []
     ctx.ld_defs = []
 
@@ -32,8 +33,9 @@ def method_decide_build(ctx):
 
     return final
 
-def method_define_build(bld, model):
-    for opt, dom in model.items():
-        opt.build(bld, model)
+def method_define_build(ctx):
+    print ctx.model
+    for opt, dom in ctx.model.items():
+        opt.build(ctx)
 
 

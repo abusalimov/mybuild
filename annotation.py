@@ -10,16 +10,16 @@ class SourceAnnotation(Annotation):
     pass
 
 class LDScriptAnnotation(SourceAnnotation):
-    def build(self, bld, spec, mod, scope):
+    def build(self, ctx, spec, mod):
         source = spec.src
         tgt = source.replace('.lds.S', '.lds')
-        bld.env.append_value('LINKFLAGS', '-Wl,-T,%s' % (tgt,))
-        bld(
+        ctx.bld.env.append_value('LINKFLAGS', '-Wl,-T,%s' % (tgt,))
+        ctx.bld(
             name = 'ldscripts',
             features = 'includes',
             source = source,
-            includes = bld.env.includes,
-            defines = bld.env.ld_defs,
+            includes = ctx.bld.env.includes,
+            defines = ctx.bld.env.ld_defs,
         )
         spec.src = tgt
         return spec
@@ -27,9 +27,9 @@ class LDScriptAnnotation(SourceAnnotation):
 class GeneratedAnnotation(SourceAnnotation):
     def __init__(self, rule):
         self.rule = rule
-    def build(self, bld, spec, mod, scope):
-        bld(
-            rule = lambda f: f.outputs[0].write(self.rule(mod, scope)),
+    def build(self, ctx, spec, mod):
+        ctx.bld(
+            rule = lambda f: f.outputs[0].write(self.rule(spec.src, mod, ctx)),
             target = spec.src
         )
         return spec 
@@ -37,7 +37,7 @@ class GeneratedAnnotation(SourceAnnotation):
 class DefMacroAnnotation(Annotation):
     def __init__(self, defines):
         self.defines = defines
-    def build(self, bld, spec, mod, scope):
+    def build(self, ctx, spec, mod):
         spec.defines += self.defines
         return spec
 
