@@ -10,6 +10,7 @@ __all__ = [
     "PdagNode",
     "PdagContext",
     "PdagContextError",
+    "DictBasedPdagContext",
     "And",
     "Or",
     "Not",
@@ -34,14 +35,7 @@ class PdagContext(object):
     __metaclass__ = abc.ABCMeta
     __slots__ = ()
 
-    @abc.abstractproperty
-    def _dict(self):
-        """
-        Implementation must provide a dictionary-like object which is used as
-        an internal storage of the context.
-        """
-        raise NotImplementedError
-
+    @abc.abstractmethod
     def __getitem__(self, pnode):
         """
         Fetch the state of a given pnode in the current context.
@@ -52,22 +46,28 @@ class PdagContext(object):
 
         Never raises KeyError.
         """
-        try:
-            return self._dict[pnode]
-        except KeyError:
-            return None
+        raise NotImplementedError
 
-    def __setitem__(self, pnode, value):
-        """
-        An alias for 'store' method with 'notify_pnode=True'.
-        """
-        self.store(pnode, value)
-
-    def store(self, pnode, value, notify_pnode=True):
+    @abc.abstractmethod
+    def _check_and_set(self, pnode, value):
         """
         Set value of a given pnode.
 
-        Depending on a 'notify_pnode' argument, setting a *new* value may
+        Returns:
+            An old value (which is the same as new one), if any,
+            or None otherwise.
+
+        Raises:
+            PdagContextError:
+                When another value has already been set for this pnode.
+        """
+        raise NotImplementedError
+
+    def store(self, pnode, value, notify_on_set=True):
+        """
+        Set value of a given pnode.
+
+        Depending on a 'notify_on_set' argument, setting a *new* value may
         result in calling 'context_setting' on the target pnode which may in
         turn set values for other nodes.
 
@@ -79,7 +79,7 @@ class PdagContext(object):
                 existing value, if any. Otherwise a PdagContextError is raised.
                 In other words, operation succeeds iff
                     ctx[pnode] is None or ctx[pnode] == value
-            notify_pnode (bool):
+            notify_on_set (bool):
                 Tells whether to call 'PdagNode.context_setting' or not.
 
         Returns:
@@ -90,6 +90,76 @@ class PdagContext(object):
             PdagContextError:
                 When another value has already been set for this pnode.
         """
+
+        old_value = self._check_and_set(pnode, value)
+
+        if old_value is None and notify_on_set:
+            pnode.context_setting(self, value)
+
+        return old_value
+
+    __setitem__ = store
+
+    def store_all(self, pnodes, value, notify_on_set=True):
+        """
+        Batch version of 'store' which first stores a value for all nodes
+        and only after that notifies newly set ones (if 'notify_on_set' is on).
+        """
+
+        if notify_on_set:
+            pnodes_to_notify = [pnode
+                for pnode in pnodes
+                    if self._check_and_set(pnode, value) is None]
+
+            for pnode in pnodes_to_notify:
+                pnode.context_setting(self, value)
+
+        else:
+            for pnode in pnodes:
+                self._check_and_set(pnode, value)
+
+    def eval_unset(self, pnode, pnodes_to_eval):
+        """
+        Requires given nodes to be evaluated.
+
+        Args:
+            pnode:
+                A node which needs other ones to be evaluated. In case when it
+                doesn't have a value in this context, the method does nothing.
+            pnodes_to_eval:
+                Iterable of nodes which must obtain values in order to satisfy
+                the value of the first argument. Usually these are operands of
+                'pnode'. May contain not only unset nodes.
+        """
+        pass
+
+    def ifilter_unset(self, pnodes):
+        return (pnode for pnode in pnodes if self[pnode] is None)
+
+    def iter_values_of(self, pnodes):
+        return (self[pnode] for pnode in pnodes)
+
+    def iter_pairs_of(self, pnodes):
+        return ((pnode, self[pnode]) for pnode in pnodes)
+
+
+class DictBasedPdagContext(PdagContext):
+    """
+    Context backed by a dictionary.
+    """
+    __slots__ = '_dict'
+
+    def __init__(self, dict_):
+        super(DictBasedPdagContext, self).__init__()
+        self._dict = dict_
+
+    def __getitem__(self, pnode):
+        try:
+            return self._dict[pnode]
+        except KeyError:
+            return None
+
+    def _check_and_set(self, pnode, value):
         assert isinstance(value, bool)
 
         self_dict = self._dict
@@ -100,28 +170,12 @@ class PdagContext(object):
         except KeyError:
             self_dict[pnode] = value
 
-            if notify_pnode:
-                pnode.context_setting(self, value)
-
         else:
             if old_value != value:
+                assert isinstance(old_value, bool)
                 raise PdagContextError
 
             return old_value
-
-    def store_all(self, pnodes, value, notify_pnode=True):
-        if notify_pnode:
-            pnodes_to_notify = []
-            for pnode in pnodes:
-                if self.store(pnode, value, notify_pnode=False) is None:
-                    pnodes_to_notify.append(pnode)
-
-            for pnode in pnodes_to_notify:
-                pnode.context_setting(self, value)
-
-        else:
-            for pnode in pnodes:
-                self.store(pnode, value, notify_pnode=False)
 
 
 class Pdag(object):
@@ -183,7 +237,7 @@ class PdagNode(object):
             out._incoming_setting(self, ctx, value)
 
     def _store_self(self, ctx, value):
-        if ctx.store(self, value, notify_pnode=False) is None:
+        if ctx.store(self, value, notify_on_set=False) is None:
             self._notify_outgoing(ctx, value)
 
     def context_setting(self, ctx, value):
@@ -263,21 +317,22 @@ class OperandSetNode(PdagNode):
             Single operand left unset (if any), None if all operands are set.
         Raises:
             self.OperandError:
-                If more than one operands are still unset, or when 'break_on'
+                If more than one operands are still unset (in this case also
+                'eval_unset' method of context is called), or when 'break_on'
                 is not None and an operand with that value is encountered.
         """
         found_single = None
 
-        for operand in self._operands:
-            operand_value = ctx[operand]
+        for operand, value in ctx.iter_pairs_of(self._operands):
 
-            if operand_value is None:
+            if value is None:
                 if found_single is not None:
+                    ctx.eval_unset(self, self._operands)
                     break
 
                 found_single = operand
 
-            elif operand_value is break_on:
+            elif value is break_on:
                 break
 
         else:
@@ -305,7 +360,7 @@ class LatticeOpNode(OperandSetNode):
                 log.debug("pdag: operand value is zero")
                 self._store_self(ctx, value)
 
-            elif ctx[self] is not self._identity:
+            elif ctx[self] is not self._identity:  # zero or None
                 log.debug("pdag: operand value is identity")
                 self._eval_operands(ctx)
 
@@ -425,20 +480,22 @@ class Implies(PdagNode):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
-            if (incoming is self._then) is value:
+            incoming_is_then = incoming is self._then
+            other_operand = self._if if incoming_is_then else self._then
+
+            if incoming_is_then is value:
                 self._store_self(ctx, True)
+                ctx.eval_unset(self, (other_operand,))
 
             else:
-                other_operand = self._then if value else self._if
-
                 self_value = ctx[self]
                 if self_value is not None:
-                    ctx[other_operand] = self_value ^ (not value)
+                    ctx[other_operand] = self_value ^ incoming_is_then
 
                 else:
                     other_value = ctx[other_operand]
                     if other_value is not None:
-                        self._store_self(ctx, other_value ^ (not value))
+                        self._store_self(ctx, other_value ^ incoming_is_then)
 
     def context_setting(self, ctx, value):
         with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
@@ -452,6 +509,9 @@ class Implies(PdagNode):
 
             elif ctx[self._then] is False:
                 ctx[self._if] = False
+
+            else:
+                ctx.eval_unset(self, (self._if, self._then))
 
             self._notify_outgoing(ctx, value)
 
@@ -481,11 +541,10 @@ class AtMostOneConstraint(OperandSetNode, ConstraintNode):
                        self.bind(ctx), incoming.bind(ctx)):
 
             if value:
-                self._store_self(ctx, True)
+                ctx.store_all((operand for operand in self._operands
+                               if operand is not incoming), False)
 
-                for operand in self._operands:
-                    if operand is not incoming:
-                        ctx[operand] = False
+                self._store_self(ctx, True)
 
             else:
                 self._eval_operands(ctx)
@@ -542,18 +601,13 @@ class AllEqualConstraint(OperandSetNode, ConstraintNode):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
+            ctx.store_all(self._operands, value)
             self._store_self(ctx, value)
-
-            for operand in self._operands:
-                if operand is not incoming:
-                    ctx[operand] = value
 
     def context_setting(self, ctx, value):
         with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
 
-            for operand in self._operands:
-                ctx[operand] = value
-
+            ctx.store_all(self._operands, value)
             self._notify_outgoing(ctx, value)
 
 

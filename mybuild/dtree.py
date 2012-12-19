@@ -17,7 +17,7 @@ from operator import attrgetter
 from operator import methodcaller
 
 from chaindict import ChainDict
-from pdag import PdagContext
+from pdag import DictBasedPdagContext
 from pdag import PdagContextError
 from util import filter_bypass
 from util import map_bypass
@@ -44,13 +44,12 @@ class Dtree(object):
         ret.update(root._dict)
         return ret
 
-class DtreeNode(PdagContext):
-    __slots__ = '_dict', '_cost', '_branchmap'
+class DtreeNode(DictBasedPdagContext):
+    __slots__ = '_cost', '_branchmap'
 
     def __init__(self, base=None):
-        super(DtreeNode, self).__init__()
-
-        self._dict = ChainDict(base._dict) if base is not None else {}
+        super(DtreeNode, self).__init__(ChainDict(base._dict)
+                                        if base is not None else {})
         self._cost = 0
         self._branchmap = {}
 
@@ -71,21 +70,21 @@ class DtreeNode(PdagContext):
             branch._dict.update(diffitems)
 
             for pnode, value in diffitems:
-                pnode.context_setting(branch, value)
                 branch._cost += pnode.costs[value]
+                pnode.context_setting(branch, value)
 
         return branch
 
-    def store(self, pnode, value, notify_pnode=True):
-        old_value = super(DtreeNode, self).store(pnode, value, notify_pnode)
+    def _check_and_set(self, pnode, value):
+        old_value = super(DtreeNode, self)._check_and_set(pnode, value)
 
         if old_value is None:
             if not self._branchmap:
                 self._cost += pnode.costs[value]
             else:
-                # Not sure if it is even possible...
+                # TODO test this logic.
                 del self._dict[pnode]
-                self._merge_changeset({pnode:value}.items())
+                self._merge_changeset(set([(pnode, value)]))
 
         return old_value
 
@@ -236,7 +235,7 @@ class DtreeNode(PdagContext):
             if len(branches) == 1:
                 resolved_pnodes.add(pnode)
 
-    def _diff_for(self, changeset, cost=None):
+    def _diff_for(self, changeset):
         selfitems = self._itemset()
 
         # Contains _different_ pairs found in either dict, bot not in both.
