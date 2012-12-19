@@ -15,6 +15,7 @@ def method_pre_parse(ctx):
     ctx.pkglist = set()
     ctx.modconstr = []
     ctx.ld_defs = []
+    ctx.runlevels = {}
 
     return ctx
 

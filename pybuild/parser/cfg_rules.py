@@ -16,10 +16,14 @@ def lds_section_load(name, vma, lma):
 def lds_section(name, reg):
     lds_section_load(name, reg, reg)
 
-def include(name, opts={}):
+def include(name, runlevel=2, opts={}):
     import build_ctx
     ctx = build_ctx
+
+    ctx.runlevels[runlevel].dependency_add(name, opts)
+
     ctx.modconstr.append((name, BoolDom([True])))
+
     for opt_name, value in opts.items():
         ctx.modconstr.append(("%s.%s" % (name, opt_name), Domain([value])))
 

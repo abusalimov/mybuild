@@ -57,16 +57,19 @@ class Module(option.Boolean, scope.BaseScope):
         self.depends = []
 
         for d in depends:
-            if not isvector(d):
-                self.depends.append((d, {}))
+            if isvector(d):
+                self.dependency_add(*d)
             else:
-                self.depends.append(d)
+                self.dependency_add(d)
 
         self.implements = implements
 
         for o in self.options:
             o.pkg = self
             self[o.name] = o
+
+    def dependency_add(self, modname, opts={}):
+        self.depends.append((modname, opts))
 
     def add_trigger(self, scope):
         for impl in self.implements:
