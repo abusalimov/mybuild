@@ -14,7 +14,8 @@ __all__ = [
     "Or",
     "Not",
     "Implies",
-    "AtMostOne",
+    "AtMostOneConstraint",
+    "AllEqualConstraint",
     "Atom",
 ]
 
@@ -135,21 +136,25 @@ class Pdag(object):
     def _set_atoms(self, atoms):
         self._atoms = atoms = frozenset(atoms)
         for atom in atoms:
-            if not isinstance(atom, Atom):
-                raise TypeError("Atom expected, got '%s' object instead" %
-                                type(atom))
-        self._nodes = frozenset(self._hull(atoms))
+            if not isinstance(atom, AtomicNode):
+                raise TypeError(
+                    "Atomic node expected, got '%s' object instead" %
+                    type(atom).__name__)
+        self._nodes = frozenset(self._hull_set(atoms))
 
     @classmethod
-    def _hull(cls, nodes):
+    def _hull_set(cls, nodes):
         unvisited = set(nodes)
         visited = set()
 
         while unvisited:
             node = unvisited.pop()
-            visited.add(node)
+
             outgoing = node._outgoing = frozenset(node._outgoing)
-            unvisited |= node._outgoing - visited
+            visited.add(node)
+
+            unvisited |= outgoing
+            unvisited -= visited
 
         return visited
 
@@ -188,22 +193,50 @@ class PdagNode(object):
         return PnodeInContext(self, ctx)
 
 
-class ConstNode(PdagNode):
+class ConstraintNode(PdagNode):
+    """
+    Marker class for a node that may constrain values of incoming nodes
+    even without having its own value specified.
+    """
+    __slots__ = ()
+
+
+class AtomicNode(PdagNode):
+    """Marker class for leaf nodes."""
+    __slots__ = ()
+
+
+class Atom(AtomicNode):
+    """To be extended by the client."""
+    __slots__ = ()
+    costs = (0, 1)
+
+    def context_setting(self, ctx, value):
+        with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
+            super(Atom, self).context_setting(ctx, value)
+
+
+class ConstNode(AtomicNode):
     """Constrains a node to take a constant value."""
     __slots__ = ()
 
+    const_value = None       # overridden by subclasses
+    instances = (None, None) # overwritten below
+
     def context_setting(self, ctx, value):
-        if value is not self._value:
+        if value is not self.const_value:
             ctx.store(self, not value) # Let it fall.
         self._notify_outgoing(ctx, value)
 
 class True_(ConstNode):
     __slots__ = ()
-    _value = True
+    const_value = True
 
 class False_(ConstNode):
     __slots__ = ()
-    _value = False
+    const_value = False
+
+ConstNode.instances = (False_, True_)
 
 
 class OperandSetNode(PdagNode):
@@ -426,7 +459,7 @@ class Implies(PdagNode):
         return '(%r => %r)' % (self._if, self._then)
 
 
-class AtMostOne(OperandSetNode):
+class AtMostOneConstraint(OperandSetNode, ConstraintNode):
     """
     Allows at most a single operand to be True. Evaluates to True if a single
     operand is True, and to False if *all* operands are also False.
@@ -441,7 +474,7 @@ class AtMostOne(OperandSetNode):
     __slots__ = ()
 
     def __init__(self, *operands):
-        super(AtMostOne, self).__init__(operands)
+        super(AtMostOneConstraint, self).__init__(operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -490,7 +523,7 @@ class AtMostOne(OperandSetNode):
                         ctx[last_unset] = self_value
 
 
-class EqGroup(OperandSetNode):
+class AllEqualConstraint(OperandSetNode, ConstraintNode):
     """
     Forces all operands to take the same value, and evaluates to that value.
     May be considered as a common alias for its operands.
@@ -503,7 +536,7 @@ class EqGroup(OperandSetNode):
     __slots__ = ()
 
     def __init__(self, *operands):
-        super(EqGroup, self).__init__(operands)
+        super(AllEqualConstraint, self).__init__(operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -522,15 +555,6 @@ class EqGroup(OperandSetNode):
                 ctx[operand] = value
 
             self._notify_outgoing(ctx, value)
-
-class Atom(PdagNode):
-    """To be extended by the client."""
-    __slots__ = ()
-    costs = (0, 1)
-
-    def context_setting(self, ctx, value):
-        with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
-            super(Atom, self).context_setting(ctx, value)
 
 
 class PnodeInContext(namedtuple('_PnodeInContext', 'node context')):

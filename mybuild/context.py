@@ -175,8 +175,8 @@ class ModuleDomain(DomainBase):
 
     def create_constraint(self):
         # TODO don't like it
-        pdag.EqGroup(self._atom, *(option.create_pnode()
-                                   for option in self._options))
+        pdag.AllEqualConstraint(self._atom,
+            *(option.create_pnode() for option in self._options))
         return pdag.And(*(instance.create_constraint()
                           for instance in self._instances))
 
@@ -235,7 +235,7 @@ class OptionDomain(NotifyingSet):
         return self._dict.itervalues()
 
     def create_pnode(self):
-        return pdag.AtMostOne(*self.iter_atoms())
+        return pdag.AtMostOneConstraint(*self.iter_atoms())
 
 
 class InstanceDomain(DomainBase):
@@ -276,8 +276,9 @@ class InstanceDomain(DomainBase):
     def create_constraint(self):
         context = self._context
 
-        constraint = pdag.EqGroup(context.create_pnode_from(self._optuple),
-                                  pdag.AtMostOne(*self._atoms))
+        constraint = pdag.AllEqualConstraint(
+            context.create_pnode_from(self._optuple),
+            pdag.AtMostOneConstraint(*self._atoms))
 
         return pdag.And(pdag.Implies(constraint,
                                      self._node.create_pnode(context)),
