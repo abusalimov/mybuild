@@ -1,4 +1,6 @@
 
+from pybuild.util import isvector
+
 class Annotation():
     def __init__(self):
         pass
@@ -42,15 +44,20 @@ class DefMacroAnnotation(Annotation):
         return spec
 
 def annotated(obj, annot):
-    try:
-        obj.annots.append(annot)
-        return obj
-    except Exception, ex:
-        class AnnotHolder(obj.__class__):
-            pass
-        new_obj = AnnotHolder(obj)
-        new_obj.annots = [annot]
-        return new_obj
+    def annotated_obj(obj, annot):
+        try:
+            obj.annots.append(annot)
+            return obj
+        except Exception, ex:
+            class AnnotHolder(obj.__class__):
+                pass
+            new_obj = AnnotHolder(obj)
+            new_obj.annots = [annot]
+            return new_obj
+
+    if isvector(obj):
+        return [annotated_obj(obj, annot) for obj in obj]
+    return annotated_obj(obj, annot)
 
 def NoRuntime(obj):
     return annotated(obj, NoRuntimeAnnotation())
