@@ -35,7 +35,6 @@ def method_decide_build(ctx):
     return final
 
 def method_define_build(ctx):
-    print ctx.model
     for opt, dom in ctx.model.items():
         opt.build(ctx)
 

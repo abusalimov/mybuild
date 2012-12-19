@@ -57,6 +57,8 @@ class Package(dict):
 
 def obj_in_pkg(cls, package, name, *args, **kargs): 
     kargs['pkg'] = package
-    package[name] = cls(name, *args, **kargs)
+    ret = cls(name, *args, **kargs)
+    package[name] = ret
+    return ret
 
 

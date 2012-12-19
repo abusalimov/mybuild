@@ -23,13 +23,15 @@ def add_many(scope, ents):
 def incut_cont(cont, scope, opt, domain):
     strict_domain = scope[opt] & domain
     old_domain = scope[opt]
-    print 'cut %s for %s' % (opt, domain)
     if strict_domain:
+        print 'cut %s for %s' % (opt, domain)
         differ = strict_domain != old_domain
         scope[opt] = strict_domain
         if differ:
             scope = opt.cut_trigger(cont, scope, old_domain)
+        print 'OK %s for %s' % (opt, domain)
     else:
+        print 'FAIL %s for %s' % (opt, domain)
         raise CutConflictException(opt)
 
     return scope

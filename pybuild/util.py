@@ -7,6 +7,3 @@ def isvector(obj, len = -1):
 
     return ans
 
-def one_or_many(obj):
-    return obj if tup_or_list(obj) else [obj]
-

@@ -136,7 +136,6 @@ class Module(option.Boolean, scope.BaseScope):
 
 
     def build(self, ctx):
-        print self, ctx.model[self]
         if not self.value(ctx.model):
             return 
 
@@ -157,10 +156,18 @@ class Module(option.Boolean, scope.BaseScope):
                 continue
             header_opts.append(inchdr(repr, self.qualified_name(), name, ctx.model[var].value()))
 
-        ctx.bld(features = 'module_header',
-            mod_name = self.qualified_name(),
-            header_opts = header_opts,
-            header_inc = header_inc)
+        #header_tg = \
+            ctx.bld(features = 'module_header',
+                name = self.qualified_name() + '_header',
+                mod_name = self.qualified_name(),
+                header_opts = header_opts,
+                header_inc = header_inc)
+
+        #print header_tg
+        #for hdr in header_inc:
+            #node = ctx.bld.path
+            #node = node.find_or_declare(hdr)
+            #ctx.bld.add_manual_dependency(header_tg.outputs, node)
 
         self.build_self(ctx, srcs)
 

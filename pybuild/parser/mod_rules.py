@@ -5,7 +5,7 @@ from .. interface import Interface
 from .. option import *
 
 from mybuild.source     import Source
-from mybuild.annotation import LDScript, Generated, NoRuntime, DefMacro
+from mybuild.annotation import LDScript, Generated, NoRuntime, DefMacro, IncludePath
 
 from .. util import isvector
 

@@ -43,6 +43,13 @@ class DefMacroAnnotation(Annotation):
         spec.defines += self.defines
         return spec
 
+class IncludePathAnnotation(Annotation):
+    def __init__(self, paths):
+        self.paths = paths
+    def build(self, ctx, spec, mod):
+        spec.includes += self.paths
+        return spec
+
 def annotated(obj, annot):
     def annotated_obj(obj, annot):
         try:
@@ -70,3 +77,7 @@ def Generated(obj, rule):
 
 def DefMacro(defines, obj):
     return annotated(obj, DefMacroAnnotation(defines))
+
+def IncludePath(paths, obj):
+    return annotated(obj, IncludePathAnnotation(paths))
+
