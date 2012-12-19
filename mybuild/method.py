@@ -14,14 +14,14 @@ def method_pre_parse(ctx):
 def method_decide_build(ctx):
     @module
     def conf(self):
-	print ctx.constr
-	for name, constr in ctx.constr:
-	    obj = ctx.root
-	    for i in name.split('.'):
-		obj = getattr(obj, i)
+        print ctx.constr
+        for name, constr in ctx.constr:
+            obj = ctx.root
+            for i in name.split('.'):
+                obj = getattr(obj, i)
 
-	    print obj
-	    self.constrain(obj(**constr))
+            print obj
+            self.constrain(obj(**constr))
 
     context = Context()
     context.consider(conf)

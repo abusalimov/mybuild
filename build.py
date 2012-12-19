@@ -15,11 +15,11 @@ def waf_entry(bld):
     ctx = bld.env
 
     if bld.env.METHOD == 'A':
-	from pybuild.method import method_pre_parse, method_define_build, method_decide_build
+        from pybuild.method import method_pre_parse, method_define_build, method_decide_build
     elif bld.env.METHOD == 'E':
-	from mybuild.method import method_pre_parse, method_define_build, method_decide_build
+        from mybuild.method import method_pre_parse, method_define_build, method_decide_build
     else:
-	raise Exception("Unknown method '%s'" % (bld.env.METHOD, ))
+        raise Exception("Unknown method '%s'" % (bld.env.METHOD, ))
 
     ctx = method_pre_parse(ctx)
 
@@ -32,10 +32,10 @@ def waf_entry(bld):
     method_define_build(bld, model)
 
     bld(
-	features = 'c cprogram',
-	target = bld.env.target,
-	includes = bld.env.includes,
-	linkflags = bld.env.LDFLAGS,
-	use = ['generated', 'ldscripts'] + bld.out,
+        features = 'c cprogram',
+        target = bld.env.target,
+        includes = bld.env.includes,
+        linkflags = bld.env.LDFLAGS,
+        use = ['generated', 'ldscripts'] + bld.out,
     )
 

@@ -21,7 +21,7 @@ def include(name, opts={}):
     ctx = build_ctx
     ctx.modconstr.append((name, BoolDom([True])))
     for opt_name, value in opts.items():
-	ctx.modconstr.append(("%s.%s" % (name, opt_name), Domain([value])))
+        ctx.modconstr.append(("%s.%s" % (name, opt_name), Domain([value])))
 
 def exclude(name):
     pass

@@ -13,16 +13,16 @@ def package(name):
     pkg = build_ctx.root
 
     for subpkg in name.split('.'):
-	if not hasattr(pkg, subpkg):
-	    setattr(pkg, subpkg, types.ModuleType(subpkg))
-	pkg = getattr(pkg, subpkg)
+        if not hasattr(pkg, subpkg):
+            setattr(pkg, subpkg, types.ModuleType(subpkg))
+        pkg = getattr(pkg, subpkg)
 
     global this_pkg
     this_pkg = pkg
 
 def module(name, *args, **kargs):
     def convert_opt(opt):
-	return '%s = option()' % (opt.name)
+        return '%s = option()' % (opt.name)
     opts = ', '.join(map(lambda o: convert_opt(o), kargs.get('options', [])))
     fn_decl = '''
 @mybuild_module

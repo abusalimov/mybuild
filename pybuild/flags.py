@@ -25,7 +25,7 @@ CXXFLAGS += ['-Wformat', ' -Wformat-nonliteral']
 CXXFLAGS += ['-I$(SRC_DIR)/include/c++']
 CXXFLAGS += ['-D"__BEGIN_DECLS=extern \"C\" {"']
 CXXFLAGS += ['-D"__END_DECLS=}"']
-#	C++ has build-in type bool
+#        C++ has build-in type bool
 CXXFLAGS += ['-DSTDBOOL_H_']
 
 # Compiler flags

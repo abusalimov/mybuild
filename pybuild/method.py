@@ -34,6 +34,6 @@ def method_decide_build(ctx):
 
 def method_define_build(bld, model):
     for opt, dom in model.items():
-	opt.build(bld, model)
+        opt.build(bld, model)
 
 

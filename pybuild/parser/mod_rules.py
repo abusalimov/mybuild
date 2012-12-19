@@ -29,7 +29,7 @@ def module(name, *args, **kargs):
     import build_ctx
     ctx = build_ctx
     if kargs.has_key('sources'):
-	kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
+        kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
     _build_obj(Module, name, args, kargs)
 
 def interface(name, *args, **kargs):
@@ -39,6 +39,6 @@ def library(name, *args, **kargs):
     import build_ctx
     ctx = build_ctx
     if kargs.has_key('sources'):
-	kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
+        kargs['sources'] = map (lambda s: Source(ctx.dirname, s), kargs['sources'])
     _build_obj(StaticModule, name, args, kargs)
 
