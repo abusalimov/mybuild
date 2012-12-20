@@ -2,6 +2,7 @@
 from exception import *
 
 class Domain(frozenset):
+    
     def value(self):
         if len(self) > 1:
             raise MultiValueException(self)
@@ -13,12 +14,19 @@ class Domain(frozenset):
         for v in sorted(self):
             return v
 
+    @classmethod
+    def single_value(cls, value):
+        return cls([value])
+
 class ListDom():
     def __init__(self, it):
         self.it = tuple(it)
 
     def __nonzero__(self):
         return True
+
+    def value(self):
+        return self.force_value()
 
     def force_value(self):
         return tuple(self.it)
@@ -32,6 +40,16 @@ class ListDom():
     def __add__(self, other):
         self.it = self.it + tuple(other)
         return self
+
+    def __iter__(self):
+        return [self.it].__iter__()
+
+    @classmethod
+    def single_value(cls, value):
+        return cls(value) 
+
+    def __repr__(self):
+        return '<ListDom: %s' % (self.it,)
 
 class IntegerDom(Domain):
     def __repr__(self):

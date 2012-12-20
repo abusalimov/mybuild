@@ -43,8 +43,19 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
     raise CutConflictException(opt)
 
 class Module(option.Boolean, scope.BaseScope):
-    def __init__(self, name, pkg=None, sources=[], options=[], super=None, implements=(), depends=(), include_trigger=None):
-        option.Boolean.__init__(self, name, pkg = pkg)
+    def __init__(self, name, pkg=None, 
+            static = False, mandatory = False,
+            sources=[], options=[], super=None, 
+            implements=(), depends=(), include_trigger=None):
+
+        if mandatory:
+            option.Boolean.__init__(self, name, default = True, pkg = pkg)
+        else:
+            option.Boolean.__init__(self, name, pkg = pkg)
+
+        self.mandatory = mandatory
+        self.static = static
+
         self.parent = super
         self.name = name
         self.include_trigger = include_trigger
@@ -107,14 +118,6 @@ class Module(option.Boolean, scope.BaseScope):
 
         return cont(scope)
 
-    def fix_trigger(self, scope):
-        for v in scope[self]:
-            try:
-                return cut(scope, self, domain.BoolDom([v]))
-            except CutConflictException:
-                pass
-        raise CutConflictException(self)
-
     def implements(self):
         def get_impl(obj):
             return [obj] + [get_impl(impl) for impl in obj.implements]
@@ -166,9 +169,13 @@ class Module(option.Boolean, scope.BaseScope):
 
     def build_self(self, ctx, srcs):
         tgt = self.qualified_name().replace('.', '_') 
+        fts = 'c'
+
+        if self.static:
+            fts += ' cstlib'
 
         ctx.bld(
-            features = 'c', 
+            features = fts, 
             target = tgt,
             defines = ['__EMBUILD_MOD__'],
             includes = ctx.bld.env.includes,
@@ -177,17 +184,3 @@ class Module(option.Boolean, scope.BaseScope):
 
         ctx.bld.out.append(tgt)
 
-class StaticModule(Module):
-    def build_self(self, ctx, srcs):
-        tgt = self.qualified_name().replace('.', '_')
-
-        ctx.bld(
-            features = 'c cstlib', 
-            target = tgt,
-            defines = ['__EMBUILD_MOD__'],
-            includes = ctx.bld.env.includes,
-            use = srcs,
-        )
-
-        ctx.bld.out.append(tgt)
-    

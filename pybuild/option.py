@@ -1,6 +1,8 @@
 
 import domain
 
+from ops import *
+
 class Option:
     def __init__(self, name, domain=None, pkg=None):
         self.name = name
@@ -20,9 +22,12 @@ class Option:
 
     def fix_trigger(self, scope):
         dom = scope[self]
-        scope[self] = domain.Domain([dom.force_value()])
-
-        return scope
+        for v in dom:
+            try:
+                return cut(scope, self, dom.__class__.single_value(v))
+            except CutConflictException:
+                pass
+        raise CutConflictException(self)
 
     def value(self, scope):
         dom = scope[self]
@@ -34,12 +39,14 @@ class Option:
 
         return value
 
-
     def qualified_name(self):
         return '%s.%s' % (self.pkg.qualified_name(), self.name)
 
     def build(self, ctx):
         pass
+
+    def __repr__(self):
+        return "<%s %s>" % (self.__class__.__name__, self.qualified_name())
 
 class DefaultOption(Option):
     def __init__(self, name, domain=None, pkg=None, default=None):
@@ -49,7 +56,7 @@ class DefaultOption(Option):
     def fix_trigger(self, scope):
         dom = scope[self]
         if hasattr(self, 'default') and self.default in dom:
-            scope[self] = domain.Domain([self.default])
+            scope = cut(scope, self, domain.Domain([self.default]))
         else:
             return Option.fix_trigger(self, scope)
 
@@ -60,7 +67,7 @@ class List(Option):
     domain_class = domain.ListDom
     def build_repr(self):
         return None
-    
+
 class Integer(DefaultOption):
     defdomain = range(0, 0x10000)
     domain_class = domain.IntegerDom

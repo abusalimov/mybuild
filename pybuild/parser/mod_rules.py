@@ -1,6 +1,6 @@
 
 from .. package import Package, obj_in_pkg
-from .. module  import Module, StaticModule
+from .. module  import Module
 from .. interface import Interface
 from .. option import *
 
@@ -55,7 +55,8 @@ def interface(name, *args, **kargs):
     __build_obj(Interface, name, args, kargs)
 
 def library(name, *args, **kargs):
-    return __mod(StaticModule, name, args, kargs)
+    kargs['static'] = True
+    return __mod(Module, name, args, kargs)
 
 def runlevel(n, depends=[]):
     import build_ctx
