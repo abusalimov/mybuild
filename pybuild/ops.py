@@ -65,12 +65,15 @@ def cut_many(scope, opts):
 
     return cut_iter(scope, [(opt, dom) for opt, dom in d.items()])
 
+def fix(scope, opt):
+    print 'fixing %s within %s' %(opt, scope[opt])
+    return opt.fix_trigger(scope)
+
 def fixate(scope):
     scope = Scope(scope)
 
     for opt, domain in scope.items():
-        print 'fixing %s within %s' %(opt, domain)
-        scope = opt.fix_trigger(scope)
+        scope = fix(scope, opt)
 
     return scope
 

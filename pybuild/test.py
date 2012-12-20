@@ -162,6 +162,38 @@ class TestCase(unittest.TestCase):
 
         self.assertEqual(final[package['timer_api']], ModDom([package['head_timer']]))
 
+    def test_interface_default(self):
+        package = Package('root')
+        obj_in_pkg(Interface, package, 'timer_api', default = 'head_timer')
+        module_package(package, 'head_timer', implements=['timer_api'])
+        module_package(package, 'timer', implements=['timer_api'])
+        module_package(package, 'timer_exmp', depends = ['timer_api'])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
+
+        cut_many(scope, [(package['timer_exmp'], BoolDom([True]))])
+
+        final = fixate(scope)
+
+        self.assertEqual(final[package['timer_api']], ModDom([package['head_timer']]))
+
+    def test_interface_default2(self):
+        package = Package('root')
+        obj_in_pkg(Interface, package, 'timer_api', default = 'timer')
+        module_package(package, 'head_timer', implements=['timer_api'])
+        module_package(package, 'timer', implements=['timer_api'])
+        module_package(package, 'timer_exmp', depends = ['timer_api'])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
+
+        cut_many(scope, [(package['timer_exmp'], BoolDom([True]))])
+
+        final = fixate(scope)
+
+        self.assertEqual(final[package['timer_api']], ModDom([package['timer']]))
+
     @unittest.expectedFailure 
     def test_options(self):
         timer_api = Interface("Timer api")

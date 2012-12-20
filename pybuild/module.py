@@ -42,7 +42,12 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
 
     raise CutConflictException(opt)
 
-class Module(option.Boolean, scope.BaseScope):
+class Entity():
+    def find_fn(self, name):
+        return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
+
+
+class Module(Entity, option.Boolean, scope.BaseScope):
     def __init__(self, name, pkg=None, 
             static = False, mandatory = False,
             sources=[], options=[], super=None, 
@@ -87,10 +92,6 @@ class Module(option.Boolean, scope.BaseScope):
             implmod = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], impl)
             scope[implmod] |= domain.ModDom([self])
         return scope
-    
-
-    def find_fn(self, name):
-        return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
 
     def cut_trigger(self, cont, scope, old_domain):
         dom = scope[self]
@@ -123,6 +124,12 @@ class Module(option.Boolean, scope.BaseScope):
             return [obj] + [get_impl(impl) for impl in obj.implements]
 
         return get_impl(self)[1:]       
+
+    def fix_trigger(self, scope):
+        for iface in self.implements:
+            scope = fix(scope, self.find_fn(iface))
+
+        return option.Boolean.fix_trigger(self, scope)
 
     def is_list(self):
         return self.implements
