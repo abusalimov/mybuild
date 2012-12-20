@@ -64,9 +64,6 @@ class Context(object):
         if option is not None:
             domain.consider_option(option, value)
 
-    def register(self, instance):
-        self.domain_for(instance._module).register(instance)
-
     def domain_for(self, module, option=None):
         try:
             domain = self._modules[module]
