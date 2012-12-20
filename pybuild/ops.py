@@ -34,7 +34,7 @@ def incut_cont(cont, scope, opt, domain):
         print 'FAIL %s for %s' % (opt, domain)
         raise CutConflictException(opt)
 
-    return scope
+    return cont(scope)
 
 def incut(scope, opt, domain):
     return incut_cont(lambda x: x, scope, opt, domain)

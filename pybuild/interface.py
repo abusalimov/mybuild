@@ -62,11 +62,17 @@ class Interface(DefaultOption, BaseScope):
     def build(self, ctx): 
         header_inc = []
 
+        def mod_hdr_fn(mod):
+            return 'module/%s.h' % (mod.qualified_name().replace('.','/'),)
+
+        #XXX
         for impl in ctx.model[self]:
-            header_inc.append('module/%s.h' % (impl.qualified_name().replace('.','/'),)) #XXX
+            header_inc.append(mod_hdr_fn(impl)) 
 
         ctx.bld(features = 'module_header',
+            name = self.qualified_name() + '_header',
             mod_name = self.qualified_name(),
             header_opts = [],
             header_inc = header_inc)
+        
 
