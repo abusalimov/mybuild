@@ -20,6 +20,10 @@ def add_many(scope, ents):
             for name, opt in ent.items():
                 scope = opt.add_trigger(scope)
     
+    for k, v in scope.items():
+        if not v:
+            raise CutConflictException(k)
+
     return scope
 
 def incut_cont(cont, scope, opt, domain):

@@ -226,6 +226,18 @@ class TestCase(unittest.TestCase):
         scope = Scope()
         self.assertRaises(CutConflictException, add_many, scope, mod_lst)
 
+    def test_interface_mandatory2(self):
+        package = Package('root')
+        obj_in_pkg(Interface, package, 'timer_api', mandatory = True)
+        module_package(package, 'timer', implements=['timer_api'])
+
+        mod_lst = map(lambda s: package[s], ['timer_api', 'timer'])
+
+        scope = Scope()
+        scope = add_many(scope, mod_lst)
+
+        self.assertEqual(scope[package['timer_api']], ModDom([package['timer']]))
+
     @unittest.expectedFailure 
     def test_options(self):
         timer_api = Interface("Timer api")

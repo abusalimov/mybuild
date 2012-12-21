@@ -45,7 +45,10 @@ class Interface(DefaultOption, BaseScope):
             self.default = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], def_name)
 
         if self.mandatory:
-            return cut(scope, self, scope[self] - ModDom([self.def_impl]))
+            # cut can't be used as not all impls are in ModDom,
+            # so cut can lead to empty ModDom for self
+            scope[self] -= ModDom([self.def_impl])
+            scope[self.def_impl] -= BoolDom([True])
 
         return scope
 

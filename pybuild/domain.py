@@ -63,8 +63,6 @@ class IntegerDom(Domain):
     def __str__(self):
         return '<IntegerDom: [%d-%d]' % (min(self), max(self))
 
-from traceback import print_stack
-
 class ModDom(Domain):
     def __init__(self, init_iter, default_impl = None):
 
@@ -75,14 +73,17 @@ class ModDom(Domain):
     def __and__(self, other):
         if isinstance(other, BoolDom):
             if True in other:
-                md1 = ModDom(self) 
-                md2 = ModDom([self.default_impl])
-                md = md1 - md2
+                md = self - ModDom([self.default_impl])
             if False in other:
-                md = ModDom(self)
+                md = ModDom(self, default_impl)
         else:
             md = Domain.__and__(self, other)
+            md.default_impl = self.default_impl
 
+        return md
+
+    def __sub__(self, other):
+        md = Domain.__sub__(self, other)
         md.default_impl = self.default_impl
         return md
 
