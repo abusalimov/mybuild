@@ -41,7 +41,7 @@ class Source(object):
             features = 'c', 
             source = spec.src,
             target = tgt,
-            defines = ['__EMBUILD_MOD__'] + spec.defines,
+            defines = ['__EMBUILD_MOD__=%s' % (opt.qualified_name().replace('.', '__'),)] + spec.defines,
             includes = ctx.bld.env.includes + spec.includes,
         )
         return tgt 
