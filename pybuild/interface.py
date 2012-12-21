@@ -21,11 +21,13 @@ class DefImplMod(Module):
         return cont(scope)
 
 class Interface(DefaultOption, BaseScope):
-    def __init__(self, name, pkg, default=None, super=None):
+    def __init__(self, name, pkg, mandatory = False, default=None, super=None):
         self.name = name
         self.pkg = pkg
         self.hash_value = hash(self.qualified_name() + ".include_interface")
         self.parent = super
+
+        self.mandatory = mandatory
 
         if default:
             self.default_name = default
@@ -41,6 +43,9 @@ class Interface(DefaultOption, BaseScope):
 
         if def_name:
             self.default = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], def_name)
+
+        if self.mandatory:
+            return cut(scope, self, scope[self] - ModDom([self.def_impl]))
 
         return scope
 
