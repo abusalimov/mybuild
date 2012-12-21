@@ -194,6 +194,29 @@ class TestCase(unittest.TestCase):
 
         self.assertEqual(final[package['timer_api']], ModDom([package['timer']]))
 
+    def test_moddom(self):
+        package = Package('root')
+        obj_in_pkg(Interface, package, 'timer_api')
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: package[s], ['timer_api']))
+
+        self.assertRaises(CutConflictException, cut_many, scope, [(package['timer_api'], BoolDom([True]))])
+
+    def test_moddom2(self):
+        package = Package('root')
+        module_package(package, 'head_timer', implements=['timer_api'])
+        module_package(package, 'timer', implements=['timer_api'])
+        obj_in_pkg(Interface, package, 'timer_api')
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer']))
+
+        cut_many(scope, [(package['timer_api'], BoolDom([True]))])
+        cut_many(scope, [(package['timer'], BoolDom([False]))])
+
+        print scope[package['timer_api']]
+                            
     @unittest.expectedFailure 
     def test_options(self):
         timer_api = Interface("Timer api")

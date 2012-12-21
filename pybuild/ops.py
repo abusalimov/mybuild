@@ -5,6 +5,8 @@ from exception import *
 
 from scope import Scope
 
+debug_out = True
+
 def add_many(scope, ents):
     for ent in ents:
         scope[ent] = ent.domain
@@ -21,17 +23,20 @@ def add_many(scope, ents):
     return scope
 
 def incut_cont(cont, scope, opt, domain):
+    if debug_out:
+        print 'cut %s for %s' % (opt, domain)
     strict_domain = scope[opt] & domain
     old_domain = scope[opt]
     if strict_domain:
-        print 'cut %s for %s' % (opt, domain)
         differ = strict_domain != old_domain
         scope[opt] = strict_domain
         if differ:
             scope = opt.cut_trigger(cont, scope, old_domain)
-        print 'OK %s for %s' % (opt, domain)
+        if debug_out:
+            print 'OK %s for %s' % (opt, domain)
     else:
-        print 'FAIL %s for %s' % (opt, domain)
+        if debug_out:
+            print 'FAIL %s for %s' % (opt, domain)
         raise CutConflictException(opt)
 
     return cont(scope)
@@ -66,7 +71,8 @@ def cut_many(scope, opts):
     return cut_iter(scope, [(opt, dom) for opt, dom in d.items()])
 
 def fix(scope, opt):
-    print 'fixing %s within %s' %(opt, scope[opt])
+    if debug_out:
+        print 'fixing %s within %s' %(opt, scope[opt])
     return opt.fix_trigger(scope)
 
 def fixate(scope):

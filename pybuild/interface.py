@@ -23,18 +23,18 @@ class DefImplMod(Module):
 class Interface(DefaultOption, BaseScope):
     def __init__(self, name, pkg, default=None, super=None):
         self.name = name
-        self.hash_value = hash(name + ".include_interface")
         self.pkg = pkg
+        self.hash_value = hash(self.qualified_name() + ".include_interface")
         self.parent = super
 
         if default:
             self.default_name = default
 
         self.def_impl = DefImplMod(self.qualified_name() + "_def_impl", pkg=pkg, implements=[self.name])
-        self.domain = ModDom([self.def_impl])
+        self.domain = ModDom([self.def_impl], default_impl = self.def_impl)
 
     def items(self):
-        return [('Default Impl', self.def_impl)]
+        return [('default_impl', self.def_impl)]
 
     def add_trigger(self, scope):
         def_name = getattr(self, 'default_name', None)
@@ -43,7 +43,6 @@ class Interface(DefaultOption, BaseScope):
             self.default = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], def_name)
 
         return scope
-
 
     def cut_trigger(self, cont, scope, old_domain):
         domain = scope[self]
@@ -61,7 +60,6 @@ class Interface(DefaultOption, BaseScope):
 
     def __hash__(self):
         return self.hash_value
-
     
     def build(self, ctx): 
         header_inc = []

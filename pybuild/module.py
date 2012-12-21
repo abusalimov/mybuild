@@ -68,7 +68,7 @@ class Module(Entity, option.Boolean, scope.BaseScope):
 
         self.options = []
         self.options += options
-        self.hash_value = hash(name + '.include_module')
+        self.hash_value = hash(self.qualified_name() + '.include_module')
 
         self.depends = []
 
