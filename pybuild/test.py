@@ -238,18 +238,26 @@ class TestCase(unittest.TestCase):
 
         self.assertEqual(scope[package['timer_api']], ModDom([package['timer']]))
 
-    @unittest.expectedFailure 
     def test_options(self):
-        timer_api = Interface("Timer api")
-        head_timer = Module("Head timer", implements=timer_api, options = {'timer_nr' : 32, 'impl_name' : None})
-        rt = Module("Hard realtime head timer", implements=timer_api, super=head_timer, options={'impl_name' : "rt timer"})
+        package = Package('root')
+        module_package(package, 'timer', options = [
+            Integer('timer_nr', default = 32),
+            Integer('id', default = 1)])
 
-        scope = try_add_step(Scope(), rt)
-        scope = try_add_step(scope, head_timer, options = {'timer_nr' : 64})
+        module_package(package, 'super_timer', super = 'timer', options = [
+            Integer('id', default = 2)])
 
-        self.assertEqual(rt.option_val(scope, 'timer_nr'),            64)
-        self.assertEqual(rt.option_val(scope, 'impl_name'),            "rt timer")
-        self.assertEqual(head_timer.option_val(scope, 'impl_name'), None)
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: package[s], ['super_timer', 'timer']))
+    
+        cut_many(scope, [(package['super_timer.timer_nr'], IntegerDom([64]))])
+
+        final = fixate(scope)
+
+        self.assertEqual(final[package['timer.id']], IntegerDom([1]))
+        self.assertEqual(final[package['super_timer.id']], IntegerDom([2]))
+        self.assertEqual(final[package['timer.timer_nr']], IntegerDom([32]))
+        self.assertEqual(final[package['super_timer.timer_nr']], IntegerDom([64]))
 
     @unittest.expectedFailure 
     def test_options_error(self):

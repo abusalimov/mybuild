@@ -10,6 +10,8 @@ class Option:
         if not domain:
             domain = self.__class__.defdomain
 
+        self.raw_domain = domain
+
         self.domain = self.__class__.domain_class(domain)
 
         self.pkg = pkg
@@ -48,6 +50,9 @@ class Option:
     def __repr__(self):
         return "<%s %s>" % (self.__class__.__name__, self.qualified_name())
 
+    def copy(self):
+        return self.__class__(self.name, self.raw_domain, self.pkg)
+
 class DefaultOption(Option):
     def __init__(self, name, domain=None, pkg=None, default=None):
         Option.__init__(self, name, domain, pkg)
@@ -61,6 +66,9 @@ class DefaultOption(Option):
             return Option.fix_trigger(self, scope)
 
         return scope
+
+    def copy(self):  
+        return self.__class__(self.name, self.raw_domain, self.pkg, self.default)
 
 class List(Option):
     defdomain = []

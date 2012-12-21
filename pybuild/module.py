@@ -47,7 +47,7 @@ class Entity():
         return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
 
 
-class Module(Entity, option.Boolean, scope.BaseScope):
+class Module(Entity, option.Boolean, dict):
     def __init__(self, name, pkg=None, 
             static = False, mandatory = False,
             sources=[], options=[], super=None, 
@@ -61,7 +61,8 @@ class Module(Entity, option.Boolean, scope.BaseScope):
         self.mandatory = mandatory
         self.static = static
 
-        self.parent = super
+        self.super_name = super
+        self.super = None
         self.name = name
         self.include_trigger = include_trigger
         self.sources = sources
@@ -87,11 +88,27 @@ class Module(Entity, option.Boolean, scope.BaseScope):
     def dependency_add(self, modname, opts={}):
         self.depends.append((modname, opts))
 
+    def import_super(self, scope):
+        if self.super_name and not self.super:
+            self.super = self.find_fn(self.super_name)
+            scope = self.super.import_super(scope)
+
+            to_add = []
+            for opt_name, opt in self.super.items():
+                if not opt_name in self:
+                    opt_copy = opt.copy()
+                    self[opt_name] = opt_copy
+                    to_add.append(opt_copy)
+
+            return add_many(scope, to_add)
+        return scope
+
     def add_trigger(self, scope):
         for impl in self.implements:
             implmod = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], impl)
             scope[implmod] |= domain.ModDom([self])
-        return scope
+
+        return self.import_super(scope)
 
     def cut_trigger(self, cont, scope, old_domain):
         dom = scope[self]
