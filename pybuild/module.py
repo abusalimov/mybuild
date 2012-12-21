@@ -29,16 +29,20 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
 
     dom = scope[opt]
 
+    dom_cls = dom.__class__
+
     if hasattr(opt, 'default') and opt.default in dom:
         dom = itertools.chain((opt.default,), dom)
 
     for value in dom:
-        value_scope = cut(scope, opt, opt.domain_class([value]))
-
         try:
+            value_scope = cut(scope, opt, dom_cls.single_value(value))
             return trigger_handle(cont, value_scope, trig, *args, **kwargs)
         except CutConflictException or MultiValueException, excp:
-            pass
+            if excp.opt == opt:
+                pass
+            else:
+                raise
 
     raise CutConflictException(opt)
 
@@ -72,6 +76,7 @@ class Module(Entity, option.Boolean, dict):
         self.hash_value = hash(self.qualified_name() + '.include_module')
 
         self.depends = []
+        self.dependents = []
 
         for d in depends:
             if isvector(d):
@@ -87,6 +92,9 @@ class Module(Entity, option.Boolean, dict):
 
     def dependency_add(self, modname, opts={}):
         self.depends.append((modname, opts))
+
+    def dependent_add(self, depnt):
+        self.dependents.append(depnt)
 
     def import_super(self, scope):
         if self.super_name and not self.super:
@@ -107,6 +115,9 @@ class Module(Entity, option.Boolean, dict):
         for impl in self.implements:
             implmod = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], impl)
             scope[implmod] |= domain.ModDom([self])
+
+        for (dep_name, dep_opts) in self.depends:
+            self.find_fn(dep_name).dependent_add(self)
 
         return self.import_super(scope)
 
@@ -133,6 +144,9 @@ class Module(Entity, option.Boolean, dict):
             for impl in self.implements:
                 implmod = self.find_fn(impl)
                 scope = incut(scope, implmod, scope[implmod] - domain.ModDom([self]))
+
+            for dependent in self.dependents:
+                scope = incut(scope, dependent, domain.BoolDom([False]))
 
         return cont(scope)
 
@@ -201,7 +215,7 @@ class Module(Entity, option.Boolean, dict):
         ctx.bld(
             features = fts, 
             target = tgt,
-            defines = ['__EMBUILD_MOD__'],
+            #defines = ['__EMBUILD_MOD__'],
             includes = ctx.bld.env.includes,
             use = srcs,
         )

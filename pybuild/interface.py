@@ -38,6 +38,9 @@ class Interface(DefaultOption, BaseScope):
     def items(self):
         return [('default_impl', self.def_impl)]
 
+    def dependent_add(self, depnt):
+        pass
+
     def add_trigger(self, scope):
         def_name = getattr(self, 'default_name', None)
 
