@@ -1,5 +1,5 @@
 
-from .. domain import BoolDom
+from .. domain import *
 
 def lds_region(name, base, size):
     import build_ctx
@@ -16,7 +16,7 @@ def lds_section_load(name, vma, lma):
 def lds_section(name, reg):
     lds_section_load(name, reg, reg)
 
-def include(name, runlevel=2, opts={}):
+def include(name, opts={}, runlevel=2):
     import build_ctx
     ctx = build_ctx
 
@@ -25,7 +25,7 @@ def include(name, runlevel=2, opts={}):
     ctx.modconstr.append((name, BoolDom([True])))
 
     for opt_name, value in opts.items():
-        ctx.modconstr.append(("%s.%s" % (name, opt_name), Domain([value])))
+        ctx.modconstr.append(("%s.%s" % (name, opt_name), value))
 
 def exclude(name):
     pass

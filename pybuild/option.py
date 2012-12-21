@@ -77,7 +77,7 @@ class List(Option):
         return None
 
 class Integer(DefaultOption):
-    defdomain = range(0, 0x10000)
+    defdomain = range(0, 0x20000)
     domain_class = domain.IntegerDom
     def build_repr(self):
         return 'NUMBER'

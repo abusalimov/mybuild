@@ -31,6 +31,8 @@ def incut_cont(cont, scope, opt, domain):
         print 'cut %s for %s' % (opt, domain)
     strict_domain = scope[opt] & domain
     old_domain = scope[opt]
+    if debug_out:
+        print 'cut %s is old domain' % (old_domain)
     if strict_domain:
         if debug_out:
             print 'cut %s is now %s' % (opt, strict_domain)
