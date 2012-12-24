@@ -23,6 +23,7 @@ __all__ = [
 
 import abc
 from collections import namedtuple
+from functools import partial
 from operator import attrgetter
 
 import logs as log
@@ -40,11 +41,16 @@ class PdagContext(object):
         """
         Fetch the state of a given pnode in the current context.
 
-        Returns:
-            Tristate (None, True or False) indicating the current value of the
-            specified pnode.
+        Raises:
+            KeyError:
+                When no value is associated with the node.
+        """
+        raise NotImplementedError
 
-        Never raises KeyError.
+    @abc.abstractmethod
+    def __contains__(self, pnode):
+        """
+        Tells whether a given pnode has a value in the current context.
         """
         raise NotImplementedError
 
@@ -67,6 +73,32 @@ class PdagContext(object):
     def _do_eval_unset(self, pnodes):
         raise NotImplementedError
 
+    def get(self, pnode, default=None):
+        """
+        Retrieves the value of a given pnode, if any. Otherwise returns
+        'default' (instead of raising KeyError).
+        """
+        try:
+            return self[pnode]
+        except KeyError:
+            return default
+
+    def check(self, pnode, value):
+        """
+        Check the value of a pnode against the given one.
+
+        Args:
+            pnode:
+                The node, whichs value to test. If not set, its value is
+                assumed to be None.
+            value:
+                True, False, or None.
+
+        Returns:
+            Whether the value of the pnode is the same as 'value'.
+        """
+        return self.get(pnode) is value
+
     def store(self, pnode, value, notify_on_set=True):
         """
         Set value of a given pnode.
@@ -82,7 +114,7 @@ class PdagContext(object):
                 The value for the target pnode, which must not conflict with an
                 existing value, if any. Otherwise a PdagContextError is raised.
                 In other words, operation succeeds iff
-                    ctx[pnode] is None or ctx[pnode] == value
+                    pnode not in ctx or ctx[pnode] == value
             notify_on_set (bool):
                 Tells whether to call 'PdagNode.context_setting' or not.
 
@@ -135,13 +167,13 @@ class PdagContext(object):
         self._do_eval_unset(self.ifilter_unset(pnodes))
 
     def ifilter_unset(self, pnodes):
-        return (pnode for pnode in pnodes if self[pnode] is None)
+        return (pnode for pnode in pnodes if self.get(pnode) is None)
 
     def iter_values_of(self, pnodes):
-        return (self[pnode] for pnode in pnodes)
+        return (self.get(pnode) for pnode in pnodes)
 
     def iter_pairs_of(self, pnodes):
-        return ((pnode, self[pnode]) for pnode in pnodes)
+        return ((pnode, self.get(pnode)) for pnode in pnodes)
 
 
 class DictBasedPdagContext(PdagContext):
@@ -155,10 +187,10 @@ class DictBasedPdagContext(PdagContext):
         self._dict = dict_
 
     def __getitem__(self, pnode):
-        try:
-            return self._dict[pnode]
-        except KeyError:
-            return None
+        return self._dict[pnode]
+
+    def __contains__(self, pnode):
+        return pnode in self._dict
 
     def _check_and_set(self, pnode, value):
         assert isinstance(value, bool)
@@ -179,22 +211,115 @@ class DictBasedPdagContext(PdagContext):
             return old_value
 
 
+class PdagMeta(type):
+
+    def __init__(cls, name, bases, attrs):
+        super(PdagMeta, cls).__init__(name, bases, attrs)
+        cls._registered_node_types = set()
+
+    def node_type(cls, target):
+        if not (isinstance(target, type) and
+                issubclass(target, Pdag.NodeBase)):
+            raise TypeError('Deco must be applied to a subclass '
+                            'of Pdag.NodeBase, got %s object instead: %r' %
+                            (type(target).__name__, target))
+
+        if any(target in types
+               for types in cls._iter_all_node_types_sets()):
+            raise ValueError('%s type has been already registered in '
+                             'class %s' % (target.__name__, cls.__name__))
+
+        cls._registered_node_types.add(target)
+
+        return target
+
+    def _iter_all_node_types_sets(cls):
+        for base in cls.__mro__:
+            if isinstance(base, PdagMeta):
+                yield base._registered_node_types
+
+    def _iter_all_node_types(cls):
+        for types in cls._iter_all_node_types_sets():
+            for node_type in types:
+                yield node_type
+
+
 class Pdag(object):
+    __metaclass__ = PdagMeta
 
-    atoms = property(attrgetter('_atoms'))
-    nodes = property(attrgetter('_nodes'))
+    class NodeBase(object):
 
-    def __init__(self, *atoms):
+        class __metaclass__(type):
+            def __new__(cls, name, bases, attrs):
+                attrs.setdefault('__slots__', ())
+                return type.__new__(cls, name, bases, attrs)
+
+            def _extend_type_with(cls, *bases):
+                return type(cls.__name__, (cls,) + bases, {})
+
+        def __new__(cls, *args, **kwargs):
+            try:
+                pdag = cls._pdag
+            except AttributeError:
+                raise RuntimeError("Don't instantiate this class directly, "
+                                   "use pdag[%s](...) instead" % cls.__name__)
+
+            args, kwargs = cls._canonicalize_args(*args, **kwargs)
+
+            frozen_kwargs = frozenset(kwargs.iteritems())
+            try:
+                ret = pdag._node_map[cls, args, frozen_kwargs]
+            except KeyError:
+                ret = pdag._node_map[cls, args, frozen_kwargs] = \
+                    super(Pdag.NodeBase, cls).__new__(cls, *args, **kwargs)
+
+            return ret
+
+        @classmethod
+        def _canonicalize_args(cls, *args, **kwargs):
+            """
+            Implementation must return a canonical (args, kwargs) tuple
+            suitable to reconstruct the object.
+            """
+            return cls._starargs_tuple(*args, **kwargs)
+
+        @classmethod
+        def _starargs_tuple(cls, *args, **kwargs):
+            return (args, kwargs)
+
+    atoms = property(lambda self: [node for node in self._node_map.itervalues()
+                                   if isinstance(node, Atom)])
+    nodes = property(lambda self: self._node_map.values())
+
+    def __init__(self):
         super(Pdag, self).__init__()
-        self._set_atoms(atoms)
+
+        self._node_map = {}
+
+        class PdagType(object):
+            __slots__ = ()
+            _pdag = self
+
+        node_types = self._node_types = {}
+        for node_type in type(self)._iter_all_node_types():
+            node_types[node_type] = node_type._extend_type_with(PdagType)
+            setattr(self, node_type.__name__, partial(node_type, self))
+
+        # self._set_atoms(atoms)
+
+    def __getitem__(self, node_type):
+        try:
+            return self._node_types[node_type]
+        except KeyError:
+            raise KeyError('Must register %s class using @%s.node_type' %
+                           (node_type.__name__, type(self).__name__))
 
     def _set_atoms(self, atoms):
         self._atoms = atoms = frozenset(atoms)
         for atom in atoms:
             if not isinstance(atom, AtomicNode):
-                raise TypeError(
-                    "Atomic node expected, got '%s' object instead" %
-                    type(atom).__name__)
+                raise TypeError('Atomic node expected, got %s object instead' %
+                                type(atom).__name__)
         self._nodes = frozenset(self._hull_set(atoms))
 
     @classmethod
@@ -214,8 +339,9 @@ class Pdag(object):
         return visited
 
 
-class PdagNode(object):
+class PdagNode(Pdag.NodeBase):
     """docstring for PdagNode"""
+
     __slots__ = '_outgoing'
 
     costs = (0, 0) # cost = pnode.costs[value] # value is either True or False
@@ -253,17 +379,15 @@ class ConstraintNode(PdagNode):
     Marker class for a node that may constrain values of incoming nodes
     even without having its own value specified.
     """
-    __slots__ = ()
 
 
 class AtomicNode(PdagNode):
     """Marker class for leaf nodes."""
-    __slots__ = ()
 
 
+@Pdag.node_type
 class Atom(AtomicNode):
     """To be extended by the client."""
-    __slots__ = ()
     costs = (0, 1)
 
     def context_setting(self, ctx, value):
@@ -271,41 +395,90 @@ class Atom(AtomicNode):
             super(Atom, self).context_setting(ctx, value)
 
 
-class ConstNode(AtomicNode):
+class ConstNode(PdagNode):
     """Constrains a node to take a constant value."""
-    __slots__ = ()
 
-    const_value = None       # overridden by subclasses
-    instances = (None, None) # overwritten below
+    value = None # overridden by subclasses
+
+    def _incoming_setting(self, incoming, ctx, value):
+        if value is not self.value:
+            raise PdagContextError
+        self._store_self(ctx, value)
 
     def context_setting(self, ctx, value):
-        if value is not self.const_value:
-            ctx.store(self, not value) # Let it fall.
+        if value is not self.value:
+            raise PdagContextError
         self._notify_outgoing(ctx, value)
 
-class True_(ConstNode):
-    __slots__ = ()
-    const_value = True
 
-class False_(ConstNode):
-    __slots__ = ()
-    const_value = False
+class ConstAtomicNode(ConstNode, AtomicNode):
+    atomic_types = (None, None)  # overwritten below
 
-ConstNode.instances = (False_, True_)
+    @property
+    def negation(self):
+        negative_type = self.atomic_types[not self.value]
+        return negative_type(self._pdag)
+
+@Pdag.node_type
+class TrueAtomic(ConstAtomicNode):
+    value = True
+
+@Pdag.node_type
+class FalseAtomic(ConstAtomicNode):
+    value = False
+
+ConstAtomicNode.atomic_types = (FalseAtomic, TrueAtomic)
+
+
+class SingleOperandNode(PdagNode):
+    """A node with a single operand."""
+    __slots__ = '_operand'
+
+    def __init__(self, operand):
+        super(SingleOperandNode, self).__init__()
+        self._operand = operand
+        self._new_incoming(operand)
+
+    @classmethod
+    def _canonicalize_args(cls, operand):
+        return cls._starargs_tuple(operand)
+
+
+class ConstConstraintNode(SingleOperandNode, ConstNode, ConstraintNode):
+    constraint_types = (None, None)  # overwritten below
+
+    def context_setting(self, ctx, value):
+        ctx[self._operand] = value
+        super(ConstConstraintNode, self).context_setting(ctx, value)
+
+@Pdag.node_type
+class TrueConstraint(ConstConstraintNode):
+    value = True
+
+@Pdag.node_type
+class FalseConstraint(ConstConstraintNode):
+    value = False
+
+ConstConstraintNode.constraint_types = (FalseConstraint, TrueConstraint)
 
 
 class OperandSetNode(PdagNode):
+    """A node which may have an arbitrary number of equivalent operands."""
     __slots__ = '_operands'
 
     class OperandError(Exception):
         pass
 
-    def __init__(self, operands):
+    def __init__(self, *operands):
         super(OperandSetNode, self).__init__()
 
         self._operands = set()
         for operand in operands:
             self._new_operand(operand)
+
+    @classmethod
+    def _canonicalize_args(cls, *operands):
+        return cls._starargs_tuple(frozenset(operands))
 
     def _new_operand(self, operand):
         """Generally subclasses should use this instead of '_new_incoming'."""
@@ -328,7 +501,7 @@ class OperandSetNode(PdagNode):
 
             if value is None:
                 if found_single is not None:
-                    if ctx[self] is not None:
+                    if self in ctx:
                         ctx.eval_unset(self._operands)
                     break
 
@@ -348,28 +521,43 @@ class OperandSetNode(PdagNode):
 
 
 class LatticeOpNode(OperandSetNode):
-    """Associative, commutative and idempotent operation."""
-    __slots__ = ()
+    """
+    An operation with the following properties:
+      - Associative: op(op(A, B), C) == op(A, op(B, C))
+      - Commutative: op(A, B) == op(B, A)
+      - Idempotent: op(A, A) == op(A) == A
 
-    def __init__(self, *operands):
-        super(LatticeOpNode, self).__init__(operands)
+    Special elements:
+      - Identity: op(Identity, A) == A; op() == Identity
+      - Zero: op(Zero, A) == Zero
+
+    """
+
+    def __new__(cls, *operands):
+        if not operands:
+            return self._pdag[ConstAtomicNode.atomic_types[cls.identity]]()
+        elif len(operands) == 1:
+            operand, = operands
+            return operand
+        else:
+            return super(LatticeOpNode, cls).__new__(cls, *operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
 
-            if value is self._zero:
+            if value is self.zero:
                 log.debug("pdag: operand value is zero")
                 self._store_self(ctx, value)
 
-            elif ctx[self] is not self._identity:  # zero or None
+            elif not ctx.check(self, self.identity):  # zero or None
                 log.debug("pdag: operand value is identity")
                 self._eval_operands(ctx)
 
     def context_setting(self, ctx, value):
         with log.debug("pdag: %s: %s", type(self).__name__, self.bind(ctx)):
 
-            if value is self._identity:
+            if value is self.identity:
                 log.debug("pdag: new value is identity")
                 ctx.store_all(self._operands, value)
                 # for operand in self._operands:
@@ -386,7 +574,7 @@ class LatticeOpNode(OperandSetNode):
                        type(self).__name__, self.bind(ctx),
                        ', '.join(str(i.bind(ctx)) for i in self._operands)):
 
-            zero = self._zero
+            zero = self.zero
             try:
                 last_unset = self._single_unset_operand(ctx, break_on=zero)
 
@@ -396,33 +584,34 @@ class LatticeOpNode(OperandSetNode):
             else:
                 if last_unset is None:
                     log.debug("pdag: all operands are identity")
-                    self._store_self(ctx, self._identity)
+                    self._store_self(ctx, self.identity)
 
-                elif ctx[self] is zero:
+                elif ctx.check(self, zero):
                     log.debug("pdag: last unset operand: %s", last_unset)
                     ctx[last_unset] = zero
 
     def __repr__(self):
         return self._repr_sign.join(map(repr, self._operands)).join('()')
 
+@Pdag.node_type
 class And(LatticeOpNode):
-    __slots__ = ()
 
-    _identity = True
-    _zero     = False
+    identity = True
+    zero     = False
 
     _repr_sign = ' & '
 
+@Pdag.node_type
 class Or(LatticeOpNode):
-    __slots__ = ()
 
-    _identity = False
-    _zero     = True
+    identity = False
+    zero     = True
 
     _repr_sign = ' | '
 
 
-class Not(PdagNode):
+@Pdag.node_type
+class Not(SingleOperandNode):
     """
     Logical negation.
 
@@ -431,12 +620,14 @@ class Not(PdagNode):
      True   False
     False    True
     """
-    __slots__ = '_operand'
 
-    def __init__(self, operand):
-        super(Not, self).__init__()
-        self._operand = operand
-        self._new_incoming(operand)
+    def __new__(cls, operand):
+        if isinstance(operand, Not):
+            return operand._operand
+        elif isinstance(operand, ConstAtomicNode):
+            return operand.negation
+        else:
+            return super(Not, cls).__new__(cls, operand)
 
     def _incoming_setting(self, incoming, ctx, value):
         assert incoming is self._operand
@@ -456,6 +647,7 @@ class Not(PdagNode):
         return '(~%r)' % self._operand
 
 
+@Pdag.node_type
 class Implies(PdagNode):
     """
     Simple logical implication.
@@ -478,6 +670,10 @@ class Implies(PdagNode):
         self._then = then
         self._new_incoming(then)
 
+    @classmethod
+    def _canonicalize_args(cls, if_, then):
+        return cls._starargs_tuple(if_, then)
+
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
@@ -490,12 +686,12 @@ class Implies(PdagNode):
                 ctx.eval_unset((other_operand,))
 
             else:
-                self_value = ctx[self]
+                self_value = ctx.get(self)
                 if self_value is not None:
                     ctx[other_operand] = self_value ^ incoming_is_then
 
                 else:
-                    other_value = ctx[other_operand]
+                    other_value = ctx.get(other_operand)
                     if other_value is not None:
                         self._store_self(ctx, other_value ^ incoming_is_then)
 
@@ -506,10 +702,10 @@ class Implies(PdagNode):
                 ctx[self._if] = True
                 ctx[self._then] = False
 
-            elif ctx[self._if] is True:
+            elif ctx.check(self._if, True):
                 ctx[self._then] = True
 
-            elif ctx[self._then] is False:
+            elif ctx.check(self._then, False):
                 ctx[self._if] = False
 
             else:
@@ -521,6 +717,7 @@ class Implies(PdagNode):
         return '(%r => %r)' % (self._if, self._then)
 
 
+@Pdag.node_type
 class AtMostOneConstraint(OperandSetNode, ConstraintNode):
     """
     Allows at most a single operand to be True. Evaluates to True if a single
@@ -533,10 +730,6 @@ class AtMostOneConstraint(OperandSetNode, ConstraintNode):
 
     When there is no operands evaluates to False.
     """
-    __slots__ = ()
-
-    def __init__(self, *operands):
-        super(AtMostOneConstraint, self).__init__(operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -579,11 +772,12 @@ class AtMostOneConstraint(OperandSetNode, ConstraintNode):
 
                 else:
                     log.debug("pdag: last unset operand: %s", last_unset)
-                    self_value = ctx[self]
+                    self_value = ctx.get(self)
                     if self_value is not None:
                         ctx[last_unset] = self_value
 
 
+@Pdag.node_type
 class AllEqualConstraint(OperandSetNode, ConstraintNode):
     """
     Forces all operands to take the same value, and evaluates to that value.
@@ -594,10 +788,6 @@ class AllEqualConstraint(OperandSetNode, ConstraintNode):
      True    True    True    True
     False   False   False    False
     """
-    __slots__ = ()
-
-    def __init__(self, *operands):
-        super(AllEqualConstraint, self).__init__(operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -617,8 +807,12 @@ class PnodeInContext(namedtuple('_PnodeInContext', 'node context')):
     __slots__ = ()
     def __repr__(self):
         node = self.node
-        value = self.context[node]
-        return '%r=%r' % (node, value) if value is not None else repr(node)
+        try:
+            value = self.context[node]
+        except KeyError:
+            return repr(node)
+        else:
+            return '%r=%r' % (node, value)
 
 
 class PdagContextError(ValueError):

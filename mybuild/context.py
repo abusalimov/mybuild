@@ -34,7 +34,6 @@ class Context(object):
         self._modules = {}
         self._job_queue = deque()
         self._reent_locked = False
-        self._atom_cache = {}
 
     def post(self, fxn):
         with self.reent_lock(): # to flush the queue on block exit
@@ -76,6 +75,13 @@ class Context(object):
 
         return domain
 
+
+class ContextPdag(pdag.Pdag):
+
+    def __init__(self):
+        super(ContextPdag, self).__init__()
+        self._atom_cache = {}
+
     def atom_for(self, module, option=None, value=Ellipsis):
         cache = self._atom_cache
         cache_key = module, option, value
@@ -111,6 +117,7 @@ class Context(object):
         atoms = chain(*(module.iter_atoms()
                         for module in self._modules.itervalues()))
         return pdag.Pdag(*atoms), constraint
+
 
 
 class DomainBase(object):

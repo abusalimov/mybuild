@@ -77,6 +77,15 @@ class DtreeNode(DictBasedPdagContext):
 
         return branch
 
+    def __contains__(self, pnode):
+        # Override because of using ChainDict.
+        try:
+            self._dict[pnode]
+        except KeyError:
+            return False
+        else:
+            return True
+
     def _check_and_set(self, pnode, value):
         old_value = super(DtreeNode, self)._check_and_set(pnode, value)
 
