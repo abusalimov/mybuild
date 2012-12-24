@@ -1,5 +1,4 @@
 
-import re
 import itertools
 
 from exception import *
@@ -12,7 +11,7 @@ from util import isvector
 
 from ops  import *
 
-from mybuild.build import inchdr
+from mybuild.common.module import ModuleBuildOps
 
 def trigger_handle(cont, scope, trig, *args, **kwargs):
     opt = None
@@ -49,8 +48,7 @@ class Entity():
     def find_fn(self, name):
         return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
 
-
-class Module(Entity, option.Boolean, dict):
+class Module(ModuleBuildOps, Entity, option.Boolean, dict):
     def __init__(self, name, pkg=None, 
             static = False, mandatory = False,
             sources=[], options=[], super=None, 
@@ -174,50 +172,14 @@ class Module(Entity, option.Boolean, dict):
     def __hash__(self):
         return self.hash_value
 
+    def is_building(self, model):
+        return self.value(model)
 
-    def build(self, ctx):
-        if not self.value(ctx.model):
-            return 
+    def get_sources(self):
+        return self.sources
 
-        srcs = []
-        header_inc = []
-        header_opts = []
+    def get_options(self):
+        return self.values()
 
-        for src in self.sources:
-            fsrc = src.build(ctx, self)
-            if re.match('.*\.o', fsrc):
-                srcs.append(fsrc)
-            elif re.match('.*\.h', fsrc):
-                header_inc.append(fsrc)
-
-        for name, var in self.items():
-            repr = var.build_repr()
-            if not repr:
-                continue
-            header_opts.append(inchdr(repr, self.qualified_name(), name, ctx.model[var].value()))
-
-        ctx.bld(features = 'module_header',
-            name = self.qualified_name() + '_header',
-            mod_name = self.qualified_name(),
-            header_opts = header_opts,
-            header_inc = header_inc)
-
-        self.build_self(ctx, srcs)
-
-    def build_self(self, ctx, srcs):
-        tgt = self.qualified_name().replace('.', '_') 
-        fts = 'c'
-
-        if self.static:
-            fts += ' cstlib'
-
-        ctx.bld(
-            features = fts, 
-            target = tgt,
-            #defines = ['__EMBUILD_MOD__'],
-            includes = ctx.bld.env.includes,
-            use = srcs,
-        )
-
-        ctx.bld.out.append(tgt)
-
+    def islib(self):
+        return self.static

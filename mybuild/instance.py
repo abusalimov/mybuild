@@ -238,7 +238,6 @@ class Instance(object):
         # return '%s%s%s' % (optuple_str, node_str and ' ', node_str)
         return '%r %r' % (self._optuple, self._node)
 
-
 class InstanceError(Error):
     """
     Throwing this kind of errors from inside a module function indicates that

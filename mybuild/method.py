@@ -1,7 +1,7 @@
 
 import types
 
-from mybuild.mybuild.context import Context
+from mybuild.mybuild.context import Context, InstanceAtom
 
 from mybuild.mybuild import module
 from dtree import Dtree
@@ -15,28 +15,26 @@ def method_pre_parse(ctx):
 def method_decide_build(ctx):
     @module
     def conf(self):
-        print ctx.constr
         for name, constr in ctx.constr:
             obj = ctx.root
             for i in name.split('.'):
                 obj = getattr(obj, i)
 
-            print obj
             self.constrain(obj(**constr))
 
     context = Context()
     context.consider(conf)
 
-    conf_atom = context.atom_for(conf)
-    pdag, constraint = context.create_pdag_with_constraint()
-    dtree = Dtree(pdag)
-    solution = dtree.solve({constraint:True, conf_atom:True})
+    g = context.create_pdag()
 
-    from pprint import pprint
-    pprint(solution)
+    dtree = Dtree(g)
+    solution = dtree.solve({g.atom_for(conf):True})
 
     return solution 
 
-def method_define_build(bld, model) :
-    pass
+def method_define_build(ctx):
+    for pnode, value in ctx.model.iteritems():
+        if isinstance(pnode, InstanceAtom):
+            pnode.build(ctx)
+
 

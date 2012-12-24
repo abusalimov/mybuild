@@ -26,6 +26,7 @@ from util import NotifyingMixin
 
 import logs as log
 
+from mybuild.common.module import ModuleBuildOps
 
 class Context(object):
     """docstring for Context"""
@@ -291,7 +292,7 @@ class InstanceDomain(DomainBase):
 
 
 @ContextPdag.node_type
-class InstanceAtom(Atom):
+class InstanceAtom(Atom, ModuleBuildOps):
     __slots__ = '_instance'
 
     instance = property(attrgetter('_instance'))
@@ -303,6 +304,21 @@ class InstanceAtom(Atom):
     def __repr__(self):
         return repr(self._instance)
 
+    def is_building(self, model):
+        #return model[self]
+        return True
+
+    def get_sources(self):
+        return []
+
+    def get_options(self):
+        return []
+
+    def qualified_name(self):
+        return ''
+
+    def islib(self):
+        return False
 
 if __name__ == '__main__':
     from mybuild import module, option
