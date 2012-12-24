@@ -1,55 +1,44 @@
-
 import types
 
 from mybuild.mybuild import module as mybuild_module, option
 from mybuild.mybuild.constraints import Constraints
 
-from mybuild.pybuild.option import Integer, Boolean, List
+from mybuild.common.rules import ModRules as CommonModRules
 
-def package(name):
-    import sys
-    import build_ctx 
+class ModRules(CommonModRules):
+    def package(self, name):
+        import sys
+        import build_ctx 
 
-    pkg = build_ctx.root
+        pkg = build_ctx.root
 
-    for subpkg in name.split('.'):
-        if not hasattr(pkg, subpkg):
-            setattr(pkg, subpkg, types.ModuleType(subpkg))
-        pkg = getattr(pkg, subpkg)
+        for subpkg in name.split('.'):
+            if not hasattr(pkg, subpkg):
+                setattr(pkg, subpkg, types.ModuleType(subpkg))
+            pkg = getattr(pkg, subpkg)
 
-    global this_pkg
-    this_pkg = pkg
+        global this_pkg
+        this_pkg = pkg
 
-def module(name, *args, **kargs):
-    def convert_opt(opt):
+    def __convert_opt(opt):
         return '%s = option()' % (opt.name)
-    opts = ', '.join(map(lambda o: convert_opt(o), kargs.get('options', [])))
-    fn_decl = '''
-@mybuild_module
-def {MOD_NAME}(self, {OPTIONS}):
-    pass
-    '''.format(MOD_NAME=name, OPTIONS = opts)
 
-    exec fn_decl in globals(), locals()
+    def module(self, name, *args, **kargs):
+        opts = ', '.join(map(__convert_opt, kargs.get('options', [])))
+        
+        common_mod_rules.module(name, args, kargs)
 
-    this_pkg.__dict__[name] = locals()[name]
+        fn_decl = '''
+    @mybuild_module
+    def {MOD_NAME}(self, {OPTIONS}):
+        pass
+        '''.format(MOD_NAME=name, OPTIONS = opts)
 
-def library(name, *args, **kargs):
-    module(name, *args, **kargs)
+        exec fn_decl
 
-def LDScript(self):
-    return self
+        mod = locals()[name]
 
-def Generated(self, fn):
-    return self
+        setattr(this_pkg, name, mod)
 
-def NoRuntime(self):
-    return self
-
-def DefMacro(macro, src):
-    return src
-
-def interface(name, *args, **kargs):
-    pass
-
+        return mod
 

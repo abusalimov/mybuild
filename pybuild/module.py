@@ -12,7 +12,6 @@ from util import isvector
 
 from ops  import *
 
-from mybuild.common import repr as common_repr
 from mybuild.build import inchdr
 
 def trigger_handle(cont, scope, trig, *args, **kwargs):

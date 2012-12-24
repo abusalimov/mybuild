@@ -9,6 +9,7 @@ from dtree import Dtree
 def method_pre_parse(ctx):
     ctx.root = types.ModuleType('root')
     ctx.constr = []
+    ctx.runlevels = {}
     return ctx
 
 def method_decide_build(ctx):

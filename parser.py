@@ -11,33 +11,35 @@ class BuildCtx(types.ModuleType):
     def __init__(self):
         super(BuildCtx, self).__init__('build_ctx')
 
+#def imp_all(scope, modname, fromlist):
+    #mod = __import__(modname, scope, scope, fromlist, -1)
+    #for k in dir(mod):
+        #if not re.match('__.*__', k):
+            #scope[k] = getattr(mod, k)
+
 def parse(ctx, mod_dirs, method ='A'):
-    def imp_all(scope, modname, fromlist):
-        mod = __import__(modname, scope, scope, fromlist, -1)
-        for k in dir(mod):
-            if not re.match('__.*__', k):
-                scope[k] = getattr(mod, k)
 
     sys.modules['build_ctx'] = ctx
 
-    locl = {}
-    glob = globals()
-
     if method == 'A':
-        imp_all(glob, 'pybuild.parser.mod_rules', ['*'])
-        imp_all(glob, 'pybuild.parser.cfg_rules', ['*'])
-        imp_all(glob, 'pybuild.parser.build_ops', ['*'])
-        
+        from pybuild.rules import ModRules, CfgRules
+
     elif method == 'E':
-        imp_all(glob, 'mybuild.parser.mod_rules', ['*'])
-        imp_all(glob, 'mybuild.parser.cfg_rules', ['*'])
+        from pybuild.parser import ModRules
+        from pybuild.parser import CfgRules
+
+    ctx.mod_rules = ModRules()
+    ctx.cfg_rules = CfgRules()
+
+    from common.mod_rules_wrapper import *
+    from common.cfg_rules_wrapper import *
 
     for arg in mod_dirs:
         for dirpath, dirnames, filenames in os.walk(arg):
             for file in filenames:
                 if file.endswith('.py') or file == 'Pybuild':
                     ctx.dirname = dirpath
-                    execfile(os.path.join(dirpath, file), glob)
+                    execfile(os.path.join(dirpath, file))
 
     return ctx
 
