@@ -36,10 +36,10 @@ class Dtree(object):
 
     def solve(self, initial_values):
         nodes = self.pdag.nodes
-        atoms = self.pdag.atoms
+        # atoms = self.pdag.atoms
 
         root = DtreeNode()
-        root.solve(atoms, initial_values)
+        root.solve(nodes, initial_values)
 
         ret = dict.fromkeys(nodes)
         ret.update(root._dict)
@@ -106,7 +106,7 @@ class DtreeNode(DictBasedPdagContext):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
 
             initial_changeset = set(initial_values.iteritems())
-            initial_changeset.update((pnode, pnode.const_pnodes)
+            initial_changeset.update((pnode, pnode.value)
                 for pnode in pnodes if isinstance(pnode, pdag.ConstNode))
 
             self._merge_changeset(initial_changeset)

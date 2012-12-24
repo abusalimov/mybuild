@@ -420,6 +420,8 @@ class ConstNode(PdagNode):
             raise PdagContextError
         self._notify_outgoing(ctx, value)
 
+    def __repr__(self):
+        return repr(self.value).upper()
 
 class ConstAtomicNode(ConstNode, AtomicNode):
     atomic_types = (None, None)  # overwritten below
