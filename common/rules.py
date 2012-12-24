@@ -4,6 +4,9 @@ from mybuild.source     import Source
 from mybuild.pybuild.option import Integer, Boolean, List
 
 class ModRules():
+    def module(self, name, *args, **kargs):
+        pass
+
     def __process(self, kargs, fn, key):
         if kargs.has_key(key):
             flat = []
@@ -30,6 +33,9 @@ class ModRules():
         ctx.runlevels[n] = self.module('runlevel%d' % (n,), depends = depends)
         return ctx.runlevels[n]
 
+    def interface(self, name, *args, **kargs):
+        return self.module(name, *args, **kargs)
+
     def LDScript(self, file):
         return file
 
@@ -53,13 +59,19 @@ class ModRules():
 
 class CfgRules():
     def lds_region(self, name, base, size):
-        pass
+        import build_ctx
+        ctx = build_ctx
+        ctx.ld_defs.append('LDS_REGION_BASE_%s=%s' % (name, base))
+        ctx.ld_defs.append('LDS_REGION_SIZE_%s=%s' % (name, size))
 
     def lds_section_load(self, name, vma, lma):
-        pass
+        import build_ctx
+        ctx = build_ctx
+        ctx.ld_defs.append('LDS_SECTION_VMA_%s=%s' % (name, vma))
+        ctx.ld_defs.append('LDS_SECTION_LMA_%s=%s' % (name, lma))
 
     def lds_section(self, name, reg):
-        pass
+        return self.lds_section_load(name, reg, reg)
 
     def include(self, name, opts={}, runlevel=2):
         pass

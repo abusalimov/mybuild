@@ -17,6 +17,7 @@ from chaindict import ChainDict
 
 import logs as log
 
+from instance import InstanceError
 
 class TreeNode(object):
     """docstring for TreeNode"""

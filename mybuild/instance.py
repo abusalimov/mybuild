@@ -10,7 +10,7 @@ from itertools import izip
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
-from mybuild.core import Error
+from core import Error
 from pdag import *
 
 import logs as log

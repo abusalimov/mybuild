@@ -25,8 +25,7 @@ def parse(ctx, mod_dirs, method ='A'):
         from pybuild.rules import ModRules, CfgRules
 
     elif method == 'E':
-        from pybuild.parser import ModRules
-        from pybuild.parser import CfgRules
+        from mybuild.rules import ModRules, CfgRules
 
     ctx.mod_rules = ModRules()
     ctx.cfg_rules = CfgRules()
