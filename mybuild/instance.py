@@ -10,7 +10,8 @@ from itertools import izip
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
-import pdag
+from mybuild.core import Error
+from pdag import *
 
 import logs as log
 
@@ -96,38 +97,39 @@ class InstanceNode(InstanceNodeBase):
         child, = self._create_children(key, (value,))
         return value, child
 
-    def _cond_pnode(self, context, module_expr, option, value):
+    def _cond_pnode(self, g, module_expr, option, value):
         if option is not None:
             # module_expr is definitely a plain module here
-            pnode = context.atom_for(module_expr, option, value)
+            pnode = g.atom_for(module_expr, option, value)
 
         else:
-            pnode = context.create_pnode_from(module_expr)
+            # here value is bool
+            pnode = g.pnode_for(module_expr)
             if not value:
-                pnode = pdag.Not(pnode)
+                pnode = g.new(Not, pnode)
 
         return pnode
 
-    def create_pnode(self, context):
-        def iter_conjuncts():
-            for expr in self._constraints:
-                yield context.create_pnode_from(expr)
+    def create_pnode(self, g):
+        constraints = g.new(And,
+            *(g.pnode_for(expr) for expr in self._constraints))
 
+        def iter_conjuncts():
             for (module_expr, option), vmap in self._childmap.iteritems():
                 for value, child in vmap.iteritems():
 
-                    yield pdag.Implies(
-                        self._cond_pnode(context, module_expr, option, value),
-                        child.create_pnode(context))
+                    yield g.new(Implies,
+                        self._cond_pnode(g, module_expr, option, value),
+                        child.create_pnode(g))
 
-        return pdag.And(*iter_conjuncts())
+        return g.new(And, constraints, *iter_conjuncts())
 
-    def create_pnode_for_decisions(self, context):
+    def create_decisions_pnode(self, g):
         def iter_conjuncts():
             for (module_expr, option), value in self._decisions.iteritems():
-                yield self._cond_pnode(context, module_expr, option, value)
+                yield self._cond_pnode(g, module_expr, option, value)
 
-        return pdag.And(*iter_conjuncts())
+        return g.new(And, *iter_conjuncts())
 
     def __repr__(self):
         decisions = self._decisions
@@ -235,4 +237,11 @@ class Instance(object):
         # node_str = str(self._node)
         # return '%s%s%s' % (optuple_str, node_str and ' ', node_str)
         return '%r %r' % (self._optuple, self._node)
+
+
+class InstanceError(Error):
+    """
+    Throwing this kind of errors from inside a module function indicates that
+    instance is not viable anymore and thus shouldn't be considered.
+    """
 

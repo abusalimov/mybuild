@@ -207,7 +207,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_10(self):
         g = self.pdag
-        A,B,C = atoms = self.atoms(g, 'ABC')
+        A,B,C = self.atoms(g, 'ABC')
 
         pnode = g.AtMostOneConstraint(A,B,C)
         solution = Dtree(g).solve({pnode:True, A:True})
@@ -217,7 +217,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_11(self):
         g = self.pdag
-        A,B,C = atoms = self.atoms(g, 'ABC')
+        A,B,C = self.atoms(g, 'ABC')
 
         pnode = g.AtMostOneConstraint(A,B,C)
         solution = Dtree(g).solve({pnode:True, A:False, B:False})
@@ -226,7 +226,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_12(self):
         g = self.pdag
-        A,B,C = atoms = self.atoms(g, 'ABC')
+        A,B,C = self.atoms(g, 'ABC')
 
         pnode = g.AtMostOneConstraint(A,B,C)
         solution = Dtree(g).solve({pnode:False})
@@ -237,11 +237,20 @@ class PdagDtreeTestCase(TestCase):
 
     def test_13(self):
         g = self.pdag
-        A,B,C = atoms = self.atoms(g, 'ABC')
+        A,B,C = self.atoms(g, 'ABC')
 
         pnode = g.AtMostOneConstraint(A,B,C)
         with self.assertRaises(PdagContextError):
             Dtree(g).solve({A:True, B:True})
+
+    def test_14(self):
+        g = self.pdag
+        A, = self.atoms(g, 'A')
+
+        pnode = g.TrueConstraint(A)
+        solution = Dtree(g).solve({})
+
+        self.assertIs(True, solution[A])
 
 
 if __name__ == '__main__':

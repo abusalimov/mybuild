@@ -12,7 +12,6 @@ __all__ = [
     "Option",
     "Optuple",
     "Error",
-    "InstanceError",
     "InternalError",
 ]
 
@@ -22,28 +21,22 @@ from inspect import getargspec
 from itertools import izip
 from operator import attrgetter
 
-import pdag
 from util import InstanceBoundTypeMixin
 
 
 class Module(object):
     """A basic building block of Mybuild."""
 
-    class Type(InstanceBoundTypeMixin):
-        pass
-
     def __init__(self, fxn):
         self._init_fxn = fxn
         self._name = fxn.__name__
 
-        module_type = type('Module_M%s' % self._name,
-                           (self.Type,),
-                           dict(__slots__=(),
-                                _module=self,
-                                _module_name=self._name))
+        class ModuleType(object):
+            __slots__ = ()
+            _module = self
+            _module_name = self._name
 
-        self._atom_type = ModuleAtom._new_type(module_type)
-        self._options = Optuple._new_type_options(module_type, fxn)
+        self._options = Optuple._new_type_options(ModuleType, fxn)
 
     def __call__(self, **kwargs):
         return self._options._ellipsis._replace(**kwargs)
@@ -51,27 +44,11 @@ class Module(object):
     def _to_optuple(self):
         return self._options._ellipsis
 
-    def _to_pnode(self):
-        return self._atom
-
     def __repr__(self):
         return '%s(%r)' % (self._name, ', '.join(self._options._fields))
 
 
-class ModuleAtom(pdag.Atom):
-    __slots__ = ()
-
-    def __repr__(self):
-        return self._module_name
-
-    @classmethod
-    def _new_type(cls, module_type):
-        return type('ModuleAtom_M%s' % module_type._module_name,
-                    (cls, module_type),
-                    dict(__slots__=()))
-
-
-class Optuple(Module.Type):
+class Optuple(InstanceBoundTypeMixin):
     """Option tuple mixin type."""
     __slots__ = ()
 
@@ -100,11 +77,6 @@ class Optuple(Module.Type):
         return self._type_eq(other) and tuple.__eq__(self, other)
     def __hash__(self):
         return self._type_hash() ^ tuple.__hash__(self)
-
-    def _to_pnode(self):
-        atoms = tuple(o._atom(v) for v,o in self._izipwith(self._options))
-        return (expr.And._from_iterable(atoms) if atoms else
-                self._module._to_pnode())
 
     @classmethod
     def _options_from_fxn(cls, fxn):
@@ -163,48 +135,31 @@ class Optuple(Module.Type):
         optuple_base._fields = new_type._make(optuple_base._fields)
         new_type._ellipsis = new_type._make(Ellipsis for _ in options)
         new_type._options = new_type._make(
-            option.set(_module=module_type._module)._init_types(module_type)
-            for option in options)
+            option.set(_module=module_type._module) for option in options)
 
         return new_type._options
 
 
 class Option(object):
 
-    class Type(Module.Type):
-        pass
-
     def __init__(self, *values, **setup_flags):
         super(Option, self).__init__()
 
-        self._default = values[0] if values else Ellipsis
-        self._allow_others = True
+        self.default = values[0] if values else Ellipsis
+        self.allow_others = True
 
-        self._values = frozenset(values)
+        self._values = set(values)
         if Ellipsis in self._values:
             raise ValueError('Ellipsis value is not permitted')
 
         self.set(**setup_flags)
 
-    def _init_types(self, module_type):
-        option_type = type('Option_M%s_O%s' % (module_type._module_name,
-                                               self._name),
-                           (self.Type, module_type),
-                           dict(__slots__=(),
-                                _option=self,
-                                _option_name=self._name))
-
-        assert not hasattr(self, '_atom_type'), 'Must be called only once'
-        self._atom_type = OptionValueAtom._new_type(option_type)
-
-        return self
-
     def set(self, **flags):
         if 'default' in flags:
             default = flags.pop('default')
-            self._default = default
+            self.default = default
             if default is not Ellipsis and default not in self._values:
-                self._values |= {default}
+                self._values.add(default)
 
         for attr in 'allow_others', '_name', '_module':
             if attr in flags:
@@ -222,25 +177,6 @@ class Option(object):
     @classmethod
     def bool(cls, default=False):
         return cls(True, False, default=default, allow_others=False)
-
-
-class OptionValueAtom(pdag.Atom):
-    __slots__ = '_value'
-
-    def __init__(self, value):
-        super(OptionValueAtom, self).__init__()
-        self._value = value
-
-    def __repr__(self):
-        return '(%s.%s==%r)' % (self._module_name,
-                                self._option_name, self._value)
-
-    @classmethod
-    def _new_type(cls, option_type):
-        return type('OptionAtom_M%s_O%s' % (option_type._module_name,
-                                            option_type._option_name),
-                    (cls, option_type),
-                    dict(__slots__=()))
 
 
 class Error(Exception):
@@ -269,12 +205,6 @@ class Error(Exception):
         return '%s(%r, %s%r)' % (type_name, msg,
                                  '**' if isinstance(fmt_args, dict) else '*',
                                  fmt_args)
-
-class InstanceError(Error):
-    """
-    Throwing this kind of errors from inside a module function indicates that
-    instance is not viable anymore and thus shouldn't be considered.
-    """
 
 class InternalError(Exception):
     """Unrecoverable application errors indicating that goes really wrong."""

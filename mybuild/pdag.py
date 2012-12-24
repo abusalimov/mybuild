@@ -271,13 +271,11 @@ class Pdag(object):
                                    "use pdag.new(%s, ...) instead" %
                                    cls.__name__)
 
-            args, kwargs = cls._canonicalize_args(*args, **kwargs)
-
-            frozen_kwargs = frozenset(kwargs.iteritems())
+            canonical = cls._canonicalize_args(*args, **kwargs)
             try:
-                ret = pdag._node_map[cls, args, frozen_kwargs]
+                ret = pdag._node_map[cls, canonical]
             except KeyError:
-                ret = pdag._node_map[cls, args, frozen_kwargs] = \
+                ret = pdag._node_map[cls, canonical] = \
                     super(Pdag.NodeBase, cls).__new__(cls, *args, **kwargs)
 
             return ret
@@ -285,14 +283,14 @@ class Pdag(object):
         @classmethod
         def _canonicalize_args(cls, *args, **kwargs):
             """
-            Implementation must return a canonical (args, kwargs) tuple
-            suitable to reconstruct the object.
+            Implementation must return a canonical representation of given
+            arguments.
             """
-            return cls._starargs_tuple(*args, **kwargs)
+            return cls._starargs(*args, **kwargs)
 
         @classmethod
-        def _starargs_tuple(cls, *args, **kwargs):
-            return (args, kwargs)
+        def _starargs(cls, *args, **kwargs):
+            return (args, frozenset(kwargs.iteritems()))
 
     nodes = property(lambda self: self._node_map.values())
 
@@ -453,7 +451,7 @@ class SingleOperandNode(PdagNode):
 
     @classmethod
     def _canonicalize_args(cls, operand):
-        return cls._starargs_tuple(operand)
+        return operand
 
 
 class ConstConstraintNode(SingleOperandNode, ConstNode, ConstraintNode):
@@ -490,7 +488,7 @@ class OperandSetNode(PdagNode):
 
     @classmethod
     def _canonicalize_args(cls, *operands):
-        return cls._starargs_tuple(frozenset(operands))
+        return frozenset(operands)
 
     def _new_operand(self, operand):
         """Generally subclasses should use this instead of '_new_incoming'."""
@@ -547,7 +545,7 @@ class LatticeOpNode(OperandSetNode):
 
     def __new__(cls, *operands):
         if not operands:
-            return self._pdag[ConstAtomicNode.atomic_types[cls.identity]]()
+            return cls._pdag.new(ConstAtomicNode.atomic_types[cls.identity])
         elif len(operands) == 1:
             operand, = operands
             return operand
@@ -684,7 +682,7 @@ class Implies(PdagNode):
 
     @classmethod
     def _canonicalize_args(cls, if_, then):
-        return cls._starargs_tuple(if_, then)
+        return if_, then
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,

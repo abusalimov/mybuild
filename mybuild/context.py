@@ -19,8 +19,9 @@ from operator import attrgetter
 from core import *
 from dtree import Dtree
 from instance import Instance
+from instance import InstanceError
 from instance import InstanceNode
-import pdag
+from pdag import *
 from util import NotifyingMixin
 
 import logs as log
@@ -75,49 +76,65 @@ class Context(object):
 
         return domain
 
+    def create_pdag(self):
+        g = ContextPdag()
 
-class ContextPdag(pdag.Pdag):
+        for module in self._modules.itervalues():
+            module.init_pdag(g)
+
+        return g
+
+
+class ContextPdag(Pdag):
 
     def __init__(self):
         super(ContextPdag, self).__init__()
-        self._atom_cache = {}
 
     def atom_for(self, module, option=None, value=Ellipsis):
-        cache = self._atom_cache
-        cache_key = module, option, value
-
-        try:
-            return cache[cache_key]
-        except KeyError:
-            pass
-
-        domain = self._modules[module]
-
-        if option is not None:
-            ret = domain.domain_for(option).atom_for(value)
+        if option is None:
+            return self.new(ModuleAtom, module)
         else:
-            ret = domain.atom
+            return self.new(OptionValueAtom, module, option, value)
 
-        cache[cache_key] = ret
-
-        return ret
-
-    def create_pnode_from(self, mslice):
+    def pnode_for(self, mslice):
         # TODO should accept arbitrary expr as well.
-        optuple = mslice._to_optuple()
-        module = optuple._module
 
-        return pdag.And(self.atom_for(module),
-                        *(self.atom_for(module, option, value)
-                          for option, value in optuple._iterpairs()))
+        return self.new(And, *self._mslice_to_conjunction(mslice))
 
-    def create_pdag_with_constraint(self):
-        constraint = pdag.And(*(module.create_constraint()
-                                for module in self._modules.itervalues()))
-        atoms = chain(*(module.iter_atoms()
-                        for module in self._modules.itervalues()))
-        return pdag.Pdag(*atoms), constraint
+    def _mslice_to_conjunction(self, mslice):
+        mslice = mslice._to_optuple()
+        module = mslice._module
 
+        option_atoms = [self.atom_for(module, option, value)
+                        for option, value in mslice._iterpairs()]
+
+        return option_atoms or [self.atom_for(module)]
+
+
+@ContextPdag.node_type
+class ModuleAtom(Atom):
+    __slots__ = '_module'
+
+    def __init__(self, module):
+        super(ModuleAtom, self).__init__()
+        self._module = module
+
+    def __repr__(self):
+        return self._module._name
+
+
+@ContextPdag.node_type
+class OptionValueAtom(Atom):
+    __slots__ = '_module', '_option', '_value'
+
+    def __init__(self, module, option, value):
+        super(OptionValueAtom, self).__init__()
+        self._module = module
+        self._option = option
+        self._value  = value
+
+    def __repr__(self):
+        return '(%s.%s==%r)' % (self._module._name, self._option, self._value)
 
 
 class DomainBase(object):
@@ -134,13 +151,11 @@ class ModuleDomain(DomainBase):
     """docstring for ModuleDomain"""
 
     module = property(attrgetter('_module'))
-    atom = property(attrgetter('_atom'))
 
     def __init__(self, context, module):
         super(ModuleDomain, self).__init__(context)
 
         self._module = module
-        self._atom = module._atom_type()
 
         self._instances = []
         self._options = module._options._make(OptionDomain(option)
@@ -172,36 +187,29 @@ class ModuleDomain(DomainBase):
     def domain_for(self, option):
         return getattr(self._options, option)
 
-    def iter_atoms(self):
-        return chain((self._atom,),
-                     *(obj.iter_atoms()
-                       for obj in chain(self._options, self._instances)))
+    def init_pdag(self, g):
+        g.new(AllEqualConstraint, g.atom_for(self._module),
+              *(option.create_pnode(g) for option in self._options))
 
-    def create_constraint(self):
-        # TODO don't like it
-        pdag.AllEqualConstraint(self._atom,
-            *(option.create_pnode() for option in self._options))
-        return pdag.And(*(instance.create_constraint()
-                          for instance in self._instances))
+        for instance in self._instances:
+            instance.init_pdag(g)
 
 
 class NotifyingSet(MutableSet, NotifyingMixin):
-    """Set with notification support. Backed by a dictionary."""
+    """Set with notification support."""
 
     def __init__(self, values):
         super(NotifyingSet, self).__init__()
-        self._dict = {}
+        self._set = set()
 
-        self |= values
-
-    def _create_value_for(self, key):
-        pass
+        for value in values:
+            self.add(value)
 
     def add(self, value):
         if value in self:
             return
-        self._dict[value] = self._create_value_for(value)
 
+        self._set.add(value)
         self._notify(value)
 
     def discard(self, value):
@@ -210,14 +218,14 @@ class NotifyingSet(MutableSet, NotifyingMixin):
         raise NotImplementedError
 
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self._set)
     def __len__(self):
-        return len(self._dict)
+        return len(self._set)
     def __contains__(self, value):
-        return value in self._dict
+        return value in self._set
 
     def __repr__(self):
-        return '%s(%r)' % (type(self).__name__, self._dict.keys())
+        return '%s(%r)' % (type(self).__name__, list(self))
 
 
 class OptionDomain(NotifyingSet):
@@ -227,19 +235,12 @@ class OptionDomain(NotifyingSet):
         self._option = option
         super(OptionDomain, self).__init__(option._values)
 
-    def atom_for(self, value):
-        if value not in self:
-            raise ValueError
-        return self._dict[value]
+    def create_pnode(self, g):
+        module = self._option._module
+        option = self._option._name
 
-    def _create_value_for(self, value):
-        return self._option._atom_type(value)
-
-    def iter_atoms(self):
-        return self._dict.itervalues()
-
-    def create_pnode(self):
-        return pdag.AtMostOneConstraint(*self.iter_atoms())
+        return g.new(AtMostOneConstraint,
+                     *(g.atom_for(module, option, value) for value in self))
 
 
 class InstanceDomain(DomainBase):
@@ -254,7 +255,7 @@ class InstanceDomain(DomainBase):
 
         self._optuple = optuple
 
-        self._atoms = []
+        self._instances = []
         self._node = root_node = InstanceNode()
 
         self.post_new(root_node)
@@ -270,28 +271,27 @@ class InstanceDomain(DomainBase):
                     log.debug("mybuild: unviable %s: %s", instance, e)
                 else:
                     log.debug("mybuild: succeeded %s", instance)
-                    self._atoms.append(InstanceAtom(instance))
+                    self._instances.append(instance)
 
         self._context.post(new)
 
-    def iter_atoms(self):
-        return iter(self._atoms)
+    def init_pdag(self, g):
+        atoms = [g.new(InstanceAtom, instance) for instance in self._instances]
+        at_most_one_instance = g.new(AtMostOneConstraint, *atoms)
 
-    def create_constraint(self):
-        context = self._context
+        optuple_instance = g.new(AllEqualConstraint,
+            g.pnode_for(self._optuple), at_most_one_instance)
 
-        constraint = pdag.AllEqualConstraint(
-            context.create_pnode_from(self._optuple),
-            pdag.AtMostOneConstraint(*self._atoms))
+        instance_decisions = [g.new(Implies, atom,
+            atom.instance._node.create_decisions_pnode(g)) for atom in atoms]
 
-        return pdag.And(pdag.Implies(constraint,
-                                     self._node.create_pnode(context)),
-            *(pdag.Implies(atom,
-                atom.instance._node.create_pnode_for_decisions(context))
-              for atom in self._atoms))
+        g.new(TrueConstraint, g.new(AllEqualConstraint,
+            g.new(Implies, optuple_instance, self._node.create_pnode(g)),
+            *instance_decisions))
 
 
-class InstanceAtom(pdag.Atom):
+@ContextPdag.node_type
+class InstanceAtom(Atom):
     __slots__ = '_instance'
 
     instance = property(attrgetter('_instance'))
@@ -317,33 +317,20 @@ if __name__ == '__main__':
 
     @module
     def m1(self):
-        if self._decide(m3):
-            self.constrain(m2(foo=17))
+        self.constrain(m2(foo=17))
 
     @module
     def m2(self, foo=42):
-        self.constrain(m3)
-
-    @module
-    def m3(self):
         pass
 
     context = Context()
     context.consider(conf)
 
-    conf_atom = context.atom_for(conf)
-    pdag, constraint = context.create_pdag_with_constraint()
-    dtree = Dtree(pdag)
-    # solution = dtree.solve({constraint:True, conf_atom:True,
-    #                        context.atom_for(m3):False})
+    g = context.create_pdag()
 
-    from collections import OrderedDict
-    solution = dtree.solve(OrderedDict([(constraint, True),
-                                        (conf_atom, True),
-                                        (context.atom_for(m3), False)]))
+    dtree = Dtree(g)
+    solution = dtree.solve({g.atom_for(conf):True})
 
-    # from pprint import pprint
-    # pprint(solution)
     for pnode, value in solution.iteritems():
         if isinstance(pnode, InstanceAtom):
             print value, pnode
