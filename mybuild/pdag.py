@@ -11,19 +11,25 @@ __all__ = [
     "PdagContext",
     "PdagContextError",
     "DictBasedPdagContext",
+    "AtomicNode",
+    "ConstNode",
+    "ConstraintNode",
+    "Atom",
+    "TrueAtomic",
+    "FalseAtomic",
+    "TrueConstraint",
+    "FalseConstraint",
     "And",
     "Or",
     "Not",
     "Implies",
     "AtMostOneConstraint",
     "AllEqualConstraint",
-    "Atom",
 ]
 
 
 import abc
 from collections import namedtuple
-from functools import partial
 from operator import attrgetter
 
 import logs as log
@@ -262,7 +268,8 @@ class Pdag(object):
                 pdag = cls._pdag
             except AttributeError:
                 raise RuntimeError("Don't instantiate this class directly, "
-                                   "use pdag[%s](...) instead" % cls.__name__)
+                                   "use pdag.new(%s, ...) instead" %
+                                   cls.__name__)
 
             args, kwargs = cls._canonicalize_args(*args, **kwargs)
 
@@ -287,9 +294,12 @@ class Pdag(object):
         def _starargs_tuple(cls, *args, **kwargs):
             return (args, kwargs)
 
-    atoms = property(lambda self: [node for node in self._node_map.itervalues()
-                                   if isinstance(node, Atom)])
     nodes = property(lambda self: self._node_map.values())
+
+    @property
+    def atoms(self):
+        return [node for node in self._node_map.itervalues()
+                if isinstance(node, Atom)]
 
     def __init__(self):
         super(Pdag, self).__init__()
@@ -303,7 +313,6 @@ class Pdag(object):
         node_types = self._node_types = {}
         for node_type in type(self)._iter_all_node_types():
             node_types[node_type] = node_type._extend_type_with(PdagType)
-            setattr(self, node_type.__name__, partial(node_type, self))
 
         # self._set_atoms(atoms)
 
@@ -313,6 +322,9 @@ class Pdag(object):
         except KeyError:
             raise KeyError('Must register %s class using @%s.node_type' %
                            (node_type.__name__, type(self).__name__))
+
+    def new(self, node_type, *args, **kwargs):
+        return self[node_type](*args, **kwargs)
 
     def _set_atoms(self, atoms):
         self._atoms = atoms = frozenset(atoms)
