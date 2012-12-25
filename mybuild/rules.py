@@ -20,7 +20,7 @@ class ModRules(CommonModRules):
         this_pkg = pkg
 
     def convert_opt(self, opt):
-        return '%s = option()' % (opt.name)
+        return '%s = option(%s)' % (opt.name, getattr(opt, 'default', ''))
 
     def module(self, name, *args, **kargs):
         opts = ', '.join(map(self.convert_opt, kargs.get('options', [])))
@@ -36,6 +36,8 @@ def create_mod(sources, qualified_name):
 
         '''.format(MOD_NAME=name, OPTIONS = opts)
 
+        print fn_decl
+    
         exec fn_decl
 
         call = create_mod(kargs.get('sources', []), name)
