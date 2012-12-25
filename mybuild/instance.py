@@ -135,7 +135,7 @@ class InstanceNode(InstanceNodeBase):
         decisions = self._decisions
         return ', '.join('%s%s=%s' %
                 (module, '.' + option if option else '', value)
-            for (module, option), value in decisions.iteritems()).join('<>')
+            for (module, option), value in decisions.iteritems())
 
 class Instance(object):
 
@@ -233,10 +233,11 @@ class Instance(object):
         return ret_value
 
     def __repr__(self):
-        # optuple_str = str(self._optuple)
-        # node_str = str(self._node)
+        optuple_str = str(self._optuple)
+        node_str = str(self._node)
         # return '%s%s%s' % (optuple_str, node_str and ' ', node_str)
-        return '%r %r' % (self._optuple, self._node)
+        return '%s <%s>' % (optuple_str, node_str) if node_str else optuple_str
+        # return '%r %r' % (self._optuple, self._node)
 
 class InstanceError(Error):
     """

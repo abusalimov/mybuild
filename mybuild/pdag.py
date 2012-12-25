@@ -265,18 +265,23 @@ class Pdag(object):
 
         def __new__(cls, *args, **kwargs):
             try:
-                pdag = cls._pdag
+                cls._pdag
             except AttributeError:
                 raise RuntimeError("Don't instantiate this class directly, "
                                    "use pdag.new(%s, ...) instead" %
                                    cls.__name__)
+            else:
+                return super(Pdag.NodeBase, cls).__new__(cls, *args, **kwargs)
 
+        @classmethod
+        def _new(cls, *args, **kwargs):
             canonical = cls._canonicalize_args(*args, **kwargs)
+
+            cache = cls._pnode_map
             try:
-                ret = pdag._node_map[cls, canonical]
+                ret = cache[cls, canonical]
             except KeyError:
-                ret = pdag._node_map[cls, canonical] = \
-                    super(Pdag.NodeBase, cls).__new__(cls, *args, **kwargs)
+                ret = cache[cls, canonical] = cls(*args, **kwargs)
 
             return ret
 
@@ -292,12 +297,11 @@ class Pdag(object):
         def _starargs(cls, *args, **kwargs):
             return (args, frozenset(kwargs.iteritems()))
 
-    nodes = property(lambda self: self._node_map.values())
+    nodes = property(lambda self: set(self._node_map.itervalues()))
 
     @property
     def atoms(self):
-        return [node for node in self._node_map.itervalues()
-                if isinstance(node, Atom)]
+        return [node for node in self.nodes if isinstance(node, Atom)]
 
     def __init__(self):
         super(Pdag, self).__init__()
@@ -306,7 +310,9 @@ class Pdag(object):
 
         class PdagType(object):
             __slots__ = ()
+
             _pdag = self
+            _pnode_map = self._node_map
 
         node_types = self._node_types = {}
         for node_type in type(self)._iter_all_node_types():
@@ -322,31 +328,38 @@ class Pdag(object):
                            (node_type.__name__, type(self).__name__))
 
     def new(self, node_type, *args, **kwargs):
-        return self[node_type](*args, **kwargs)
+        return self[node_type]._new(*args, **kwargs)
 
-    def _set_atoms(self, atoms):
-        self._atoms = atoms = frozenset(atoms)
-        for atom in atoms:
-            if not isinstance(atom, AtomicNode):
-                raise TypeError('Atomic node expected, got %s object instead' %
-                                type(atom).__name__)
-        self._nodes = frozenset(self._hull_set(atoms))
+    def new_const(self, const_value, operand=None):
+        if operand is None:
+            return self.new(ConstAtomicNode.atomic_types[const_value])
+        else:
+            return self.new(ConstConstraintNode.constraint_types[const_value],
+                            operand)
 
-    @classmethod
-    def _hull_set(cls, nodes):
-        unvisited = set(nodes)
-        visited = set()
+    # def _set_atoms(self, atoms):
+    #     self._atoms = atoms = frozenset(atoms)
+    #     for atom in atoms:
+    #         if not isinstance(atom, AtomicNode):
+    #             raise TypeError('Atomic node expected, got %s object instead' %
+    #                             type(atom).__name__)
+    #     self._nodes = frozenset(self._hull_set(atoms))
 
-        while unvisited:
-            node = unvisited.pop()
+    # @classmethod
+    # def _hull_set(cls, nodes):
+    #     unvisited = set(nodes)
+    #     visited = set()
 
-            outgoing = node._outgoing = frozenset(node._outgoing)
-            visited.add(node)
+    #     while unvisited:
+    #         node = unvisited.pop()
 
-            unvisited |= outgoing
-            unvisited -= visited
+    #         outgoing = node._outgoing = frozenset(node._outgoing)
+    #         visited.add(node)
 
-        return visited
+    #         unvisited |= outgoing
+    #         unvisited -= visited
+
+    #     return visited
 
 
 class PdagNode(Pdag.NodeBase):
@@ -408,36 +421,39 @@ class Atom(AtomicNode):
 class ConstNode(PdagNode):
     """Constrains a node to take a constant value."""
 
-    value = None # overridden by subclasses
+    const_value = None # overridden by subclasses
 
     def _incoming_setting(self, incoming, ctx, value):
-        if value is not self.value:
+        if value is not self.const_value:
             raise PdagContextError
         self._store_self(ctx, value)
 
     def context_setting(self, ctx, value):
-        if value is not self.value:
+        if value is not self.const_value:
             raise PdagContextError
         self._notify_outgoing(ctx, value)
 
     def __repr__(self):
-        return repr(self.value).upper()
+        return repr(self.const_value).upper()
+
+# Markers to simplify isinstance checks.
+class TrueConstNode(ConstNode):  const_value = True
+class FalseConstNode(ConstNode): const_value = False
 
 class ConstAtomicNode(ConstNode, AtomicNode):
     atomic_types = (None, None)  # overwritten below
 
-    @property
-    def negation(self):
-        negative_type = self.atomic_types[not self.value]
-        return negative_type(self._pdag)
+    def negate(self):
+        return self._pdag.new_const(not self.value)
+
+    @classmethod
+    def _canonicalize_args(self):
+        pass
 
 @Pdag.node_type
-class TrueAtomic(ConstAtomicNode):
-    value = True
-
+class TrueAtomic(TrueConstNode, ConstAtomicNode): pass
 @Pdag.node_type
-class FalseAtomic(ConstAtomicNode):
-    value = False
+class FalseAtomic(FalseConstNode, ConstAtomicNode): pass
 
 ConstAtomicNode.atomic_types = (FalseAtomic, TrueAtomic)
 
@@ -459,17 +475,25 @@ class SingleOperandNode(PdagNode):
 class ConstConstraintNode(SingleOperandNode, ConstNode, ConstraintNode):
     constraint_types = (None, None)  # overwritten below
 
+    @classmethod
+    def _new(cls, operand):
+        if isinstance(operand, ConstNode):
+            if operand.const_value is cls.const_value:
+                return operand
+            # else maybe die here
+        elif isinstance(operand, Not):
+            return cls._pdag.new_const(not cls.const_value, operand._operand)
+        else:
+            return super(ConstConstraintNode, cls)._new(operand)
+
     def context_setting(self, ctx, value):
         ctx[self._operand] = value
         super(ConstConstraintNode, self).context_setting(ctx, value)
 
 @Pdag.node_type
-class TrueConstraint(ConstConstraintNode):
-    value = True
-
+class TrueConstraint(TrueConstNode, ConstConstraintNode): pass
 @Pdag.node_type
-class FalseConstraint(ConstConstraintNode):
-    value = False
+class FalseConstraint(FalseConstNode, ConstConstraintNode): pass
 
 ConstConstraintNode.constraint_types = (FalseConstraint, TrueConstraint)
 
@@ -545,14 +569,24 @@ class LatticeOpNode(OperandSetNode):
 
     """
 
-    def __new__(cls, *operands):
-        if not operands:
-            return cls._pdag.new(ConstAtomicNode.atomic_types[cls.identity])
-        elif len(operands) == 1:
-            operand, = operands
+    @classmethod
+    def _new(cls, *operands):
+        new_operands = set()
+
+        for operand in operands:
+            if isinstance(operand, ConstNode):
+                if operand.const_value is cls.zero:
+                    return operand
+            else:
+                new_operands.add(operand)
+
+        if not new_operands:
+            return cls._pdag.new_const(cls.identity)
+        elif len(new_operands) == 1:
+            operand, = new_operands
             return operand
         else:
-            return super(LatticeOpNode, cls).__new__(cls, *operands)
+            return super(LatticeOpNode, cls)._new(*new_operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
@@ -633,13 +667,14 @@ class Not(SingleOperandNode):
     False    True
     """
 
-    def __new__(cls, operand):
+    @classmethod
+    def _new(cls, operand):
         if isinstance(operand, Not):
             return operand._operand
-        elif isinstance(operand, ConstAtomicNode):
-            return operand.negation
+        elif isinstance(operand, ConstNode):
+            return cls._pdag.new_const(not operand.const_value)
         else:
-            return super(Not, cls).__new__(cls, operand)
+            return super(Not, cls)._new(operand)
 
     def _incoming_setting(self, incoming, ctx, value):
         assert incoming is self._operand
@@ -681,6 +716,21 @@ class Implies(PdagNode):
 
         self._then = then
         self._new_incoming(then)
+
+    @classmethod
+    def _new(cls, if_, then):
+        if (isinstance(if_, FalseConstNode) or
+              isinstance(then, TrueConstNode)):
+            return cls._pdag.new_const(True)
+
+        elif isinstance(if_, TrueConstNode):
+            return then
+
+        elif isinstance(then, FalseConstNode):
+            return cls._pdag.new(Not, if_)
+
+        else:
+            return super(Implies, cls)._new(if_, then)
 
     @classmethod
     def _canonicalize_args(cls, if_, then):
@@ -743,6 +793,18 @@ class AtMostOneConstraint(OperandSetNode, ConstraintNode):
     When there is no operands evaluates to False.
     """
 
+    @classmethod
+    def _new(cls, *operands):
+        operands = set(operands)
+
+        if not operands:
+            return cls._pdag.new_const(False)
+        elif len(operands) == 1:
+            operand, = operands
+            return operand
+        else:
+            return super(AtMostOneConstraint, cls)._new(*operands)
+
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,
                        self.bind(ctx), incoming.bind(ctx)):
@@ -800,6 +862,16 @@ class AllEqualConstraint(OperandSetNode, ConstraintNode):
      True    True    True    True
     False   False   False    False
     """
+
+    @classmethod
+    def _new(cls, *operands):
+        operands = set(operands)
+
+        if len(operands) == 1:
+            operand, = operands
+            return operand
+        else:
+            return super(AllEqualConstraint, cls)._new(*operands)
 
     def _incoming_setting(self, incoming, ctx, value):
         with log.debug("pdag: %s: %s, operand %s", type(self).__name__,

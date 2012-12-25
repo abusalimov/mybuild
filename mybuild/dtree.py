@@ -97,6 +97,8 @@ class DtreeNode(DictBasedPdagContext):
                 del self._dict[pnode]
                 self._merge_changeset(set([(pnode, value)]))
 
+            self._unset_pnodes.discard(pnode)
+
         return old_value
 
     def _do_eval_unset(self, pnodes):
@@ -105,13 +107,22 @@ class DtreeNode(DictBasedPdagContext):
     def solve(self, pnodes, initial_values):
         with log.debug("dtree: solving %d nodes", len(pnodes)):
 
+            unset_pnodes = self._unset_pnodes
+
+            # We must evaluate constraining nodes in order to enforce
+            # constraint checks.
+            unset_pnodes.update(pnode
+                for pnode in pnodes if isinstance(pnode, pdag.ConstraintNode))
+
+            # Prepare and commit initial changeset:
+            #   values from arguments and nodes which have constant values.
             initial_changeset = set(initial_values.iteritems())
-            initial_changeset.update((pnode, pnode.value)
+            initial_changeset.update((pnode, pnode.const_value)
                 for pnode in pnodes if isinstance(pnode, pdag.ConstNode))
 
             self._merge_changeset(initial_changeset)
 
-            unset_pnodes = self._unset_pnodes
+            # Loop until all reachable nodes get evaluated.
             while unset_pnodes:
                 self._create_branches_on(unset_pnodes.pop())
 
@@ -225,6 +236,7 @@ class DtreeNode(DictBasedPdagContext):
                                  for pnode, value in self._dict.iteritems())
 
         branchmap = self._branchmap
+        unset_pnodes = self._unset_pnodes
 
         for pnode, value in diffitems:
             # If the pnode has been used for branching then prune a bad one.
@@ -233,6 +245,8 @@ class DtreeNode(DictBasedPdagContext):
                                                    if b[pnode] == value)
                 if not branches:
                     raise PdagContextError
+
+            unset_pnodes.discard(pnode)
 
             # This may still throw, I think...
             pnode.context_setting(self, value)
