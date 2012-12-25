@@ -5,7 +5,7 @@ from exception import *
 
 from scope import Scope
 
-debug_out = True
+debug_out = True and False
 
 def add_many(scope, ents):
     for ent in ents:

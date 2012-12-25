@@ -65,7 +65,7 @@ class CfgRules(CommonCfgRules):
 
         ctx.runlevels[runlevel].dependency_add(name, opts)
 
-        ctx.modconstr.append((name, BoolDom([True])))
+        ctx.modconstr.append((name, True))
 
         for opt_name, value in opts.items():
             ctx.modconstr.append(("%s.%s" % (name, opt_name), value))

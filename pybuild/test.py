@@ -43,7 +43,7 @@ class TestCase(unittest.TestCase):
     def test_depends_with_options(self):
         package = Package('root')
         module_package(package, 'stack', options = [Integer('stack_sz', domain = range(8192,1000000))])
-        module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : IntegerDom([16000])}) ])
+        module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : 16000}) ])
 
         scope = Scope()
         scope = add_many(scope, map(lambda s: package[s], ['stack', 'thread_core']))
@@ -80,7 +80,7 @@ class TestCase(unittest.TestCase):
     def test_depends_with_options2(self):
         package = Package('root')
         module_package(package, 'stack', options = [Integer('stack_sz', domain = range(8192,12000))])
-        module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : Domain([16000])}) ])
+        module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : 16000}) ])
 
         scope = Scope()
         scope = add_many(scope, map(lambda s: package[s], ['stack', 'thread_core']))

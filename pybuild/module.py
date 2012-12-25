@@ -133,7 +133,8 @@ class Module(ModuleBuildOps, Entity, option.Boolean, dict):
                 depmod = self.find_fn(dep)
                 scope = incut(scope, depmod, domain.BoolDom([True]))
                 for opt, d in opts.items():
-                    scope = incut(scope, self.pkg[dep + '.' + opt], d)
+                    opt_obj = self.find_fn(dep + '.' + opt)
+                    scope = incut(scope, opt_obj, opt_obj.domain_class(d))
 
             if self.include_trigger:
                 return trigger_handle(cont, scope, self.include_trigger, self.find_fn)

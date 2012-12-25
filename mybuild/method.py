@@ -6,6 +6,8 @@ from mybuild.mybuild.context import Context, InstanceAtom
 from mybuild.mybuild import module
 from dtree import Dtree
 
+import mybuild.mybuild.logs as log
+
 def method_pre_parse(ctx):
     ctx.root = types.ModuleType('root')
     ctx.constr = []
@@ -13,14 +15,25 @@ def method_pre_parse(ctx):
     return ctx
 
 def method_decide_build(ctx):
+    print ctx.constr
     @module
     def conf(self):
         for name, constr in ctx.constr:
+            print name
             obj = ctx.root
             for i in name.split('.'):
                 obj = getattr(obj, i)
 
+            print obj, constr
             self.constrain(obj(**constr))
+
+    log.zones = set([
+                    'dtree',
+                    'pdag',
+                    'mybuild',
+                    ])
+    log.verbose = True
+    log.init_log()
 
     context = Context()
     context.consider(conf)

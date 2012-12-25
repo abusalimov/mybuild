@@ -4,7 +4,6 @@ from exception import *
 import itertools 
 
 class Domain(frozenset):
-    
     def value(self):
         if len(self) > 1:
             raise MultiValueException(self)
@@ -65,9 +64,7 @@ class IntegerDom(Domain):
 
 class ModDom(Domain):
     def __init__(self, init_iter, default_impl = None):
-
         self.default_impl = default_impl
-
         Domain.__init__(self, init_iter)
 
     def __and__(self, other):

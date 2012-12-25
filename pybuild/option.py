@@ -12,9 +12,16 @@ class Option:
 
         self.raw_domain = domain
 
-        self.domain = self.__class__.domain_class(domain)
+        self.domain = self.domain_class(domain)
 
         self.pkg = pkg
+
+    def domain_class(self, domain, *args, **kargs):
+        cls = self.__class__.domain_cls
+        try:
+            return cls(domain, *args, **kargs)
+        except TypeError:
+            return cls([domain], *args, **kargs)
 
     def cut_trigger(self, cont, scope, domain):
         return cont(scope)
@@ -72,13 +79,13 @@ class DefaultOption(Option):
 
 class List(Option):
     defdomain = []
-    domain_class = domain.ListDom
+    domain_cls = domain.ListDom
     def build_repr(self):
         return None
 
 class Integer(DefaultOption):
     defdomain = range(0, 0x20000)
-    domain_class = domain.IntegerDom
+    domain_cls = domain.IntegerDom
     def build_repr(self):
         return 'NUMBER'
 
@@ -88,7 +95,7 @@ class String(DefaultOption):
 
 class Boolean(DefaultOption):
     defdomain = [True, False]
-    domain_class = domain.BoolDom
+    domain_cls = domain.BoolDom
     def build_repr(self):
         return 'BOOLEAN'
 
