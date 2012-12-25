@@ -52,11 +52,12 @@ class InstanceNodeBase(object):
 
 
 class InstanceNode(InstanceNodeBase):
-    __slots__ = '_constraints', '_decisions'
+    __slots__ = '_constraints', '_provideds', '_decisions'
 
     def __init__(self, parent=None):
         super(InstanceNode, self).__init__(parent)
-        self._constraints = set()
+        self._constraints = []
+        self._provideds = []
         self._decisions = {}
 
     def _new_child(self, parent_key=None, parent_value=None):
@@ -69,10 +70,13 @@ class InstanceNode(InstanceNodeBase):
 
         return new
 
-    def constrain(self, expr):
-        self._constraints.add(expr)
+    def add_constraint(self, expr):
+        self._constraints.append(expr)
 
-    def make_decisions(self, module_expr, option=None, values=(True,False)):
+    def add_provided(self, expr):
+        self._provideds.append(expr)
+
+    def make_decisions(self, module_expr, option=None, values=(True, False)):
         """
         Either retrieves an already taken decision (in case of replaying),
         or creates a new child for each value from 'values' iterable returning
@@ -174,7 +178,11 @@ class Instance(object):
 
     def constrain(self, expr):
         self.consider(expr)
-        self._node.constrain(expr)
+        self._node.add_constraint(expr)
+
+    def provides(self, expr):
+        self.consider(expr)
+        self._node.add_provided(expr)
 
     def _decide(self, expr):
         self.consider(expr)
@@ -207,7 +215,7 @@ class Instance(object):
 
         return self._make_decision(module, option, domain_gen())
 
-    def _make_decision(self, module_expr, option=None, domain=(True,False)):
+    def _make_decision(self, module_expr, option=None, domain=(True, False)):
         """
         Returns: a value taken.
         """
@@ -233,11 +241,9 @@ class Instance(object):
         return ret_value
 
     def __repr__(self):
-        optuple_str = str(self._optuple)
+        optuple = self._optuple
         node_str = str(self._node)
-        # return '%s%s%s' % (optuple_str, node_str and ' ', node_str)
-        return '%s <%s>' % (optuple_str, node_str) if node_str else optuple_str
-        # return '%r %r' % (self._optuple, self._node)
+        return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
 
 class InstanceError(Error):
     """

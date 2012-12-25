@@ -330,6 +330,7 @@ if __name__ == '__main__':
     @module
     def conf(self):
         self.constrain(m1)
+        self.constrain(iface)
         self.sources = 'test.c'
 
     @module
@@ -338,6 +339,10 @@ if __name__ == '__main__':
 
     @module
     def m2(self, foo=42):
+        self.provides(iface)
+
+    @module
+    def iface(self):
         pass
 
     context = Context()
