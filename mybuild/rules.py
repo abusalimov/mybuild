@@ -28,14 +28,19 @@ class ModRules(CommonModRules):
         CommonModRules.module_helper(self, name, args, kargs)
 
         fn_decl = '''
-@mybuild_module
-def {MOD_NAME}(self, {OPTIONS}):
-    pass
+def create_mod(sources, qualified_name):
+    def {MOD_NAME}(inst, {OPTIONS}):
+        inst.sources = sources
+        inst.qualified_name = qualified_name
+    return {MOD_NAME}
+
         '''.format(MOD_NAME=name, OPTIONS = opts)
 
         exec fn_decl
 
-        mod = locals()[name]
+        call = create_mod(kargs.get('sources', []), name)
+
+        mod = mybuild_module(call)
 
         setattr(this_pkg, name, mod)
 

@@ -309,7 +309,7 @@ class InstanceAtom(Atom, ModuleBuildOps):
         return True
 
     def get_sources(self):
-        return []
+        return self.instance.sources
 
     def get_options(self):
         return []
@@ -321,7 +321,7 @@ class InstanceAtom(Atom, ModuleBuildOps):
         return False
 
 if __name__ == '__main__':
-    from mybuild import module, option
+    from mybuild.mybuild import module, option
 
     log.zones = ['mybuild', 'pdag']
     log.verbose = True
@@ -330,6 +330,7 @@ if __name__ == '__main__':
     @module
     def conf(self):
         self.constrain(m1)
+        self.sources = 'test.c'
 
     @module
     def m1(self):
@@ -350,4 +351,6 @@ if __name__ == '__main__':
     for pnode, value in solution.iteritems():
         if isinstance(pnode, InstanceAtom):
             print value, pnode
+            srcs = getattr(pnode.instance, 'sources', '')
+            print srcs
 
