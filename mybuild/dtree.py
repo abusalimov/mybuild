@@ -8,6 +8,7 @@ __date__ = "2012-11-30"
 __all__ = [
     "Dtree",
     "DtreeNode",
+    "DtreeError",
 ]
 
 
@@ -120,13 +121,17 @@ class DtreeNode(DictBasedPdagContext):
             initial_changeset.update((pnode, pnode.const_value)
                 for pnode in pnodes if isinstance(pnode, pdag.ConstNode))
 
-            self._merge_changeset(initial_changeset)
+            try:
+                self._merge_changeset(initial_changeset)
 
-            # Loop until all reachable nodes get evaluated.
-            while unset_pnodes:
-                self._create_branches_on(unset_pnodes.pop())
+                # Loop until all reachable nodes get evaluated.
+                while unset_pnodes:
+                    self._create_branches_on(unset_pnodes.pop())
 
-            self._master_merge()
+                self._master_merge()
+
+            except PdagContextError:
+                raise DtreeSolveError
 
     def _create_branches_on(self, pnode):
         """Attempt to use proof of contradiction."""
@@ -282,4 +287,10 @@ class DtreeNode(DictBasedPdagContext):
     def _itemset(self):
         return set(self._dict.iteritems())
 
+
+class DtreeError(Exception):
+    pass
+
+class DtreeSolveError(DtreeError):
+    pass
 
