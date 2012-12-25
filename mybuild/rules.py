@@ -23,24 +23,28 @@ class ModRules(CommonModRules):
         return '%s = option(%s)' % (opt.name, getattr(opt, 'default', ''))
 
     def module(self, name, *args, **kargs):
-        opts = ', '.join(map(self.convert_opt, kargs.get('options', [])))
+        opts_def = ', '.join(map(self.convert_opt, kargs.get('options', [])))
+        opts_name = ', '.join([opt.name for opt in kargs.get('options', [])])
         
         CommonModRules.module_helper(self, name, args, kargs)
 
         fn_decl = '''
-def create_mod(sources, qualified_name):
+def create_mod(fn):
     def {MOD_NAME}(inst, {OPTIONS}):
-        inst.sources = sources
-        inst.qualified_name = qualified_name
+        fn(inst, {OPTS_NAME})
     return {MOD_NAME}
 
-        '''.format(MOD_NAME=name, OPTIONS = opts)
+        '''.format(MOD_NAME=name, OPTIONS = opts_def, OPTS_NAME=opts_name)
 
         print fn_decl
     
-        exec fn_decl
+        exec fn_decl in globals(), locals()
 
-        call = create_mod(kargs.get('sources', []), name)
+        def body(inst, *args):
+            inst.sources = kargs.get('sources', [])
+            inst.qualified_name = name
+            
+        call = create_mod(body)
 
         mod = mybuild_module(call)
 
