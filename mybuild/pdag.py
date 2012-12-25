@@ -337,30 +337,6 @@ class Pdag(object):
             return self.new(ConstConstraintNode.constraint_types[const_value],
                             operand)
 
-    # def _set_atoms(self, atoms):
-    #     self._atoms = atoms = frozenset(atoms)
-    #     for atom in atoms:
-    #         if not isinstance(atom, AtomicNode):
-    #             raise TypeError('Atomic node expected, got %s object instead' %
-    #                             type(atom).__name__)
-    #     self._nodes = frozenset(self._hull_set(atoms))
-
-    # @classmethod
-    # def _hull_set(cls, nodes):
-    #     unvisited = set(nodes)
-    #     visited = set()
-
-    #     while unvisited:
-    #         node = unvisited.pop()
-
-    #         outgoing = node._outgoing = frozenset(node._outgoing)
-    #         visited.add(node)
-
-    #         unvisited |= outgoing
-    #         unvisited -= visited
-
-    #     return visited
-
 
 class PdagNode(Pdag.NodeBase):
     """docstring for PdagNode"""

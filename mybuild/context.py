@@ -323,11 +323,7 @@ class InstanceAtom(Atom, ModuleBuildOps):
 if __name__ == '__main__':
     from mybuild import module, option
 
-    import sys
-    sys.stdout = sys.stderr
-
-    log.zones = ['dtree']
-    log.zones += ['mybuild', 'pdag']
+    log.zones = ['mybuild', 'pdag']
     log.verbose = True
     log.init_log()
 
