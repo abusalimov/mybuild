@@ -129,12 +129,12 @@ class Module(ModuleBuildOps, Entity, option.Boolean, dict):
                 implmod = self.find_fn(impl)
                 scope = incut(scope, implmod, domain.ModDom([self]))
 
+            dep_cut = []
+            
             for dep, opts in self.depends:
-                depmod = self.find_fn(dep)
-                scope = incut(scope, depmod, domain.BoolDom([True]))
-                for opt, d in opts.items():
-                    opt_obj = self.find_fn(dep + '.' + opt)
-                    scope = incut(scope, opt_obj, opt_obj.domain_class(d))
+                dep_cut += [(dep, True)] + [(dep + '.' + opt_name, val) for opt_name, val in opts.items()]
+
+            scope = cut_many_fancy(scope, self.find_fn, dep_cut)
 
             if self.include_trigger:
                 return trigger_handle(cont, scope, self.include_trigger, self.find_fn)

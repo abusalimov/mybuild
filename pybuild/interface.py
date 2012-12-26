@@ -35,6 +35,15 @@ class Interface(DefaultOption, BaseScope):
         self.def_impl = DefImplMod(self.qualified_name() + "_def_impl", pkg=pkg, implements=[self.name])
         self.domain = ModDom([self.def_impl], default_impl = self.def_impl)
 
+    def domain_class(self, init, *args, **kargs):
+        try:
+            if isinstance(init, bool) or all([isinstance(v, bool) for v in init]):
+                return DefaultOption.domain_class(self, init, BoolDom, *args, **kargs)
+        except:
+            pass
+
+        return DefaultOption.domain_class(self, init, ModDom, *args, **kargs)
+
     def items(self):
         return [('default_impl', self.def_impl)]
 

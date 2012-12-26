@@ -78,6 +78,9 @@ def cut_many(scope, opts):
 
     return cut_iter(scope, [(opt, dom) for opt, dom in d.items()])
 
+def cut_many_fancy(scope, find_fn, constr):
+    return cut_many(scope, [(find_fn(name), find_fn(name).domain_class(val)) for name, val in constr])
+
 def fix(scope, opt):
     if debug_out:
         print 'fixing %s within %s' %(opt, scope[opt])

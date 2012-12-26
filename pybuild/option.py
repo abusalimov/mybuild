@@ -16,8 +16,9 @@ class Option:
 
         self.pkg = pkg
 
-    def domain_class(self, domain, *args, **kargs):
-        cls = self.__class__.domain_cls
+    def domain_class(self, domain, cls = None, *args, **kargs):
+        if not cls:
+            cls = self.__class__.domain_cls
         try:
             return cls(domain, *args, **kargs)
         except TypeError:

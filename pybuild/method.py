@@ -26,9 +26,7 @@ def method_decide_build(ctx):
 
     add_many(scope, modlst)
 
-    modconstr = map(lambda (name, dom): (ctx.root[name], ctx.root[name].domain_class(dom)), ctx.modconstr)
-
-    cut_scope = cut_many(scope, modconstr)
+    cut_scope = cut_many_fancy(scope, lambda mod_name: ctx.root[mod_name], ctx.modconstr)
 
     final = fixate(cut_scope)
 
