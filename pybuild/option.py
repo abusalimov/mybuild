@@ -34,6 +34,7 @@ class Option:
         dom = scope[self]
         for v in dom:
             try:
+                print self, v
                 return cut(scope, self, dom.__class__.single_value(v))
             except CutConflictException:
                 pass

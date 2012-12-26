@@ -18,6 +18,7 @@ class ModRules(CommonModRules):
 
         global this_pkg
         this_pkg = pkg
+        pkg.qualified_name = name
 
     def convert_opt(self, opt):
         return '%s = option(%s)' % (opt.name, getattr(opt, 'default', ''))
@@ -40,9 +41,10 @@ def create_mod(fn):
     
         exec fn_decl in globals(), locals()
 
+        global this_pkg
         def body(inst, *args):
             inst.sources = kargs.get('sources', [])
-            inst.qualified_name = name
+            inst.qualified_name = "%s.%s" % (this_pkg.qualified_name, name)
             
         call = create_mod(body)
 

@@ -16,6 +16,9 @@ from interface import Interface
 def module_package(package, name, *args, **kargs):
     obj_in_pkg(Module, package, name, *args, **kargs)
 
+def package_find(package, mod_name):
+    return getattr(package, mod_name)
+
 class TestCase(unittest.TestCase):
     def test_recursive_feature_add(self):
         package = Package('root')
@@ -27,18 +30,18 @@ class TestCase(unittest.TestCase):
         module_package(package, 'test3')
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['blck', 'stdio', 'fs', 'test', 'test2', 'test3']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['blck', 'stdio', 'fs', 'test', 'test2', 'test3']))
 
-        scope = cut_many(scope, [(package['fs'], BoolDom([True])), (package['test2'], BoolDom([True]))])
+        scope = cut_many(scope, [(package.fs, BoolDom([True])), (package.test2, BoolDom([True]))])
 
         final = fixate(scope)
         
-        self.assertEqual(final[package['blck']],  BoolDom([True]))
-        self.assertEqual(final[package['stdio']], BoolDom([True]))
-        self.assertEqual(final[package['fs']],    BoolDom([True]))
-        self.assertEqual(final[package['test']],  BoolDom([True]))
-        self.assertEqual(final[package['test2']], BoolDom([True]))
-        self.assertEqual(final[package['test3']], BoolDom([False]))
+        self.assertEqual(final[package.blck],  BoolDom([True]))
+        self.assertEqual(final[package.stdio], BoolDom([True]))
+        self.assertEqual(final[package.fs],    BoolDom([True]))
+        self.assertEqual(final[package.test],  BoolDom([True]))
+        self.assertEqual(final[package.test2], BoolDom([True]))
+        self.assertEqual(final[package.test3], BoolDom([False]))
 
     def test_depends_with_options(self):
         package = Package('root')
@@ -46,15 +49,15 @@ class TestCase(unittest.TestCase):
         module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : 16000}) ])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['stack', 'thread_core']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['stack', 'thread_core']))
 
-        scope = cut_many(scope, [(package['stack'], BoolDom([True])), (package['thread_core'], BoolDom([True]))])
+        scope = cut_many(scope, [(package.stack, BoolDom([True])), (package.thread_core, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertTrue(final[package['thread_core']])
-        self.assertTrue(final[package['stack']])
-        self.assertEqual(final[package['stack.stack_sz']], Domain([16000]))
+        self.assertTrue(final[package.thread_core])
+        self.assertTrue(final[package.stack])
+        self.assertEqual(final[package.stack.stack_sz], Domain([16000]))
 
     def test_depends_with_list(self):
         package = Package('root')
@@ -67,15 +70,15 @@ class TestCase(unittest.TestCase):
         module_package(package, 'stack_lds', depends = [ 'lds' ], include_trigger=incl_trigger)
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['lds', 'stack_lds']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['lds', 'stack_lds']))
 
-        scope = cut_many(scope, [(package['stack_lds'], BoolDom([True]))])
+        scope = cut_many(scope, [(package.stack_lds, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertTrue(final[package['lds']])
-        self.assertTrue(final[package['stack_lds']])
-        self.assertEqual(len(final[package['lds.sections']]), 1)
+        self.assertTrue(final[package.lds])
+        self.assertTrue(final[package.stack_lds])
+        self.assertEqual(len(final[package.lds.sections]), 1)
 
     def test_depends_with_options2(self):
         package = Package('root')
@@ -83,10 +86,9 @@ class TestCase(unittest.TestCase):
         module_package(package, 'thread_core', depends = [ ('stack', {'stack_sz' : 16000}) ])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['stack', 'thread_core']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['stack', 'thread_core']))
 
-
-        self.assertRaises(CutConflictException, cut, scope, package['thread_core'], BoolDom([True]))
+        self.assertRaises(CutConflictException, cut, scope, package.thread_core, BoolDom([True]))
 
     def test_optional_include(self):
         package = Package('root')
@@ -95,23 +97,23 @@ class TestCase(unittest.TestCase):
         def uart_trigger(scope, find_fn):
             opt = find_fn('uart.amba_pp')
             if opt.value(scope):
-                return cut(scope, package['amba'], BoolDom([True]))
+                return cut(scope, package.amba, BoolDom([True]))
             return scope
 
         module_package(package, 'uart', options = [Boolean('amba_pp')] , include_trigger=uart_trigger)
         
         scope = Scope()
-        scope = add_many(scope, [package['uart'], 
-                         package['amba']])
+        scope = add_many(scope, [package.uart, 
+                         package.amba])
 
-        scope = cut_many(scope, [(package['uart'], BoolDom([True])), 
-                                 (package['uart.amba_pp'], BoolDom([True]))])
+        scope = cut_many(scope, [(package.uart, BoolDom([True])), 
+                                 (package.uart.amba_pp, BoolDom([True]))])
 
         self.assertTrue(scope != False)
 
         final = fixate(scope)
 
-        self.assertTrue(final[package['amba']])
+        self.assertTrue(final[package.amba])
 
     def test_optional_include2(self):
         package = Package('root')
@@ -127,11 +129,11 @@ class TestCase(unittest.TestCase):
         module_package(package, 'uart', options = [Boolean('amba_pp')] , include_trigger=uart_trigger)
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['uart', 'amba', 'bad_module']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['uart', 'amba', 'bad_module']))
 
         self.assertRaises(CutConflictException, 
-                cut_many, scope, [(package['uart'],       BoolDom([True])), 
-                                  (package['bad_module'], BoolDom([False]))])
+                cut_many, scope, [(package.uart,       BoolDom([True])), 
+                                  (package.bad_module, BoolDom([False]))])
 
     def test_interface(self):
         package = Package('root')
@@ -139,13 +141,13 @@ class TestCase(unittest.TestCase):
         module_package(package, 'head_timer', implements=['timer_api'])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api', 'head_timer']))
 
-        cut_many(scope, [(package['head_timer'], BoolDom([True]))])
+        cut_many(scope, [(package.head_timer, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertEqual(final[package['timer_api']], Domain([package['head_timer']]))
+        self.assertEqual(final[package.timer_api], Domain([package.head_timer]))
 
     def test_interface2(self):
         package = Package('root')
@@ -154,13 +156,13 @@ class TestCase(unittest.TestCase):
         module_package(package, 'timer_exmp', depends = ['timer_api'])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer_exmp']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api', 'head_timer', 'timer_exmp']))
 
-        cut_many(scope, [(package['timer_exmp'], BoolDom([True]))])
+        cut_many(scope, [(package.timer_exmp, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertEqual(final[package['timer_api']], ModDom([package['head_timer']]))
+        self.assertEqual(final[package.timer_api], ModDom([package.head_timer]))
 
     def test_interface_default(self):
         package = Package('root')
@@ -170,13 +172,13 @@ class TestCase(unittest.TestCase):
         module_package(package, 'timer_exmp', depends = ['timer_api'])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
 
-        cut_many(scope, [(package['timer_exmp'], BoolDom([True]))])
+        cut_many(scope, [(package.timer_exmp, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertEqual(final[package['timer_api']], ModDom([package['head_timer']]))
+        self.assertEqual(final[package.timer_api], ModDom([package.head_timer]))
 
     def test_interface_default2(self):
         package = Package('root')
@@ -186,22 +188,22 @@ class TestCase(unittest.TestCase):
         module_package(package, 'timer_exmp', depends = ['timer_api'])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api', 'head_timer', 'timer', 'timer_exmp']))
 
-        cut_many(scope, [(package['timer_exmp'], BoolDom([True]))])
+        cut_many(scope, [(package.timer_exmp, BoolDom([True]))])
 
         final = fixate(scope)
 
-        self.assertEqual(final[package['timer_api']], ModDom([package['timer']]))
+        self.assertEqual(final[package.timer_api], ModDom([package.timer]))
 
     def test_moddom(self):
         package = Package('root')
         obj_in_pkg(Interface, package, 'timer_api')
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api']))
 
-        self.assertRaises(CutConflictException, cut_many, scope, [(package['timer_api'], BoolDom([True]))])
+        self.assertRaises(CutConflictException, cut_many, scope, [(package.timer_api, BoolDom([True]))])
 
     def test_moddom2(self):
         package = Package('root')
@@ -210,18 +212,18 @@ class TestCase(unittest.TestCase):
         obj_in_pkg(Interface, package, 'timer_api')
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['timer_api', 'head_timer', 'timer']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['timer_api', 'head_timer', 'timer']))
 
-        cut_many(scope, [(package['timer_api'], BoolDom([True]))])
-        cut_many(scope, [(package['timer'], BoolDom([False]))])
+        cut_many(scope, [(package.timer_api, BoolDom([True]))])
+        cut_many(scope, [(package.timer, BoolDom([False]))])
 
-        self.assertEqual(scope[package['timer_api']], ModDom([package['head_timer']]))
+        self.assertEqual(scope[package.timer_api], ModDom([package.head_timer]))
                             
     def test_interface_mandatory(self):
         package = Package('root')
         obj_in_pkg(Interface, package, 'timer_api', mandatory = True)
 
-        mod_lst = map(lambda s: package[s], ['timer_api'])
+        mod_lst = map(lambda s: getattr(package, s), ['timer_api'])
 
         scope = Scope()
         self.assertRaises(CutConflictException, add_many, scope, mod_lst)
@@ -231,12 +233,12 @@ class TestCase(unittest.TestCase):
         obj_in_pkg(Interface, package, 'timer_api', mandatory = True)
         module_package(package, 'timer', implements=['timer_api'])
 
-        mod_lst = map(lambda s: package[s], ['timer_api', 'timer'])
+        mod_lst = map(lambda s: getattr(package, s), ['timer_api', 'timer'])
 
         scope = Scope()
         scope = add_many(scope, mod_lst)
 
-        self.assertEqual(scope[package['timer_api']], ModDom([package['timer']]))
+        self.assertEqual(scope[package.timer_api], ModDom([package.timer]))
 
     def test_options(self):
         package = Package('root')
@@ -248,16 +250,16 @@ class TestCase(unittest.TestCase):
             Integer('id', default = 2)])
 
         scope = Scope()
-        scope = add_many(scope, map(lambda s: package[s], ['super_timer', 'timer']))
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['super_timer', 'timer']))
     
-        cut_many(scope, [(package['super_timer.timer_nr'], IntegerDom([64]))])
+        cut_many(scope, [(package.super_timer.timer_nr, IntegerDom([64]))])
 
         final = fixate(scope)
 
-        self.assertEqual(final[package['timer.id']], IntegerDom([1]))
-        self.assertEqual(final[package['super_timer.id']], IntegerDom([2]))
-        self.assertEqual(final[package['timer.timer_nr']], IntegerDom([32]))
-        self.assertEqual(final[package['super_timer.timer_nr']], IntegerDom([64]))
+        self.assertEqual(final[package.timer.id], IntegerDom([1]))
+        self.assertEqual(final[package.super_timer.id], IntegerDom([2]))
+        self.assertEqual(final[package.timer.timer_nr], IntegerDom([32]))
+        self.assertEqual(final[package.super_timer.timer_nr], IntegerDom([64]))
 
     @unittest.expectedFailure 
     def test_options_error(self):

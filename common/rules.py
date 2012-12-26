@@ -3,6 +3,8 @@ from mybuild.pybuild.util import isvector
 from mybuild.source     import Source
 from mybuild.pybuild.option import Integer, Boolean, List
 
+from mybuild.annotation import LDScript, Generated, NoRuntime, DefMacro, IncludePath
+
 class ModRules():
     def module(self, name, *args, **kargs):
         pass
@@ -37,19 +39,19 @@ class ModRules():
         return self.module(name, *args, **kargs)
 
     def LDScript(self, file):
-        return file
+        return LDScript(file)
 
     def Generated(self, file, fn):
-        return file 
+        return Generated(file, fn)
 
-    def NoRuntime(self, file):
-        return file
+    def NoRuntime(self, mod):
+        return NoRuntime(mod)
 
     def DefMacro(self, macro, src):
-        return src
+        return DefMacro(macro, src)
 
     def IncludePath(self, paths, srcs):
-        return srcs
+        return IncludePath(paths, srcs)
 
     def Integer(self, *args, **kargs):
         return Integer(*args, **kargs)

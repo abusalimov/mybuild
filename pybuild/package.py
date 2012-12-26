@@ -1,30 +1,39 @@
 
-class Package(dict):
+class Package():
     def __init__(self, name, pkg=None):
         self.name = name
-        self.pkg = pkg  
+        self.pkg  = pkg
         self.hash = hash(self.qualified_name())
+        self.dict = {}
 
     def __getitem__(self, key):
-        splt = key.split('.', 1)
-        obj = dict.__getitem__(self, splt[0])
+        raise Exception
+
+    def __getattr__(self, attr):
+        splt = attr.split('.', 1)
+        try:
+            obj = self.dict[splt[0]]
+        except KeyError:
+            raise AttributeError(attr)
 
         if len(splt) > 1:
-            return obj[splt[1]]
+            return getattr(obj, splt[1])
 
         return obj
 
+    def set(self, name, obj):
+        self.dict[name] = obj
+
     def built_subpack(self, key):
         splt = key.split('.', 1)
-        obj = self
-
-        if not self.has_key(splt[0]):
-            dict.__setitem__(self, splt[0], Package(splt[0], self))
+    
+        if not self.dict.has_key(splt[0]):
+            self.dict[splt[0]] = Package(splt[0], self)
 
         if len(splt) > 1:
-            return self[splt[0]].built_subpack(splt[1])
+            return self.dict[splt[0]].built_subpack(splt[1])
 
-        return self
+        return self.dict[splt[0]]
 
     def qualified_name(self):
         if self.pkg == None:
@@ -42,23 +51,26 @@ class Package(dict):
     def find_with_imports(self, imports, name):
         for impt in imports:
             if impt:
-                pkg = self[impt]
+                pkg = getattr(self, impt)
             else:
                 pkg = self
 
             try:
-                return pkg[name]
-            except KeyError:
+                return getattr(pkg, name)
+            except AttributeError:
                 pass
-        raise KeyError(name)
+        raise AttributeError(name)
 
     def __hash__(self):
         return self.hash
+    
+    def __str__(self):
+        return '<Package %s: %s>' % (self.name, self.dict)
 
 def obj_in_pkg(cls, package, name, *args, **kargs): 
     kargs['pkg'] = package
     ret = cls(name, *args, **kargs)
-    package[name] = ret
+    package.set(name, ret)
     return ret
 
 

@@ -37,10 +37,7 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
             value_scope = cut(scope, opt, dom_cls.single_value(value))
             return trigger_handle(cont, value_scope, trig, *args, **kwargs)
         except CutConflictException or MultiValueException, excp:
-            if excp.opt == opt:
-                pass
-            else:
-                raise
+            pass
 
     raise CutConflictException(opt)
 
@@ -48,7 +45,7 @@ class Entity():
     def find_fn(self, name):
         return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
 
-class Module(ModuleBuildOps, Entity, option.Boolean, dict):
+class Module(ModuleBuildOps, Entity, option.Boolean):
     def __init__(self, name, pkg=None, 
             static = False, mandatory = False,
             sources=[], options=[], super=None, 
@@ -82,10 +79,24 @@ class Module(ModuleBuildOps, Entity, option.Boolean, dict):
                 self.dependency_add(d)
 
         self.implements = implements
+    
+        self.opt_dict = {}
 
         for o in self.options:
             o.pkg = self
-            self[o.name] = o
+            self.opt_dict[o.name] = o
+
+    def contents(self):
+        return self.opt_dict.items()
+
+    def items(self):
+        raise Exception()
+
+    def __getattr__(self, attr):
+        try:
+            return self.opt_dict[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
     def dependency_add(self, modname, opts={}):
         self.depends.append((modname, opts))
@@ -99,10 +110,10 @@ class Module(ModuleBuildOps, Entity, option.Boolean, dict):
             scope = self.super.import_super(scope)
 
             to_add = []
-            for opt_name, opt in self.super.items():
-                if not opt_name in self:
+            for opt_name, opt in self.super.opt_dict.items():
+                if not opt_name in self.opt_dict:
                     opt_copy = opt.copy()
-                    self[opt_name] = opt_copy
+                    self.opt_dict[opt_name] = opt_copy
                     to_add.append(opt_copy)
 
             return add_many(scope, to_add)
@@ -180,7 +191,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean, dict):
         return self.sources
 
     def get_options(self):
-        return self.values()
+        return self.opt_dict.values()
 
     def islib(self):
         return self.static

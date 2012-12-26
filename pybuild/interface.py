@@ -44,7 +44,7 @@ class Interface(DefaultOption, BaseScope):
 
         return DefaultOption.domain_class(self, init, ModDom, *args, **kargs)
 
-    def items(self):
+    def contents(self):
         return [('default_impl', self.def_impl)]
 
     def dependent_add(self, depnt):

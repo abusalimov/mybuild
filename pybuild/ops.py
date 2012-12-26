@@ -5,19 +5,19 @@ from exception import *
 
 from scope import Scope
 
-debug_out = True and False
+debug_out = True #and False
 
 def add_many(scope, ents):
     for ent in ents:
         scope[ent] = ent.domain
         if hasattr(ent,'items'):
-            for name, opt in ent.items():
+            for name, opt in ent.contents():
                 scope[opt] = opt.domain
 
     for ent in ents:
         scope = ent.add_trigger(scope)
         if hasattr(ent,'items'):
-            for name, opt in ent.items():
+            for name, opt in ent.contents():
                 scope = opt.add_trigger(scope)
     
     for k, v in scope.items():
@@ -84,7 +84,11 @@ def cut_many_fancy(scope, find_fn, constr):
 def fix(scope, opt):
     if debug_out:
         print 'fixing %s within %s' %(opt, scope[opt])
-    return opt.fix_trigger(scope)
+    ret = opt.fix_trigger(scope)
+    if debug_out:
+        print 'fixed %s within %s' %(opt, scope[opt])
+
+    return ret
 
 def fixate(scope):
     scope = Scope(scope)

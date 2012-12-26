@@ -315,7 +315,7 @@ class InstanceAtom(Atom, ModuleBuildOps):
         return []
 
     def qualified_name(self):
-        return ''
+        return getattr(self.instance, 'qualified_name', '')
 
     def islib(self):
         return False

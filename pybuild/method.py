@@ -22,11 +22,11 @@ def method_pre_parse(ctx):
 def method_decide_build(ctx):
     scope = ctx.scope
 
-    modlst = map(lambda name: ctx.root[name], ctx.modlist)
+    modlst = map(lambda name: getattr(ctx.root, name), ctx.modlist)
 
     add_many(scope, modlst)
 
-    cut_scope = cut_many_fancy(scope, lambda mod_name: ctx.root[mod_name], ctx.modconstr)
+    cut_scope = cut_many_fancy(scope, lambda mod_name: getattr(ctx.root, mod_name), ctx.modconstr)
 
     final = fixate(cut_scope)
 
