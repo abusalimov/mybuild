@@ -1,7 +1,7 @@
 
 import re
 
-from package import Package
+from mybuild.package import Package
 from module  import Module
 from interface import Interface
 from scope   import Scope

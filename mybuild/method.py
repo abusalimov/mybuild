@@ -1,15 +1,15 @@
 
-import types
-
 from mybuild.mybuild.context import Context, InstanceAtom
 
 from mybuild.mybuild import module
 from dtree import Dtree
 
+from mybuild.package import Package
+
 import mybuild.mybuild.logs as log
 
 def method_pre_parse(ctx):
-    ctx.root = types.ModuleType('root')
+    ctx.root = Package('root')
     ctx.constr = []
     ctx.runlevels = {}
     return ctx

@@ -11,14 +11,10 @@ class ModRules(CommonModRules):
 
         pkg = build_ctx.root
 
-        for subpkg in name.split('.'):
-            if not hasattr(pkg, subpkg):
-                setattr(pkg, subpkg, types.ModuleType(subpkg))
-            pkg = getattr(pkg, subpkg)
+        pkg = pkg.build_subpack(name)
 
         global this_pkg
         this_pkg = pkg
-        pkg.qualified_name = name
 
     def convert_opt(self, opt):
         return '%s = option(%s)' % (opt.name, getattr(opt, 'default', ''))
@@ -44,7 +40,7 @@ def create_mod(fn):
         global this_pkg
         def body(inst, *args):
             inst.sources = kargs.get('sources', [])
-            inst.qualified_name = "%s.%s" % (this_pkg.qualified_name, name)
+            inst.qualified_name = "%s.%s" % (this_pkg.qualified_name(), name)
             
         call = create_mod(body)
 

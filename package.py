@@ -24,14 +24,14 @@ class Package():
     def set(self, name, obj):
         self.dict[name] = obj
 
-    def built_subpack(self, key):
+    def build_subpack(self, key):
         splt = key.split('.', 1)
     
         if not self.dict.has_key(splt[0]):
             self.dict[splt[0]] = Package(splt[0], self)
 
         if len(splt) > 1:
-            return self.dict[splt[0]].built_subpack(splt[1])
+            return self.dict[splt[0]].build_subpack(splt[1])
 
         return self.dict[splt[0]]
 

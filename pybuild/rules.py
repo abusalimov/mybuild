@@ -1,5 +1,5 @@
 
-from package import Package, obj_in_pkg
+from mybuild.package import Package, obj_in_pkg
 from module  import Module
 from interface import Interface
 from option import *
@@ -16,7 +16,7 @@ class ModRules(CommonModRules):
         import build_ctx
         ctx = build_ctx
 
-        ctx.pkglist.add(ctx.root.built_subpack(name))
+        ctx.pkglist.add(ctx.root.build_subpack(name))
 
     def build_obj(self, cls, name, args, kargs):
         global package_name
