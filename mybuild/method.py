@@ -48,8 +48,6 @@ def method_decide_build(ctx):
 def method_define_build(ctx):
     for pnode, value in ctx.model.iteritems():
         if isinstance(pnode, InstanceAtom):
-            srcs = getattr(pnode.instance, 'sources', '')
-            print srcs
-            #pnode.build(ctx)
+            pnode.build(ctx)
 
 

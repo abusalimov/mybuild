@@ -309,7 +309,7 @@ class InstanceAtom(Atom, ModuleBuildOps):
         return True
 
     def get_sources(self):
-        return self.instance.sources
+        return getattr(self.instance, 'sources', [])
 
     def get_options(self):
         return []
