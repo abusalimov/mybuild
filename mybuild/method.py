@@ -18,6 +18,7 @@ def method_decide_build(ctx):
     print ctx.constr
     @module
     def conf(self):
+        self.qualified_name = 'conf'
         for name, constr in ctx.constr:
             print name
             obj = ctx.root

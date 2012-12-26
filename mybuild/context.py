@@ -320,6 +320,9 @@ class InstanceAtom(Atom, ModuleBuildOps):
     def islib(self):
         return False
 
+    def __getattr__(self, attr):
+        return getattr(self.instance, attr)
+
 if __name__ == '__main__':
     from mybuild.mybuild import module, option
 

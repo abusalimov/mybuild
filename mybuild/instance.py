@@ -240,10 +240,22 @@ class Instance(object):
 
         return ret_value
 
+    def __getattr__(self, attr):
+        return ModuleOptionHolder(getattr(self._optuple, attr))
+
     def __repr__(self):
         optuple = self._optuple
         node_str = str(self._node)
         return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
+
+
+# Required for be compatible with Pybuild
+# Just covers raw value with object
+class ModuleOptionHolder():
+    def __init__(self, obj):
+        self.obj = obj
+    def value(self, ctx):
+        return self.obj
 
 class InstanceError(Error):
     """
