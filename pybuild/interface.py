@@ -76,7 +76,7 @@ class Interface(DefaultOption, BaseScope):
         return cont(scope)
 
     def __repr__(self):
-        return "Interface '" + self.name + "'"
+        return "Interface '" + self.qualified_name() + "'"
 
     def __hash__(self):
         return self.hash_value

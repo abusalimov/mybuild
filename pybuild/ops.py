@@ -68,15 +68,15 @@ def cut(scope, opt, domain):
     return scope
 
 def cut_many(scope, opts):
-    has_no_trigger = filter(lambda m: not getattr(m, 'include_trigger', False), 
-                    [m for m, d in opts])
-    d = dict(opts)
+    post_w_trigger = []
+    
+    for opt, dom in opts:
+        if getattr(opt, 'include_trigger', False):
+            post_w_trigger.append((opt, dom))
+        else:
+            scope = incut(scope, opt, dom)
 
-    for opt in has_no_trigger:
-        scope = incut(scope, opt, d[opt])
-        del d[opt]
-
-    return cut_iter(scope, [(opt, dom) for opt, dom in d.items()])
+    return cut_iter(scope, post_w_trigger)
 
 def cut_many_fancy(scope, find_fn, constr):
     return cut_many(scope, [(find_fn(name), find_fn(name).domain_class(val)) for name, val in constr])
