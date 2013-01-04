@@ -43,7 +43,13 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
 
 class Entity():
     def find_fn(self, name):
-        return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
+        try:
+            return self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], name)
+        except AttributeError, excp:
+            raise AttributeError(
+                    "Can't find '%s', referenced from %s" % 
+                    (excp.message, self))
+            
 
 class Module(ModuleBuildOps, Entity, option.Boolean):
     def __init__(self, name, pkg=None, 
@@ -125,7 +131,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
 
     def add_trigger(self, scope):
         for impl in self.implements:
-            implmod = self.pkg.root().find_with_imports([self.pkg.qualified_name(), ''], impl)
+            implmod = self.find_fn(impl)
             scope[implmod] |= domain.ModDom([self])
 
         for (dep_name, dep_opts) in self.depends:
@@ -179,7 +185,8 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
         return self.implements
 
     def __repr__(self):
-        return "<Module %s, depends %s, sources %s>" % (self.name, self.depends, self.sources)
+        return "<Module %s, depends %s, sources %s>" % \
+            (self.qualified_name(), self.depends, self.sources)
 
     def canon_repr(self):
         opts = map(lambda name_opt_pair: name_opt_pair[0], self.items())
