@@ -83,6 +83,10 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
         self.opt_dict = {}
 
         for o in self.options:
+            if hasattr(self, o.name):
+                raise Exception(
+                    "Sorry, can't have option with name '%s' in %s"
+                    %(o.name, self))
             o.pkg = self
             self.opt_dict[o.name] = o
 

@@ -34,7 +34,6 @@ class Option:
         dom = scope[self]
         for v in dom:
             try:
-                print self, v
                 return cut(scope, self, dom.__class__.single_value(v))
             except CutConflictException:
                 pass
@@ -70,7 +69,7 @@ class DefaultOption(Option):
     def fix_trigger(self, scope):
         dom = scope[self]
         if hasattr(self, 'default') and self.default in dom:
-            scope = cut(scope, self, domain.Domain([self.default]))
+            scope = cut(scope, self, dom.__class__.single_value(self.default))
         else:
             return Option.fix_trigger(self, scope)
 
@@ -92,6 +91,8 @@ class Integer(DefaultOption):
         return 'NUMBER'
 
 class String(DefaultOption):
+    defdomain = [domain.StringDom.wildcard]
+    domain_cls = domain.StringDom
     def build_repr(self):
         return 'STRING'
 

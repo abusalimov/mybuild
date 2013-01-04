@@ -90,4 +90,19 @@ class ModDom(Domain):
 class BoolDom(Domain):
     pass
 
+class StringDom(Domain):
+    wildcard = object()
+    def __and__(self, other):
+        if isinstance(other, StringDom):
+            if self.wildcard in self:
+                return StringDom(other)
+            else:
+                return StringDom(Domain.__and__(self, other))
+        else:
+            return StringDom([])
+
+    def __contains__(self, item):
+        return Domain.__contains__(self, self.wildcard) \
+                or Domain.__contains__(self, item)
+
 

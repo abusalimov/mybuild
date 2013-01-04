@@ -3,12 +3,12 @@ import unittest
 
 from exception import *
 
-from package import Package, obj_in_pkg
+from .. package import Package, obj_in_pkg
 from scope   import Scope
-from ops     import add_many, cut_many, cut, fixate
+from ops     import *
 
-from option  import Boolean, List, Integer
-from domain  import BoolDom, ListDom, IntegerDom, Domain, ModDom
+from option  import Boolean, List, Integer, String
+from domain  import BoolDom, ListDom, IntegerDom, Domain, ModDom, StringDom
 
 from module  import Module
 from interface import Interface
@@ -260,6 +260,51 @@ class TestCase(unittest.TestCase):
         self.assertEqual(final[package.super_timer.id], IntegerDom([2]))
         self.assertEqual(final[package.timer.timer_nr], IntegerDom([32]))
         self.assertEqual(final[package.super_timer.timer_nr], IntegerDom([64]))
+
+    def test_string_opt(self):
+        package = Package('root')
+        module_package(package, 'hello', options = [
+            String('call', default = 'Me'),
+            ])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['hello']))
+
+        cut_many(scope, [(package.hello, BoolDom([True]))])
+
+        final = fixate(scope)
+    
+        self.assertEqual(final[package.hello.call], StringDom(['Me']))
+    
+    def test_string_opt2(self):
+        package = Package('root')
+        module_package(package, 'hello', options = [
+            String('call', default = 'Me'),
+            ])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['hello']))
+
+        cut_many(scope, [(package.hello, BoolDom([True])), 
+            (package.hello.call, StringDom(['You']))])
+
+        final = fixate(scope)
+    
+        self.assertEqual(final[package.hello.call], StringDom(['You']))
+    
+    def test_string_opt3(self):
+        package = Package('root')
+        module_package(package, 'hello', options = [
+            String('call', default = 'Me'),
+            ])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['hello']))
+
+        self.assertRaises(CutConflictException, 
+            cut_many, scope, [(package.hello, BoolDom([True])), 
+            (package.hello.call, StringDom(['You'])),
+            (package.hello.call, StringDom(['Other']))])
 
     @unittest.expectedFailure 
     def test_options_error(self):
