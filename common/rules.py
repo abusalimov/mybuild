@@ -1,7 +1,7 @@
 from mybuild.pybuild.util import isvector
 
 from mybuild.source     import Source
-from mybuild.pybuild.option import Integer, Boolean, List
+from mybuild.pybuild.option import Integer, Boolean, List, String
 
 from mybuild.annotation import LDScript, Generated, NoRuntime, DefMacro, IncludePath
 
@@ -58,6 +58,9 @@ class ModRules():
 
     def List(self, *args, **kargs):
         return List(*args, **kargs)
+    
+    def String(self, *args, **kargs):
+        return String(*args, **kargs)
 
 class CfgRules():
     def lds_region(self, name, base, size):

@@ -1,4 +1,3 @@
-
 import re
 from mybuild.build import inchdr
 

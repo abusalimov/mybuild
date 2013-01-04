@@ -29,6 +29,9 @@ def Boolean(*args, **kargs):
 def List(*args, **kargs):
     return ctx.mod_rules.List(*args, **kargs)
 
+def String(*args, **kargs):
+    return ctx.mod_rules.String(*args, **kargs)
+
 def IncludePath(*args, **kargs):
     return ctx.mod_rules.IncludePath(*args, **kargs)
 
