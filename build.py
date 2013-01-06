@@ -23,7 +23,7 @@ def waf_entry(bld):
 
     ctx = method_pre_parse(ctx)
 
-    ctx = parser.parse(ctx, ['src', 'pyconf'], bld.env.METHOD)
+    ctx = parser.parse(ctx, ['src', 'third-party', 'pyconf'], bld.env.METHOD)
 
     model = method_decide_build(ctx)
 
