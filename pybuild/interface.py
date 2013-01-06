@@ -9,16 +9,11 @@ from domain import BoolDom, ModDom
 from scope  import BaseScope
 
 class DefImplMod(Module):
+    def __init__(self, *args, **kargs):
+        Module.__init__(self, *args, **kargs)
+        self.default = True
     def add_trigger(self, scope):
         return scope
-
-    def cut_trigger(self, cont, scope, old_domain):
-        domain = scope[self]
-
-        if domain.value():
-            raise CutConflictException(self)
-
-        return cont(scope)
 
 class Interface(DefaultOption, BaseScope):
     def __init__(self, name, pkg, mandatory = False, default=None, super=None):
@@ -74,6 +69,17 @@ class Interface(DefaultOption, BaseScope):
             return cont(incut(scope, domain.value(), BoolDom([True])))
 
         return cont(scope)
+
+    def dom_key(self, dom_val):
+        map = {
+            getattr(self, 'default', 'None') : 1,  
+            self.def_impl : 2,
+        }
+    
+        if map.has_key(dom_val):
+            return map[dom_val]
+
+        return 0
 
     def __repr__(self):
         return "Interface '" + self.qualified_name() + "'"

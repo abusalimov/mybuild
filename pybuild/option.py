@@ -32,12 +32,15 @@ class Option:
 
     def fix_trigger(self, scope):
         dom = scope[self]
-        for v in dom:
+        for v in sorted(dom, key = self.dom_key, reverse = True):
             try:
                 return cut(scope, self, dom.__class__.single_value(v))
             except CutConflictException:
                 pass
         raise CutConflictException(self)
+
+    def dom_key(self, dom_v):
+        return 0
 
     def value(self, scope):
         dom = scope[self]
@@ -65,14 +68,16 @@ class DefaultOption(Option):
     def __init__(self, name, domain=None, pkg=None, default=None):
         Option.__init__(self, name, domain, pkg)
         self.default = default 
+        self.has_default = default != None
 
-    def fix_trigger(self, scope):
-        dom = scope[self]
-        if hasattr(self, 'default') and self.default in dom:
-            scope = cut(scope, self, dom.__class__.single_value(self.default))
-        else:
-            return Option.fix_trigger(self, scope)
+    def dom_key(self, dom_val):
+        if dom_val == self.default:
+            return 1
+        return 0
 
+    def add_trigger(self, scope):
+        if self.has_default:
+            scope[self] |= self.domain.__class__([self.default])
         return scope
 
     def copy(self):  

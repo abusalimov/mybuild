@@ -196,6 +196,21 @@ class TestCase(unittest.TestCase):
 
         self.assertEqual(final[package.timer_api], ModDom([package.timer]))
 
+    def test_interface_none(self):
+        package = Package('root')
+        obj_in_pkg(Interface, package, 'useless_api', default = 'big_module')
+        module_package(package, 'big_module', implements=['useless_api'])
+
+        scope = Scope()
+        scope = add_many(scope, map(lambda s: getattr(package, s), ['useless_api', 'big_module']))
+        
+        cut_many(scope, [])
+
+        final = fixate(scope)
+    
+        self.assertEqual(final[package.useless_api], ModDom([package.useless_api.def_impl]))
+        self.assertEqual(final[package.big_module], BoolDom([False]))
+
     def test_moddom(self):
         package = Package('root')
         obj_in_pkg(Interface, package, 'timer_api')

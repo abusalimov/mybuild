@@ -179,14 +179,13 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
         for iface in self.implements:
             scope = fix(scope, self.find_fn(iface))
 
-        return option.Boolean.fix_trigger(self, scope)
+        return option.Boolean.fix_trigger(self, scope) 
 
     def is_list(self):
         return self.implements
 
     def __repr__(self):
-        return "<Module %s, depends %s, sources %s>" % \
-            (self.qualified_name(), self.depends, self.sources)
+        return "<Module %s>" % (self.qualified_name())
 
     def canon_repr(self):
         opts = map(lambda name_opt_pair: name_opt_pair[0], self.items())

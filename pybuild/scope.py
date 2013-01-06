@@ -15,12 +15,12 @@ class BaseScope(dict):
         self.parent = parent
         
     def __getitem__(self, x):
-        if dict.has_key(self, x):
-            return dict.__getitem__(self, x)
-        elif self.parent:
-            return self.parent[x]
-        else:
-            raise AttributeError
+        this = self
+        while this:
+            if dict.has_key(this, x):
+                return dict.get(this, x)
+            this = this.parent
+        raise AttributeError
 
     def __len__(self):
         par = 0
