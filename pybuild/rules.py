@@ -35,14 +35,17 @@ class ModRules(CommonModRules):
         return self.build_obj(Interface, name, args, kargs)
 
 class CfgRules(CommonCfgRules):
-    def include(self, name, opts={}, runlevel=2):
+    def include(self, name, **kargs):
         import build_ctx
         ctx = build_ctx
 
-        ctx.runlevels[runlevel].dependency_add(name, opts)
+        if kargs.has_key('runlevel'):
+            runlevel = kargs['runlevel']
+            del kargs['runlevel']
+            ctx.runlevels[runlevel].dependency_add(name, kargs)
 
         ctx.modconstr.append((name, True))
 
-        for opt_name, value in opts.items():
+        for opt_name, value in kargs.items():
             ctx.modconstr.append(("%s.%s" % (name, opt_name), value))
 

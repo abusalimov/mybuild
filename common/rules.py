@@ -78,7 +78,7 @@ class CfgRules():
     def lds_section(self, name, reg):
         return self.lds_section_load(name, reg, reg)
 
-    def include(self, name, opts={}, runlevel=2):
+    def include(self, name, **kargs):
         pass
 
     def exclude(self, name):
