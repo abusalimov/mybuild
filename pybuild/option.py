@@ -53,7 +53,10 @@ class Option:
         return value
 
     def qualified_name(self):
-        return '%s.%s' % (self.pkg.qualified_name(), self.name)
+        pkg_qual_name = self.pkg.qualified_name()
+        if pkg_qual_name:
+            return '%s.%s' % (pkg_qual_name, self.name)
+        return self.name
 
     def build(self, ctx):
         pass

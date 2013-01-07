@@ -271,6 +271,7 @@ class TestCase(unittest.TestCase):
 
         final = fixate(scope)
 
+        self.assertEqual(package.super_timer.timer_nr.qualified_name(), 'super_timer.timer_nr')
         self.assertEqual(final[package.timer.id], IntegerDom([1]))
         self.assertEqual(final[package.super_timer.id], IntegerDom([2]))
         self.assertEqual(final[package.timer.timer_nr], IntegerDom([32]))

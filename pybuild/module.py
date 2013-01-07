@@ -123,6 +123,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
             for opt_name, opt in self.super.opt_dict.items():
                 if not opt_name in self.opt_dict:
                     opt_copy = opt.copy()
+                    opt_copy.pkg = self
                     self.opt_dict[opt_name] = opt_copy
                     to_add.append(opt_copy)
 
