@@ -8,6 +8,8 @@ from scope   import Scope
 from domain  import BoolDom
 from ops     import *
 
+import logging
+
 def method_pre_parse(ctx):
     ctx.scope = Scope()
     ctx.root = Package('root', None)
@@ -24,11 +26,22 @@ def method_decide_build(ctx):
 
     modlst = map(lambda name: getattr(ctx.root, name), ctx.modlist)
 
-    add_many(scope, modlst)
+    try:
+        add_many(scope, modlst)
+    except CutConflictException, e:
+        logging.error("%s is empty after all modules adding", e.opt)
+        raise
 
-    cut_scope = cut_many_fancy(scope, lambda mod_name: getattr(ctx.root, mod_name), ctx.modconstr)
+    try:
+        cut_scope = cut_many_fancy(scope, lambda mod_name: getattr(ctx.root, mod_name), ctx.modconstr)
+    except CutConflictException, e:
+        logging.error("%s is in conflict", e.opt)
+        raise
 
-    final = fixate(cut_scope)
+    try:
+        final = fixate(cut_scope)
+    except:
+        raise
 
     return final
 

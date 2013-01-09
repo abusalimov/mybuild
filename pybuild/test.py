@@ -105,7 +105,6 @@ class TestCase(unittest.TestCase):
         scope = Scope()
         scope = add_many(scope, [package.uart, 
                          package.amba])
-
         scope = cut_many(scope, [(package.uart, BoolDom([True])), 
                                  (package.uart.amba_pp, BoolDom([True]))])
 
@@ -131,9 +130,10 @@ class TestCase(unittest.TestCase):
         scope = Scope()
         scope = add_many(scope, map(lambda s: getattr(package, s), ['uart', 'amba', 'bad_module']))
 
-        self.assertRaises(CutConflictException, 
-                cut_many, scope, [(package.uart,       BoolDom([True])), 
-                                  (package.bad_module, BoolDom([False]))])
+        scope = cut_many(scope, [(package.uart,       BoolDom([True])), 
+                                 (package.bad_module, BoolDom([False]))])
+
+        self.assertRaises(CutConflictException, fixate, scope)
 
     def test_interface(self):
         package = Package('root')

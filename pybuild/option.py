@@ -10,7 +10,7 @@ class Option:
         if not domain:
             domain = self.__class__.defdomain
 
-        self.raw_domain = domain
+        self.init_domain = domain
 
         self.domain = self.domain_class(domain)
 
@@ -19,9 +19,9 @@ class Option:
     def domain_class(self, domain, cls = None, *args, **kargs):
         if not cls:
             cls = self.__class__.domain_cls
-        try:
+        if isinstance(domain, tuple) or isinstance(domain, list):
             return cls(domain, *args, **kargs)
-        except TypeError:
+        else:
             return cls([domain], *args, **kargs)
 
     def cut_trigger(self, cont, scope, domain):
@@ -30,17 +30,17 @@ class Option:
     def add_trigger(self, scope):
         return scope
 
+    def dom_key(self, dom_v):
+        return 0
+
     def fix_trigger(self, scope):
-        dom = scope[self]
+        dom = scope[self].release_it()
         for v in sorted(dom, key = self.dom_key, reverse = True):
             try:
                 return cut(scope, self, dom.__class__.single_value(v))
             except CutConflictException:
                 pass
-        raise CutConflictException(self)
-
-    def dom_key(self, dom_v):
-        return 0
+        raise CutConflictException(self, scope)
 
     def value(self, scope):
         dom = scope[self]
@@ -65,7 +65,7 @@ class Option:
         return "<%s %s>" % (self.__class__.__name__, self.qualified_name())
 
     def copy(self):
-        return self.__class__(self.name, self.raw_domain, self.pkg)
+        return self.__class__(self.name, self.init_domain, self.pkg)
 
 class DefaultOption(Option):
     def __init__(self, name, domain=None, pkg=None, default=None):
@@ -80,11 +80,11 @@ class DefaultOption(Option):
 
     def add_trigger(self, scope):
         if self.has_default:
-            scope[self] |= self.domain.__class__([self.default])
-        return scope
+            scope[self] |= self.domain_class(self.default)
+        return Option.add_trigger(self, scope) 
 
     def copy(self):  
-        return self.__class__(self.name, self.raw_domain, self.pkg, self.default)
+        return self.__class__(self.name, self.init_domain, self.pkg, self.default)
 
 class List(Option):
     defdomain = []
@@ -93,7 +93,7 @@ class List(Option):
         return None
 
 class Integer(DefaultOption):
-    defdomain = range(0, 0x20000)
+    defdomain = [domain.IntegerDom.wildcard]
     domain_cls = domain.IntegerDom
     def build_repr(self):
         return 'NUMBER'

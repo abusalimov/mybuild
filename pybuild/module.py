@@ -13,10 +13,12 @@ from ops  import *
 
 from mybuild.common.module import ModuleBuildOps
 
-def trigger_handle(cont, scope, trig, *args, **kwargs):
+import logging, warnings
+
+def trigger_handle(cont, scope, self, *args, **kwargs):
     opt = None
     try:
-        trig_ret = trig(scope, *args, **kwargs)
+        trig_ret = self.include_trigger(scope, *args, **kwargs)
 
         if isinstance(trig_ret, Scope):
             return cont(trig_ret)
@@ -24,6 +26,8 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
         return cont(scope)
     except MultiValueException, excp:
         opt = excp.opt
+        warnings.warn("%s is accessed from %s' user code, but it haven't fully specified, iterating withih %s" % \
+                (opt, self.qualified_name(), scope[opt]))
 
     dom = scope[opt]
 
@@ -35,11 +39,11 @@ def trigger_handle(cont, scope, trig, *args, **kwargs):
     for value in dom:
         try:
             value_scope = cut(scope, opt, dom_cls.single_value(value))
-            return trigger_handle(cont, value_scope, trig, *args, **kwargs)
+            return trigger_handle(cont, value_scope, self, *args, **kwargs)
         except CutConflictException or MultiValueException, excp:
             pass
 
-    raise CutConflictException(opt)
+    raise CutConflictException(opt, scope)
 
 class Entity():
     def find_fn(self, name):
@@ -159,7 +163,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
             scope = cut_many_fancy(scope, self.find_fn, dep_cut)
 
             if self.include_trigger:
-                return trigger_handle(cont, scope, self.include_trigger, self.find_fn)
+                return trigger_handle(cont, scope, self, self.find_fn)
         else:
             for impl in self.implements:
                 implmod = self.find_fn(impl)

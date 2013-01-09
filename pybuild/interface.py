@@ -8,6 +8,8 @@ from option import DefaultOption
 from domain import BoolDom, ModDom
 from scope  import BaseScope
 
+import logging
+
 class DefImplMod(Module):
     def __init__(self, *args, **kargs):
         Module.__init__(self, *args, **kargs)
@@ -108,4 +110,12 @@ class Interface(DefaultOption, BaseScope):
             header_opts = header_opts, 
             header_inc = header_inc)
         
+    def diagnost(self, scope):
+        dom = scope[self]
+        impls = [mod.qualified_name() for mod in dom - ModDom([self.def_impl])]
+        if impls:
+            logging.error("All implementations (%s) of %s are not successfull" %
+                (impls, self))
+        else:
+            logging.error("%s have no implementations" % self)
 

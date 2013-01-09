@@ -8,19 +8,23 @@ class Domain(frozenset):
         if len(self) > 1:
             raise MultiValueException(self)
         elif len(self) < 1:
-            raise CutConflictException(self)
+            raise CutConflictException(self, None)
         return self.force_value()
 
     def force_value(self):
         for v in sorted(self):
             return v
 
+    def __or__(self, other):
+        return self.__class__(itertools.chain(self, other))
+
+    def release_it(self):
+        return self
+
     @classmethod
     def single_value(cls, value):
         return cls([value])
 
-    def __or__(self, other):
-        return self.__class__(itertools.chain(self, other))
 
 class ListDom():
     def __init__(self, it):
@@ -48,19 +52,15 @@ class ListDom():
     def __iter__(self):
         return [self.it].__iter__()
 
+    def release_it(self):
+        return self
+
     @classmethod
     def single_value(cls, value):
         return cls(value) 
 
     def __repr__(self):
         return '<ListDom: %s' % (self.it,)
-
-class IntegerDom(Domain):
-    def __repr__(self):
-        return '<IntegerDom: [%d-%d]' % (min(self), max(self))
-
-    def __str__(self):
-        return '<IntegerDom: [%d-%d]' % (min(self), max(self))
 
 class ModDom(Domain):
     def __init__(self, init_iter, default_impl = None):
@@ -90,19 +90,37 @@ class ModDom(Domain):
 class BoolDom(Domain):
     pass
 
-class StringDom(Domain):
+class BigDomain(Domain):
     wildcard = object()
+
     def __and__(self, other):
-        if isinstance(other, StringDom):
+        if isinstance(other, self.__class__):
             if self.wildcard in self:
-                return StringDom(other)
+                return self.__class__(other)
             else:
-                return StringDom(Domain.__and__(self, other))
+                return self.__class__(Domain.__and__(self, other))
         else:
-            return StringDom([])
+            return self.__class__([])
 
     def __contains__(self, item):
         return Domain.__contains__(self, self.wildcard) \
                 or Domain.__contains__(self, item)
 
+    def release_it(self):
+        return self 
 
+class StringDom(BigDomain):
+    pass
+
+class IntegerDom(BigDomain):
+    def release_it(self):
+        release = BigDomain.release_it(self)
+        if self.wildcard not in self:
+            return release 
+        return release | IntegerDom([16 * i for i in xrange(0, 0x20000)])
+
+    def __repr__(self):
+        return '<IntegerDom: [%s-%s]' % (min(self), max(self))
+
+    def __str__(self):
+        return '<IntegerDom: [%s-%s]' % (min(self), max(self))

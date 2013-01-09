@@ -45,6 +45,13 @@ class BaseScope(dict):
         return True
 
 class Scope(BaseScope):
+    def __init__(self, *args, **kargs):
+        BaseScope.__init__(self, *args, **kargs)
+        if self.parent:
+            self.post_list = self.parent.post_list
+        else:
+            self.post_list = []
+
     def __repr__(self):
         return 'Scope {' + \
             reduce (operator.add, map(lambda x: "\t%s: %s" % x, self.items()), "")

@@ -30,7 +30,6 @@ def waf_entry(bld):
     bld.out = []
 
     ctx.model = model 
-    del ctx.scope
     ctx.bld   = bld
 
     method_define_build(ctx)
