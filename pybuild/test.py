@@ -267,14 +267,15 @@ class TestCase(unittest.TestCase):
         scope = Scope()
         scope = add_many(scope, map(lambda s: getattr(package, s), ['super_timer', 'timer']))
     
-        cut_many(scope, [(package.super_timer.timer_nr, IntegerDom([64]))])
+        cut_many(scope, [(package.super_timer.timer_nr, IntegerDom([64])),
+            (package.super_timer, BoolDom([True]))])
 
         final = fixate(scope)
 
         self.assertEqual(package.super_timer.timer_nr.qualified_name(), 'super_timer.timer_nr')
-        self.assertEqual(final[package.timer.id], IntegerDom([1]))
+        #self.assertEqual(final[package.timer.id], IntegerDom([1]))
         self.assertEqual(final[package.super_timer.id], IntegerDom([2]))
-        self.assertEqual(final[package.timer.timer_nr], IntegerDom([32]))
+        #self.assertEqual(final[package.timer.timer_nr], IntegerDom([32]))
         self.assertEqual(final[package.super_timer.timer_nr], IntegerDom([64]))
 
     def test_string_opt(self):

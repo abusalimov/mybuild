@@ -78,10 +78,9 @@ def cut_many(scope, opts):
 def cut_many_fancy(scope, find_fn, constr):
     return cut_many(scope, [(find_fn(name), find_fn(name).domain_class(val)) for name, val in constr])
 
-def fix(scope, opt):
+def fix(scope, opt, *args, **kargs):
     logging.debug('fixing %s within %s' %(opt, scope[opt]))
-    ret = opt.fix_trigger(scope)
-    assert len(ret[opt]) == 1
+    ret = opt.fix_trigger(scope, *args, **kargs)
     logging.debug('fixed %s with %s' %(opt, ret[opt]))
 
     return ret
@@ -96,7 +95,7 @@ def fixate(scope):
     scope = cut_iter(scope, post)
 
     for opt, domain in scope.items():
-        scope = fix(scope, opt)
+            scope = fix(scope, opt)
 
     return scope
 

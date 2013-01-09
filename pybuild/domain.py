@@ -98,7 +98,7 @@ class BigDomain(Domain):
             if self.wildcard in self:
                 return self.__class__(other)
             else:
-                return self.__class__(Domain.__and__(self, other))
+                return self.__class__(Domain.__and__(self, other) - {self.wildcard})
         else:
             return self.__class__([])
 
@@ -107,18 +107,12 @@ class BigDomain(Domain):
                 or Domain.__contains__(self, item)
 
     def release_it(self):
-        return self 
+        return self - {self.wildcard}
 
 class StringDom(BigDomain):
     pass
 
 class IntegerDom(BigDomain):
-    def release_it(self):
-        release = BigDomain.release_it(self)
-        if self.wildcard not in self:
-            return release 
-        return release | IntegerDom([16 * i for i in xrange(0, 0x20000)])
-
     def __repr__(self):
         return '<IntegerDom: [%s-%s]' % (min(self), max(self))
 

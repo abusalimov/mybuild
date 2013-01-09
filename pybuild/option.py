@@ -33,8 +33,16 @@ class Option:
     def dom_key(self, dom_v):
         return 0
 
-    def fix_trigger(self, scope):
-        dom = scope[self].release_it()
+    def fix_trigger(self, scope, from_module = False):
+        if not from_module:
+            return scope
+
+        try:
+            dom = scope[self].release_it()
+        except NotDefinedException, e:
+            e.opt = self
+            raise
+
         for v in sorted(dom, key = self.dom_key, reverse = True):
             try:
                 return cut(scope, self, dom.__class__.single_value(v))
@@ -46,7 +54,7 @@ class Option:
         dom = scope[self]
         try:
             value = dom.value()
-        except Exception, excp:
+        except OptException, excp:
             excp.opt = self
             raise
 

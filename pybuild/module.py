@@ -180,11 +180,18 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
 
         return get_impl(self)[1:]       
 
-    def fix_trigger(self, scope):
+    def fix_trigger(self, scope, from_module = False):
         for iface in self.implements:
-            scope = fix(scope, self.find_fn(iface))
+            scope = fix(scope, self.find_fn(iface), from_module = True)
 
-        return option.Boolean.fix_trigger(self, scope) 
+        scope = option.Boolean.fix_trigger(self, scope, from_module = True) 
+
+        if self.value(scope):
+            for o in self.options:
+                scope = fix(scope, o, from_module = True)
+
+        return scope
+        
 
     def is_list(self):
         return self.implements

@@ -18,7 +18,9 @@ class BaseScope(dict):
         this = self
         while this:
             if dict.has_key(this, x):
-                return dict.get(this, x)
+                val = dict.get(this, x)
+                self[x] = val
+                return val
             this = this.parent
         raise AttributeError
 

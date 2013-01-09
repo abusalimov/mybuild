@@ -22,6 +22,13 @@ def method_pre_parse(ctx):
     return ctx
 
 def method_decide_build(ctx):
+    return simple_decide(ctx)
+
+def profiling_decide(ctx):
+    import cProfile
+    return cProfile.runctx('simple_decide(ctx)', globals(), locals())
+
+def simple_decide(ctx):
     scope = ctx.scope
 
     modlst = map(lambda name: getattr(ctx.root, name), ctx.modlist)

@@ -1,13 +1,17 @@
 
-class MultiValueException(Exception):
+class OptException(Exception):
     def __init__(self, opt):
         self.opt = opt 
 
-class CutConflictException(Exception):
-    def __init__(self, opt, scope):
-        self.opt = opt 
-        self.scope = scope
-
     def __str__(self):
-        return self.opt
+        return "<%s: %s>" % (self.__class__.__name__, self.opt)
+
+class NotDefinedException(OptException):
+    pass
+
+class MultiValueException(OptException):
+    pass
+
+class CutConflictException(Exception):
+    pass
 

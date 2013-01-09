@@ -1,4 +1,16 @@
 
+def pkg_rec(self, attr):
+    splt = attr.split('.', 1)
+    if self.dict.has_key(splt[0]):
+        obj = self.dict[splt[0]]
+    else:
+        raise AttributeError(attr)
+
+    if len(splt) > 1:
+        return getattr(obj, splt[1])
+
+    return obj
+
 class Package():
     def __init__(self, name, pkg=None):
         self.name = name
@@ -10,16 +22,7 @@ class Package():
         raise Exception
 
     def __getattr__(self, attr):
-        splt = attr.split('.', 1)
-        try:
-            obj = self.dict[splt[0]]
-        except KeyError:
-            raise AttributeError(attr)
-
-        if len(splt) > 1:
-            return getattr(obj, splt[1])
-
-        return obj
+        return pkg_rec(self, attr)
 
     def set(self, name, obj):
         self.dict[name] = obj
