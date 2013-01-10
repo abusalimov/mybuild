@@ -234,6 +234,41 @@ class TestCase(unittest.TestCase):
 
         self.assertEqual(scope[package.timer_api], ModDom([package.head_timer]))
                             
+
+    def test_mandatory(self):
+        package = Package('root')
+        module_package(package, 'mod', mandatory = True)
+        module_package(package, 'dep', depends = ['mod'])
+
+        mod_lst = map(lambda s: getattr(package, s), ['mod', 'dep'])
+
+        scope = Scope()
+        scope = add_many(scope, mod_lst)
+
+        scope = fix(scope, package.dep)
+
+        final = fixate(scope)
+
+        self.assertEqual(final[package.mod], BoolDom([True]))
+        self.assertEqual(final[package.dep], BoolDom([False]))
+
+    def test_mandatory2(self):
+        package = Package('root')
+        module_package(package, 'mod')
+        module_package(package, 'dep', depends = ['mod'], mandatory = True)
+
+        mod_lst = map(lambda s: getattr(package, s), ['mod', 'dep'])
+
+        scope = Scope()
+        scope = add_many(scope, mod_lst)
+
+        scope = fix(scope, package.mod)
+
+        final = fixate(scope)
+
+        self.assertEqual(final[package.mod], BoolDom([True]))
+        self.assertEqual(final[package.dep], BoolDom([True]))
+
     def test_interface_mandatory(self):
         package = Package('root')
         obj_in_pkg(Interface, package, 'timer_api', mandatory = True)

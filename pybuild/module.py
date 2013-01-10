@@ -62,7 +62,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
             implements=(), depends=(), include_trigger=None):
 
         if mandatory:
-            option.Boolean.__init__(self, name, default = True, pkg = pkg)
+            option.Boolean.__init__(self, name, domain = [True], pkg = pkg)
         else:
             option.Boolean.__init__(self, name, pkg = pkg)
 
