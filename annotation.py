@@ -5,6 +5,11 @@ class Annotation():
     def __init__(self):
         pass
 
+    def listify(self, maybe_list):
+        if not isinstance(maybe_list, tuple) and not isinstance(maybe_list, list):
+            return [maybe_list]
+        return maybe_list
+
 class NoRuntimeAnnotation(Annotation):
     pass
 
@@ -38,14 +43,16 @@ class GeneratedAnnotation(SourceAnnotation):
 
 class DefMacroAnnotation(Annotation):
     def __init__(self, defines):
-        self.defines = defines
+        self.defines = self.listify(defines)
+
     def build(self, ctx, spec, mod):
         spec.defines += self.defines
         return spec
 
 class IncludePathAnnotation(Annotation):
     def __init__(self, paths):
-        self.paths = paths
+        self.paths = self.listify(paths)
+
     def build(self, ctx, spec, mod):
         spec.includes += self.paths
         return spec
