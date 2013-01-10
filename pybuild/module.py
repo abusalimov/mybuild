@@ -75,8 +75,6 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
         self.include_trigger = include_trigger
         self.sources = sources
 
-        self.options = []
-        self.options += options
         self.hash_value = hash(self.qualified_name() + '.include_module')
 
         self.depends = []
@@ -92,7 +90,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
     
         self.opt_dict = {}
 
-        for o in self.options:
+        for o in options:
             if hasattr(self, o.name):
                 raise Exception(
                     "Sorry, can't have option with name '%s' in %s"
@@ -187,7 +185,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
         scope = option.Boolean.fix_trigger(self, scope, from_module = True) 
 
         if self.value(scope):
-            for o in self.options:
+            for o in self.opt_dict.values():
                 scope = fix(scope, o, from_module = True)
 
         return scope
