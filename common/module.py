@@ -37,6 +37,10 @@ class ModuleBuildOps(object):
 
         if self.islib():
             fts += ' cstlib'
+            for i in self.get_depends():
+                if i.islib():
+                    srcs.append(i.qualified_name().replace('.', '_'))
+
 
         ctx.bld(
             features = fts, 

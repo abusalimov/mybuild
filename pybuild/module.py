@@ -210,6 +210,9 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
     def get_sources(self):
         return self.sources
 
+    def get_depends(self):
+        return [self.find_fn(d) for d, opt in self.depends]
+
     def get_options(self):
         return self.opt_dict.values()
 

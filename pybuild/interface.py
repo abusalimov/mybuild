@@ -119,3 +119,5 @@ class Interface(DefaultOption, BaseScope):
         else:
             logging.error("%s have no implementations" % self)
 
+    def islib(self):
+        return False
