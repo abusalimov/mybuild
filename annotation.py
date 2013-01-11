@@ -5,6 +5,9 @@ class Annotation():
     def __init__(self):
         pass
 
+    def get_name(self):
+        return self.__class__.__name__
+
     def listify(self, maybe_list):
         if not isinstance(maybe_list, tuple) and not isinstance(maybe_list, list):
             return [maybe_list]
