@@ -204,7 +204,7 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
     def __hash__(self):
         return self.hash_value
 
-    def is_building(self, model):
+    def isbuilding(self, model):
         return self.value(model)
 
     def get_sources(self):
@@ -218,3 +218,6 @@ class Module(ModuleBuildOps, Entity, option.Boolean):
 
     def islib(self):
         return self.static
+
+    def isinterface(self):
+        return False

@@ -121,3 +121,9 @@ class Interface(DefaultOption, BaseScope):
 
     def islib(self):
         return False
+
+    def isinterface(self):
+        return True
+
+    def isbuilding(self, scope):
+        return not self.def_impl in scope[self]

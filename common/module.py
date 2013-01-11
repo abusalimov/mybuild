@@ -3,7 +3,7 @@ from mybuild.build import inchdr
 
 class ModuleBuildOps(object):
     def build(self, ctx):
-        if not self.is_building(ctx.model):
+        if not self.isbuilding(ctx.model):
             return 
 
         srcs = []
