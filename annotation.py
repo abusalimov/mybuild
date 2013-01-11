@@ -20,7 +20,7 @@ class LDScriptAnnotation(SourceAnnotation):
     def build(self, ctx, spec, mod):
         source = spec.src
         tgt = source.replace('.lds.S', '.lds')
-        ctx.bld.env.append_value('LINKFLAGS', '-Wl,-T,%s' % (tgt,))
+        ctx.bld.env.append_value('linker_script', tgt)
         ctx.bld(
             name = 'ldscripts',
             features = 'includes',
