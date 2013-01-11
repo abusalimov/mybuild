@@ -13,10 +13,16 @@ class Annotation():
             return [maybe_list]
         return maybe_list
 
+    def build(self, ctx, spec, mod):
+        return spec
+
 class NoRuntimeAnnotation(Annotation):
     pass
 
 class SourceAnnotation(Annotation):
+    pass
+
+class InitFSAnnotation(Annotation):
     pass
 
 class LDScriptAnnotation(SourceAnnotation):
@@ -38,8 +44,9 @@ class GeneratedAnnotation(SourceAnnotation):
     def __init__(self, rule):
         self.rule = rule
     def build(self, ctx, spec, mod):
+        rule = self.rule(spec.src, mod, ctx)
         ctx.bld(
-            rule = lambda f: f.outputs[0].write(self.rule(spec.src, mod, ctx)),
+            rule = lambda f: f.outputs[0].write(rule),
             target = spec.src
         )
         return spec 
@@ -81,6 +88,9 @@ def NoRuntime(obj):
 
 def LDScript(obj):
     return annotated(obj, LDScriptAnnotation())
+
+def InitFS(obj):
+    return annotated(obj, InitFSAnnotation())
 
 def Generated(obj, rule):
     return annotated(obj, GeneratedAnnotation(rule))

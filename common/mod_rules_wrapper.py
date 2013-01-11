@@ -44,5 +44,8 @@ def Generated(*args, **kargs):
 def LDScript(*args, **kargs):
     return ctx.mod_rules.LDScript(*args, **kargs)
 
+def InitFS(*args, **kargs):
+    return ctx.mod_rules.InitFS(*args, **kargs)
+
 def NoRuntime(*args, **kargs):
     return ctx.mod_rules.NoRuntime(*args, **kargs)
