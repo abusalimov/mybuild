@@ -20,7 +20,9 @@
 			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
 			"selector": "source.python",
 
-			"cmd": ["coverage", "run", "run-fixup.py", "$file"],
+			"cmd": ["env", "PYTHONPATH=${packages}/Python Coverage",
+					"python", "-u", "-m", "coverage", "run",
+					"run-fixup.py", "$file"],
 			"working_dir": "${project_path}"
 		}
 	]
