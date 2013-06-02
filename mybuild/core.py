@@ -18,9 +18,9 @@ __all__ = [
 
 from collections import namedtuple
 from inspect import getargspec
-from itertools import izip
 from operator import attrgetter
 
+from compat import *
 from util import InstanceBoundTypeMixin
 
 
@@ -60,7 +60,7 @@ class Optuple(InstanceBoundTypeMixin):
         return self._izipwith(self._fields, with_ellipsis, swap=True)
 
     def _izipwith(self, other, with_ellipsis=False, swap=False):
-        it = izip(self, other) if not swap else izip(other, self)
+        it = zip(self, other) if not swap else zip(other, self)
         self_idx = int(bool(swap))
         return (it if with_ellipsis else
                 (pair for pair in it if pair[self_idx] is not Ellipsis))
@@ -108,12 +108,12 @@ class Optuple(InstanceBoundTypeMixin):
                 raise TypeError(
                     'Option name cannot start with an underscore: %s' % arg)
 
-        head = [Option() for _ in xrange(len(defaults), len(option_args))]
+        head = [Option() for _ in xrange(len(option_args) - len(defaults))]
         tail = [option if isinstance(option, Option) else Option(option)
                 for option in defaults]
 
-        return map(lambda option, name: option.set(_name=name),
-                   head + tail, option_args)
+        return [option.set(_name=name)
+                for option, name in zip(head + tail, option_args)]
 
     @classmethod
     def _new_type_options(cls, module_type, fxn):
