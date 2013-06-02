@@ -2,9 +2,67 @@
 Misc stuff. --Eldar
 """
 
+from collections import namedtuple
+from collections import Mapping
+
+from compat import *
+
+
+class Pair(namedtuple('_Pair', 'false true')):
+    __slots__ = ()
+
+    def _map_with(self, fxn):
+        return self._make(map(fxn, self))
+
+bools = Pair(False, True)
+
+def to_dict(iterable_or_mapping, check_exclusive=False):
+    if isinstance(iterable_or_mapping, dict):
+        return iterable_or_mapping
+
+    if not check_exclusive or isinstance(iterable_or_mapping, Mapping):
+        return dict(iterable_or_mapping)
+
+    items = list(iterable_or_mapping)
+    ret_dict = dict(items)
+    if len(ret_dict) != len(items):
+        raise ValueError('Item(s) with conflicting keys detected')
+
+    return ret_dict
+
+
+if hasattr(0, 'bit_length'):
+
+    def single_set_bit(x):
+        if x > 0 and not (x & (x-1)):
+            return x.bit_length() - 1
+
+else:
+    def single_set_bit(x):
+        if x > 0 and not (x & (x-1)):
+            return len(bin(x)) - 3  # 5 -> bin=0b101 -> len=5 -> ret=2
+
+
 def singleton(cls):
     """Decorator for declaring and instantiating a class in-place."""
     return cls()
+
+def pop_iter(s):
+    s_pop = s.pop()
+    while s:
+        yield s_pop()
+
+def until_fixed(fxn):
+    prev = fxn()
+    yield prev
+
+    next = fxn()
+
+    while prev != next:
+        yield next
+
+        prev = next
+        next = fxn()
 
 def unique(iterable, key=id):
     """
