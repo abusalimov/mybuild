@@ -12,6 +12,9 @@ __all__ = [
     "Neglast",
     "Reason",
 
+    "to_lset",
+    "to_nvdict",
+
     "AtomicNode",
     "Atom",
 
@@ -190,7 +193,7 @@ class Node(Pgraph.NodeBase, Pair):
         if costs is None:
             costs = self._costs
 
-        for literal, literal_cost in zip(self, Pair(costs)):
+        for literal, literal_cost in zip(self, Pair._make(costs)):
             literal.cost = literal_cost
 
 
@@ -286,6 +289,8 @@ class Literal(object):
         self.therefore_all(others, why_therefore)
         self.becauseof_all(others, why_becauseof)
 
+    def __repr__(self):
+        return "%r=%r" % (self.node, self.value)
 
 class Neglast(object):
     """
@@ -330,7 +335,7 @@ class Reason(namedtuple('_Reason', 'why, literal, cause_literals')):
         if why is None:
             why = cls._fallback_why_func
 
-        return cls.__new__(cls, why, literal, cause_literals)
+        return super(Reason, cls).__new__(cls, why, literal, cause_literals)
 
     def _fallback_why_func(cls, literal, *cause_literals):
         return '%s <= %s' % (literal, cause_literals)
@@ -546,11 +551,11 @@ class Not(SingleOperandNode):
 
     why_self_equals_negated_operand = None
 
-    def __init__(self, *operands):
-        super(Not, self).__init__(*operands)
+    def __init__(self, operand):
+        super(Not, self).__init__(operand)
 
         self[False].equivalent(operand[True],
-                               why=self.why_self_equals_negated_operand)
+                why_becauseof=self.why_self_equals_negated_operand)
 
     @classmethod
     def _new(cls, operand):
@@ -562,7 +567,7 @@ class Not(SingleOperandNode):
             return super(Not, cls)._new(operand)
 
     def __repr__(self):
-        return '(~%r)' % self._operand
+        return '(~%r)' % (self._operand,)
 
 
 @Pgraph.node_type
@@ -587,24 +592,21 @@ class Implies(Node):
         self._if = if_
         self._then = then
 
-        self[False].equivalent_all({if_:True, then:False},
-            why_therefore=XXX,
-            why_becauseof=XXX)
+        self[False].equivalent_all({if_:True, then:False}) # XXX reasons
 
     @classmethod
     def _new(cls, if_, then):
-        if (isinstance(if_, FalseConstNode) or
-              isinstance(then, TrueConstNode)):
-            return cls._pgraph.new_const(True)
+        # if (isinstance(if_, FalseConstNode) or
+        #       isinstance(then, TrueConstNode)):
+        #     return cls._pgraph.new_const(True)
 
-        elif isinstance(if_, TrueConstNode):
-            return then
+        # elif isinstance(if_, TrueConstNode):
+        #     return then
 
-        elif isinstance(then, FalseConstNode):
-            return cls._pgraph.new_node(Not, if_)
+        # elif isinstance(then, FalseConstNode):
+        #     return cls._pgraph.new_node(Not, if_)
 
-        else:
-            return super(Implies, cls)._new(if_, then)
+        return super(Implies, cls)._new(if_, then)
 
     @classmethod
     def _canonical_args(cls, if_, then):

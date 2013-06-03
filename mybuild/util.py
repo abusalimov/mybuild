@@ -12,7 +12,7 @@ class Pair(namedtuple('_Pair', 'false true')):
     __slots__ = ()
 
     def _map_with(self, fxn):
-        return self._make(map(fxn, self))
+        return Pair._make(map(fxn, self))
 
 bools = Pair(False, True)
 
