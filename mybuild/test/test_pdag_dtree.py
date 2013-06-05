@@ -46,6 +46,16 @@ class PdagDtreeTestCase(TestCase):
         return [atom_with_cost(name or '', cost) if cost is not None else
                 atom(name) for name, cost in izip_longest(names, costs)]
 
+    def test_00(self):
+        g = self.pgraph
+        A, = self.atoms(g, 'A')
+
+        pnode = g.Not(A)
+        solution = solve(g, {pnode:True})
+
+        self.assertIs(True,  solution[pnode])
+        self.assertIs(False, solution[A])
+
     def test_01(self):
         g = self.pgraph
         A,B,C,D = self.atoms(g, 'ABCD')

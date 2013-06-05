@@ -134,6 +134,10 @@ class Pgraph(object):
 
         self._node_map = {}
 
+        self.const_literals = Pair._make(
+                self.new_node(ConstNode.types[const_value])[const_value]
+                for const_value in bools)
+
     def new_node(self, node_type, *args, **kwargs):
         """
         Returns a node of the given type.
@@ -156,12 +160,12 @@ class Pgraph(object):
         Constrains a given node (if any) to the specified const_value.
         In case if node is None, returns a special constant node.
         """
-        const_node = self.new_node(ConstNode.types[const_value])
+        const_literal = self.const_literals[const_value]
 
         if node is not None:
-            node[const_value].becauseof(const_node[const_value], why)
+            node[const_value].becauseof(const_literal, why)
         else:
-            node = const_node
+            node = const_literal.node
 
         return node
 
