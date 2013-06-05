@@ -62,6 +62,7 @@ class Context(namedtuple('_Context', 'nodes, literals, reasons')):
         if reason is not None:
             self.reasons.add(reason)
 
+
 class TrunkContext(Context):
     """docstring for TrunkContext"""
 
@@ -70,25 +71,6 @@ class TrunkContext(Context):
 
         self.branchmap = dict()  # maps gen literals to branches
         self.neglefts = dict()   # neglasts to sets of left literals
-
-    def branch_for(self, literal):
-        """
-        Returns branch, which effectively is an implication closure of given
-        literal.
-        """
-
-        if literal in self.literals:
-            return None
-
-        if literal.node in self.nodes:
-            raise ContextError(self)
-
-        try:
-            branch = self.branchmap[literal]
-        except KeyError:
-            branch = self.branchmap[literal] = BranchContext(literal)
-
-        return branch
 
 
 class BranchContext(Context):
@@ -200,13 +182,10 @@ def initialize_branch(trunk, branch):
         try:
             # print ' .' * len(stack), 'branch %r for:' % \
             #   (id(stack[-1]) % 37), sorted(stack[-1].gen_literals)
-
             implied = stack[-1].init_task.next()
             if isinstance(implied, ContextError):
                 raise implied
 
-            # print ' .' * len(stack), ' (defer until %r: %r)' % \
-            #   (id(implied) % 37, tuple(implied.gen_literals)[0])
         except StopIteration:
             stack.pop().init_task = None
 
@@ -239,49 +218,57 @@ def branch_init_task(trunk, branch):
             continue  # already handled
 
         try:
-            implied = trunk.branch_for(literal)
-            if implied is None:
-                continue  # included in the trunk, i.e. unconditionally
+            try:
+                implied = trunk.branchmap[literal]
+
+            except KeyError:
+                if literal in trunk.literals:
+                    continue  # included in the trunk, i.e. unconditionally
+                raise ContextError(branch)
 
             if implied.fresh:
                 yield implied  # defer until a branch is initialized
 
-            if literal in branch.gen_literals:
-                continue  # branches have been swapped
+                # During initialization of the implied branch it could have
+                # been swapped with an implicant (appears upper on the stack).
+                # Example:
+                #   A => B => C => A
+                #           ^- assuming we're handling this implication now
+                # Upon returning back from 'yield' above, a branch initially
+                # created for C gets swapped with A and should not be used
+                # anymore. So we have to lookup an up-to-date branch for the
+                # given literal from the branchmap.
+                if literal in branch.literals:
+                    continue
 
-            assert literal in implied.gen_literals
+                implied = trunk.branchmap[literal]
 
-            if not implied.valid:
-                raise ContextError(branch)
-
-            if implied.init_task is None:
-                implied.implicants |= branch.gen_literals
-
-            else:  # equivalent (mutual implication)
-                # Forget about this branch, switch to the implicant one.
-                branch, implied = swap_branches(trunk, branch, implied)
-
-            imply_branch(trunk, branch, implied, todo)
+            branch = imply_branch(trunk, branch, implied, todo)
 
         except ContextError as e:
             yield e
 
 
-def swap_branches(trunk, branch, other):
-    # Fixup any references to an old branch.
-    for gen_literal in branch.gen_literals:
-        assert trunk.branchmap[gen_literal] is branch
-        trunk.branchmap[gen_literal] = other
+def imply_branch(trunk, branch, implied, todo):
+    if not implied.valid:
+        raise ContextError(branch)
 
-    other.gen_literals |= branch.gen_literals
+    if implied.init_task is None:
+        implied.implicants |= branch.gen_literals
 
-    return other, branch
+    else:  # equivalent (mutual implication), swap branches.
+        implied.gen_literals |= branch.gen_literals
 
+        # Fixup any references to an old branch.
+        for gen_literal in branch.gen_literals:
+            trunk.branchmap[gen_literal] = implied
 
-def imply_branch(trunk, branch, other, todo):
-    branch |= other
+        # Forget about this branch, switch to the implicant one.
+        branch, implied = implied, branch
 
-    for neglast, other_negexcl in iteritems(other.negexcls):
+    branch |= implied
+
+    for neglast, other_negexcl in iteritems(implied.negexcls):
         negleft = trunk.neglefts[neglast]
 
         negexcl = branch.negexcls[neglast]
@@ -300,6 +287,8 @@ def imply_branch(trunk, branch, other, todo):
     if not branch.valid:
         raise ContextError(branch)
 
+    return branch
+
 
 def merge_into_trunk(trunk, branch):
     trunk |= branch
@@ -316,27 +305,17 @@ def merge_into_trunk(trunk, branch):
             continue
 
 
-
 def revert_changes(trunk, branch, other):
     pass
 
 
-def create_branch(trunk, literal):
-    branch = trunk.branch_for(literal)
-
-    try:
-        initialize_branch(trunk, branch)
-    except ContextError:
-        assert not branch.valid
-
-    return branch
-
-
 def n_valid(pair):
     return sum(branch.valid for branch in pair)
+
 def single_valid(pair):
     if n_valid(pair) == 1:
         return pair[pair[True].valid]
+
 
 def prepare_branches(trunk, unresolved_nodes):
     if not unresolved_nodes:
@@ -344,9 +323,15 @@ def prepare_branches(trunk, unresolved_nodes):
 
     for node in unresolved_nodes:
         for literal in node:
-            create_branch(trunk, literal)
+            trunk.branchmap[literal] = BranchContext(literal)
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
+
+    for branch in itervalues(trunk.branchmap):
+        try:
+            initialize_branch(trunk, branch)
+        except ContextError:
+            assert not branch.valid
 
     branch_pairs = list(node._map_with(trunk.branchmap.get)
                         for node in unresolved_nodes)

@@ -293,6 +293,14 @@ class Literal(object):
         self.therefore_all(others, why_therefore)
         self.becauseof_all(others, why_becauseof)
 
+    def __lshift__(self, other):
+        self.becauseof(other)
+        return other
+
+    def __rshift__(self, other):
+        self.therefore(other)
+        return other
+
     def __repr__(self):
         return "%r=%r" % (self.node, self.value)
 
