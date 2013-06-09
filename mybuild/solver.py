@@ -24,11 +24,12 @@ from util import bools
 from util import filter_bypass
 from util import map_bypass
 from util import pop_iter
+from util import send_next_iter
 
 import logs as log
 
 
-class Context(namedtuple('_Context', 'nodes, literals, reasons')):
+class Context(object):
     """
     Context backed by sets of nodes and their literals.
     """
@@ -37,23 +38,28 @@ class Context(namedtuple('_Context', 'nodes, literals, reasons')):
     def valid(self):
         return len(self.nodes) == len(self.literals)
 
-    def __new__(cls, *args, **kwargs):
-        return super(Context, cls).__new__(cls,
-            nodes    = set(),
-            literals = set(),
-            reasons  = set())
+    def __init__(self):
+        super(Context, self).__init__()
+
+        self.nodes    = set()
+        self.literals = set()
+        self.reasons  = set()
 
     def __len__(self):
         return len(self.literals)
 
     def __ior__(self, other):
-        for s, o in zip(self, other):
-            s |= o
+        self.nodes    |= other.nodes
+        self.literals |= other.literals
+        self.reasons  |= other.reasons
+
         return self
 
     def __isub__(self, other):
-        for s, o in zip(self, other):
-            s -= o
+        self.nodes    -= other.nodes
+        self.literals -= other.literals
+        self.reasons  -= other.reasons
+
         return self
 
     def add_literal(self, literal, reason=None):
@@ -81,22 +87,64 @@ class BranchContext(Context):
         return self.error is None and len(self.nodes) == len(self.literals)
 
     @property
-    def fresh(self):
-        return not self.literals
+    def initialized(self):
+        return bool(self.literals)
 
-    def __init__(self, gen_literal):
+    def __init__(self, trunk, *gen_literals):
         super(BranchContext, self).__init__()
 
-        self.gen_literals = set([gen_literal])
+        self.trunk        = trunk
+        self.gen_literals = set(gen_literals)
+
+        self.negexcls   = defaultdict(set)
+        self.todo       = set()
 
         self.implicants = set()
-        self.negexcls = defaultdict(set)
-        self.init_task = None
-        self.error = None
+        self.init_task  = None
+        self.error      = None
+
+    def __ior__(self, other):
+        trunk = self.trunk
+        if trunk is not other.trunk:
+            raise ValueError('Both branches must belong to the same trunk')
+
+        for neglast, other_negexcl in iteritems(other.negexcls):
+            negexcl = self.negexcls[neglast]
+            negexcl |= other_negexcl
+
+            self.__check_neglast(neglast, negexcl)
+
+        self.todo |= other.todo
+
+        return super(BranchContext, self).__ior__(other)
+
+    def add_literal(self, literal, reason=None):
+        for neglast in literal.neglasts:
+            negexcl = self.negexcls[neglast]
+            negexcl.add(literal)
+
+            self.__check_neglast(neglast, negexcl)
+
+        super(BranchContext, self).add_literal(literal, reason)
+
+    def __check_neglast(self, neglast, negexcl):
+        negleft = self.trunk.neglefts[neglast]
+
+        left = len(negleft) - len(negexcl)
+        if left <= 1:
+            neg_literal, neg_reason = neglast.neg_reason_for(
+                last_literal=(negleft-negexcl).pop() if left else None)
+
+            self.reasons.add(neg_reason)
+            self.todo.add(neg_literal)
 
 
 def create_trunk(pgraph, initial_literals=[]):
-    (nodes, literals, reasons) = trunk = TrunkContext()
+    trunk = TrunkContext()
+
+    nodes    = trunk.nodes
+    literals = trunk.literals
+    reasons  = trunk.reasons
     neglefts = trunk.neglefts
 
     neglasts_todo = list()
@@ -162,7 +210,7 @@ def create_trunk(pgraph, initial_literals=[]):
     return trunk
 
 
-def initialize_branch(trunk, branch):
+def initialize_branch(branch):
     """
     Merges all implied branches into the given one.
 
@@ -172,10 +220,10 @@ def initialize_branch(trunk, branch):
     """
     assert branch.init_task is None
 
-    if not branch.fresh:
+    if branch.initialized:
         return
 
-    branch.init_task = branch_init_task(trunk, branch)
+    branch.init_task = branch_init_task(branch)
     stack = [branch]
 
     while stack:
@@ -183,8 +231,6 @@ def initialize_branch(trunk, branch):
             # print ' .' * len(stack), 'branch %r for:' % \
             #   (id(stack[-1]) % 37), sorted(stack[-1].gen_literals)
             implied = stack[-1].init_task.next()
-            if isinstance(implied, ContextError):
-                raise implied
 
         except StopIteration:
             stack.pop().init_task = None
@@ -192,102 +238,87 @@ def initialize_branch(trunk, branch):
         except ContextError as error:
             # unwind branch stack
             for implicant in reversed(stack):
+                implicant.init_task = None
                 implicant.error = error
                 error = ContextError(implicant, error)
             raise
 
         else:
-            assert implied.fresh and implied.init_task is None
+            assert not implied.initialized and implied.init_task is None
 
-            implied.init_task = branch_init_task(trunk, implied)
+            implied.init_task = branch_init_task(implied)
             stack.append(implied)
 
 
-def branch_init_task(trunk, branch):
-    init_literal, = branch.gen_literals  # assumed to be singular
+def branch_init_task(branch):
+    trunk = branch.trunk
 
-    branch.add_literal(init_literal)
+    for gen_literal in branch.gen_literals:
+        branch.add_literal(gen_literal)
 
-    # TODO add a Reason for init_literal (not here)
-    branch.reasons.update(init_literal.imply_reasons)
+        branch.reasons.update(gen_literal.imply_reasons)
+        branch.todo |= gen_literal.implies
 
-    todo = set(init_literal.implies)
-    while todo:
-        literal = todo.pop()
+    todo_it = send_next_iter(pop_iter(branch.todo))
+
+    for literal in todo_it:
         if literal in branch.literals:
             continue  # already handled
 
         try:
-            try:
-                implied = trunk.branchmap[literal]
+            implied = trunk.branchmap[literal]
 
-            except KeyError:
-                if literal in trunk.literals:
-                    continue  # included in the trunk, i.e. unconditionally
-                raise ContextError(branch)
+        except KeyError:
+            if literal in trunk.literals:
+                continue  # included in the trunk, i.e. unconditionally
 
-            if implied.fresh:
-                yield implied  # defer until a branch is initialized
+            assert ~literal in trunk.literals
+            raise ContextError(branch)
 
-                # During initialization of the implied branch it could have
-                # been swapped with an implicant (appears upper on the stack).
-                # Example:
-                #   A => B => C => A
-                #           ^- assuming we're handling this implication now
-                # Upon returning back from 'yield' above, a branch initially
-                # created for C gets swapped with A and should not be used
-                # anymore. So we have to lookup an up-to-date branch for the
-                # given literal from the branchmap.
-                if literal in branch.literals:
-                    continue
+        if implied.init_task is not None:
+            # Equivalent (mutual implication), swap branches.
+            implied.gen_literals |= branch.gen_literals
 
-                implied = trunk.branchmap[literal]
+            # Fixup any references to an old branch.
+            for gen_literal in branch.gen_literals:
+                trunk.branchmap[gen_literal] = implied
 
-            branch = imply_branch(trunk, branch, implied, todo)
+            imply_branch(implied, branch)
+            break  # forget about this branch, nothing more to do here
 
-        except ContextError as e:
-            yield e
+        elif implied.initialized:
+            implied.implicants.add(branch)
+            implied.implicants |= branch.implicants
+
+            imply_branch(branch, implied)
+
+        else:
+            yield implied  # defer until a branch is initialized
+
+            # During initialization of the implied branch it may have been
+            # swapped with an implicant (appears upper on the stack).
+            #
+            # Example:
+            #   A => B => C => A
+            #           ^- assuming we're handling this implication now
+            #
+            # Upon returning back from 'yield' above, a branch initially
+            # created for C gets swapped with A and should not be used
+            # anymore.
+            #
+            # So the best thing we can do here is to restart handling the
+            # literal from the beginning.
+            todo_it.send(literal)
 
 
-def imply_branch(trunk, branch, implied, todo):
+def imply_branch(branch, implied):
     if not implied.valid:
         raise ContextError(branch)
 
-    if implied.init_task is None:
-        implied.implicants |= branch.gen_literals
-
-    else:  # equivalent (mutual implication), swap branches.
-        implied.gen_literals |= branch.gen_literals
-
-        # Fixup any references to an old branch.
-        for gen_literal in branch.gen_literals:
-            trunk.branchmap[gen_literal] = implied
-
-        # Forget about this branch, switch to the implicant one.
-        branch, implied = implied, branch
-
     branch |= implied
-
-    for neglast, other_negexcl in iteritems(implied.negexcls):
-        negleft = trunk.neglefts[neglast]
-
-        negexcl = branch.negexcls[neglast]
-        negexcl |= other_negexcl
-
-        left = len(negleft) - len(negexcl)
-        if left > 1:
-            continue
-
-        neg_literal, neg_reason = neglast.neg_reason_for(
-            last_literal=(negleft-negexcl).pop() if left else None)
-
-        branch.reasons.add(neg_reason)
-        todo.add(neg_literal)
 
     if not branch.valid:
         raise ContextError(branch)
-
-    return branch
 
 
 def merge_into_trunk(trunk, branch):
@@ -300,7 +331,7 @@ def merge_into_trunk(trunk, branch):
 
     neg_lset = set(map(operator.__invert__, branch.literals))
 
-    for other in map(trunk.branchmap.get, branch.implicants):
+    for other in branch.implicants:
         if not other.valid:
             continue
 
@@ -310,7 +341,7 @@ def revert_changes(trunk, branch, other):
 
 
 def n_valid(pair):
-    return sum(branch.valid for branch in pair)
+    return sum(bool(branch.valid) for branch in pair)
 
 def single_valid(pair):
     if n_valid(pair) == 1:
@@ -323,13 +354,13 @@ def prepare_branches(trunk, unresolved_nodes):
 
     for node in unresolved_nodes:
         for literal in node:
-            trunk.branchmap[literal] = BranchContext(literal)
+            trunk.branchmap[literal] = BranchContext(trunk, literal)
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
 
     for branch in itervalues(trunk.branchmap):
         try:
-            initialize_branch(trunk, branch)
+            initialize_branch(branch)
         except ContextError:
             assert not branch.valid
 

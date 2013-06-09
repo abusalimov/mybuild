@@ -265,10 +265,9 @@ class PdagDtreeTestCase(TestCase):
         g = self.pgraph
         A,B,C = self.atoms(g, 'ABC')
 
-        A[True] >> B[True] >> C[True] >> A[True]
-
         # (A | A&~A) & (A=>B) & (B=>C) & (C=>A)
-        pnode = g.And(g.Or(g.Not(A), g.And(A, g.Not(A))))
+        A[True] >> B[True] >> C[True] >> A[True]
+        pnode = g.Or(A, g.And(A, g.Not(A)))
         solution = solve(g, {pnode:True})
 
         self.assertIs(True, solution[A])

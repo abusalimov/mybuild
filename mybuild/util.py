@@ -47,10 +47,20 @@ def singleton(cls):
     """Decorator for declaring and instantiating a class in-place."""
     return cls()
 
+
 def pop_iter(s):
-    s_pop = s.pop()
+    get_next = s.pop
     while s:
-        yield s_pop()
+        yield get_next()
+
+def send_next_iter(it, first=None):
+    get_next = iter(it).next
+    received = first
+    while True:
+        received = (yield received if received is not None else get_next())
+        if received is not None:
+            yield  # from send
+
 
 def until_fixed(fxn):
     prev = fxn()
