@@ -48,8 +48,8 @@ def singleton(cls):
     return cls()
 
 
-def pop_iter(s):
-    get_next = s.pop
+def pop_iter(s, pop_meth='pop'):
+    get_next = getattr(s, pop_meth)
     while s:
         yield get_next()
 

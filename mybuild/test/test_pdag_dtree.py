@@ -106,14 +106,17 @@ class PdagDtreeTestCase(TestCase):
     def test_05(self):
         g = self.pgraph
         A,B = self.atoms(g, 'AB')
+        nA,nB = map(g.Not, (A,B))
 
-        # (~A + A&B + B) & (~B + ~B&A)
-        pnode = g.And(g.Or(g.Not(A), g.And(A,B), B),
-                       g.Or(g.Not(B), g.And(A, g.Not(B))))
-        solution = solve(g, {pnode:True})
+        # (A + ~A&~B + ~B) & (B + B&~A)
+        # solution = solve(g, {pnode:True})
+        solution = solve(g, {
+                g.Or(A, g.And(nA, nB), nB): True,
+                g.Or(B, g.And(nA, B)): True
+            })
 
-        self.assertIs(False, solution[A])
-        self.assertIs(False, solution[B])
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
 
     def test_06(self):
         g = self.pgraph
@@ -276,7 +279,6 @@ class PdagDtreeTestCase(TestCase):
 
 
 if __name__ == '__main__':
-
     import mybuild.logs as log
 
     log.zones = set([

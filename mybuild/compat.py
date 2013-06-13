@@ -12,12 +12,14 @@ if _py3k:
     filter = filter
     map    = map
     zip    = zip
+    next   = next
 
 else:
     range = xrange
     from itertools import ifilter as filter
     from itertools import imap    as map
     from itertools import izip    as zip
+    next = _operator.methodcaller('next')
 
 
 if _py3k:
