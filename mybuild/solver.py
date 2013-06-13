@@ -37,6 +37,10 @@ class Context(object):
     def valid(self):
         return len(self.nodes) == len(self.literals)
 
+    @property
+    def cost(self):
+        return sum(literal.cost for literal in self.literals)
+
     def __init__(self):
         super(Context, self).__init__()
 
@@ -46,6 +50,10 @@ class Context(object):
 
     def __len__(self):
         return len(self.literals)
+
+    def __repr__(self):
+        return ' & '.join(repr(literal).join('()')
+                          for literal in self.literals)
 
     def __ior__(self, other):
         self.nodes    |= other.nodes
@@ -119,7 +127,8 @@ class BranchContextBase(Context):
     def __init__(self, trunk):
         super(BranchContextBase, self).__init__()
 
-        self.trunk      = trunk
+        self.trunk        = trunk
+        self.gen_literals = set()
 
         self.negexcls   = defaultdict(set)
         self.todo       = set()
@@ -127,6 +136,15 @@ class BranchContextBase(Context):
     def __ior__(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both branches must belong to the same trunk')
+
+        if self.literals >= other.gen_literals:
+            assert self.nodes    >= other.nodes
+            assert self.literals >= other.literals
+            assert self.reasons  >= other.reasons
+            assert self.todo     >= other.todo
+            for neglast, negexcl in iteritems(other.negexcls):
+                assert self.negexcls[neglast] >= negexcl
+            return self
 
         self.todo |= other.todo
 
@@ -185,7 +203,7 @@ class BranchContext(BranchContextBase):
     def __init__(self, trunk, *gen_literals):
         super(BranchContext, self).__init__(trunk)
 
-        self.gen_literals = set(gen_literals)
+        self.gen_literals.update(gen_literals)
 
         self.implicants = set()
         self.init_task  = None
@@ -374,9 +392,6 @@ def branch_init_task(branch):
 
 
 def prepare_branches(trunk, unresolved_nodes):
-    if not unresolved_nodes:
-        return
-
     for node in unresolved_nodes:
         for literal in node:
             trunk.branchmap[literal] = BranchContext(trunk, literal)
@@ -399,7 +414,11 @@ def resolve_branches(trunk):
         for literal, branch in iter_todo(resolved):
             resolved.update(branch, check=True)
 
-        trunk |= resolved
+        trunk.update(resolved, check=True)
+
+        for literal in resolved.literals:
+            for each in literal.node:  # remove both literal and ~literal
+                del trunk.branchmap[each]
 
         resolved.clear()
 
@@ -412,6 +431,14 @@ def resolve_branches(trunk):
                 resolved.todo.add(~literal)  # TODO reason
 
 
+def combine_branches(trunk):
+    branches = sorted(set(itervalues(trunk.branchmap)),
+                      key=operator.attrgetter('cost'))
+    assert all(branch.valid for branch in branches)
+
+    print [('%r: %d' % (branch, branch.cost)) for branch in branches]
+
+
 def solve(pgraph, initial_values):
     nodes = pgraph.nodes
 
@@ -421,6 +448,7 @@ def solve(pgraph, initial_values):
 
     prepare_branches(trunk, nodes-trunk.nodes)
     resolve_branches(trunk)
+    combine_branches(trunk)
 
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
