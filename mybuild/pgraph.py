@@ -215,9 +215,9 @@ class Literal(object):
     def __init__(self):
         super(Literal, self).__init__()
 
-        self.implies = set()         # set of implied literals
+        self.implies = set()         # what to include among with this one
         self.imply_reasons = list()  # precreated reason objects
-        self.neglasts = dict()       # neglast-to-index_in_its_list mapping
+        self.neglasts = set()        # from where to exclude
 
     def __invert__(self):
         """Returns the opposite literal."""
@@ -280,10 +280,10 @@ class Literal(object):
         else:
             neglast = Neglast(~self, node_values, why)
 
-            for index, literal in enumerate(neglast.literals):
+            for literal in neglast.literals:
                 if self.node._pgraph is not literal.node._pgraph:
                     raise ValueError('Must belong to the same Pgraph')
-                literal.neglasts[neglast] = index
+                literal.neglasts.add(neglast)
 
     def equivalent_all(self, others, why_therefore=None, why_becauseof=None):
         """Group equivalence: self <=> all(others)"""
