@@ -88,18 +88,12 @@ class Context(object):
         del self.reasons
 
     def update(self, other, check=True):
-        if check and not other.valid:
-            raise ContextError(self)
-
         self |= other
 
         if check and not self.valid:
             raise ContextError(self)
 
     def difference_update(self, other, check=True):
-        if check and not other.valid:
-            raise ContextError(self)
-
         self -= other
 
         if check and not self.valid:
@@ -136,6 +130,9 @@ class TrunkContext(Context):
     def __isub__(self, other):
         return NotImplemented
 
+    def branchset(self):
+        return set(itervalues(self.branchmap))
+
 
 class BranchContextBase(Context):
     """docstring for BranchContextBase"""
@@ -169,14 +166,17 @@ class BranchContextBase(Context):
         except (StopIteration, KeyError):
             assert False, 'should not happen'
         else:
-            assert self.gen_literals == set(map(operator.__invert__,
-                                                inv_branch.gen_literals))
+            assert (not self.valid or not inv_branch.valid or
+                    self.gen_literals == set(map(operator.__invert__,
+                                                 inv_branch.gen_literals)))
 
         return inv_branch
 
     def __ior__(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both branches must belong to the same trunk')
+        if other.todo:
+            raise NotImplementedError('Other is not ready')
 
         if self.literals >= other.gen_literals:
             assert self.nodes    >= other.nodes
@@ -189,8 +189,6 @@ class BranchContextBase(Context):
 
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__ior__, negexcl)
-
-        self.todo |= other.todo
 
         return super(BranchContextBase, self).__ior__(other)
 
@@ -303,22 +301,22 @@ class BranchContext(BranchContextBase):
 
     @property
     def initialized(self):
-        return bool(self.literals)
+        return not self.todo
 
-    def __init__(self, trunk, *gen_literals):
+    def __init__(self, trunk, gen_literal):
         super(BranchContext, self).__init__(trunk)
 
-        self.gen_literals.update(gen_literals)
+        self.error = None
+        self.gen_literals.add(gen_literal)
 
-        self.init_task  = None
-        self.error      = None
+        self.add_literal(gen_literal)
+
+        self.reasons.update(gen_literal.imply_reasons)
+        self.todo |= gen_literal.implies
 
     def copy(self):
         new = super(BranchContext, self).copy()
-
-        new.init_task  = None
-        new.error      = None
-
+        new.error = None
         return new
 
 
@@ -393,73 +391,75 @@ def create_trunk(pgraph, initial_literals=[]):
     return trunk
 
 
-def initialize_branch(branch):
-    """
-    Merges all implied branches into the given one.
+def prepare_branches(trunk, unresolved_nodes):
+    for node in unresolved_nodes:
+        for literal in node:
+            branch = trunk.branchmap[literal] = BranchContext(trunk, literal)
+            branch.todo_it = None
 
-    Upon returning the branch is completely initialized, unless a ContextError
-    has been raised. In the latter case the branch is considered invalid (not
-    branch.valid) and the raised error is remembered in branch.error attribute.
-    """
-    assert branch.init_task is None
+    assert len(trunk.branchmap) == 2*len(unresolved_nodes)
 
-    if branch.initialized:
-        return
+    stack = list()
 
-    branch.init_task = branch_init_task(branch)
-    stack = [branch]
+    def stack_push(branch):
+        assert branch.todo_it is None
+        branch.todo_it = branch.iter_todo_away()
+        stack.append(branch)
 
-    while stack:
+    def stack_pop():
+        branch = stack.pop()
+        del branch.todo_it
+        return branch
+
+    todo_branches = trunk.branchset()
+
+    while stack or todo_branches:
+        if not stack:
+            stack_push(todo_branches.pop())
+
+        branch = stack[-1]
+        # print ' .' * len(stack), 'branch %r for:' % \
+        #   (id(stack[-1]) % 37), sorted(branch.gen_literals)
+
         try:
-            # print ' .' * len(stack), 'branch %r for:' % \
-            #   (id(stack[-1]) % 37), sorted(stack[-1].gen_literals)
-            implied = next(stack[-1].init_task)
+            # Can't use branch.handle_todos since some branches are in an
+            # intermediate state. Manual iteration also makes it possible to
+            # check for mutual implication more efficiently.
+            literal, implied = next(branch.todo_it)
+            # print ' ' * 60, id(branch) % 37, '->', id(implied) % 37, \
+            #  '\t', literal
 
-        except StopIteration:
-            # print ' .' * len(stack), 'branch %r done' % (id(stack[-1]) % 37)
-            stack.pop().init_task = None
+            if not implied.valid:
+                branch.todo.add(literal)
+                raise ContextError(branch)
+
+            if implied.initialized:
+                branch.update(implied)
+                continue
+
+            if implied.todo_it is not None:  # Equivalent (mutual implication).
+                implied.todo |= branch.todo
+                branch.todo.clear()
+
+                implied.update(branch)
+                branch.substitute_with(implied)
+
+                raise StopIteration  # forget about this branch
 
         except ContextError as error:
-            # print ' .' * len(stack), 'branch %r dies' % (id(stack[-1]) % 37)
+            # print ' .' * len(stack), 'branch %r dies' % (id(branch) % 37)
             # unwind implication stack
-            for implicant in reversed(stack):
-                implicant.init_task = None
+            for implicant in pop_iter(stack, pop=stack_pop):
                 implicant.error = error
                 error = ContextError(implicant, error)
-            raise
 
-        else:
-            assert not implied.initialized and implied.init_task is None
+        except StopIteration:
+            # print ' .' * len(stack), 'branch %r done' % (id(branch) % 37)
+            # no more implications, or the branch was merged into an equivalent
+            stack_pop()
 
-            implied.init_task = branch_init_task(implied)
-            stack.append(implied)
-
-
-def branch_init_task(branch):
-    for gen_literal in branch.gen_literals:
-        branch.add_literal(gen_literal)
-
-        branch.reasons.update(gen_literal.imply_reasons)
-        branch.todo |= gen_literal.implies
-
-    # Can't use branch.handle_todos since some branches are in an
-    # intermediate state. Manual iteration also makes it possible to check
-    # for mutual implication more efficiently.
-    for literal, implied in branch.iter_todo_away():
-        # print ' ' * 60, id(branch) % 37, '->', id(implied) % 37, '\t', literal
-
-        if implied.init_task is not None:  # Equivalent (mutual implication).
-            implied.update(branch)
-
-            branch.substitute_with(implied)
-            break  # forget about this branch, nothing more to do here
-
-        elif implied.initialized:
-            branch.update(implied)
-
-        else:
-            yield implied  # defer until a branch is initialized
-
+        else:  # defer until a branch is initialized
+            #
             # During initialization of the implied branch it may have been
             # replaced by an implicant (appears upper on the stack).
             #
@@ -467,38 +467,24 @@ def branch_init_task(branch):
             #   A => B => C => A
             #           ^- assuming we're handling this implication now
             #
-            # Upon returning back from 'yield' above, a branch initially
-            # created for C gets replaced by A and should not be used
-            # anymore.
+            # Upon returning back to handling the implication, a branch
+            # initially created for C gets replaced by A and should not be
+            # used anymore.
             #
             # So the best thing we can do here is to restart handling the
             # literal from the beginning.
             branch.todo.add(literal)
 
-
-def prepare_branches(trunk, unresolved_nodes):
-    for node in unresolved_nodes:
-        for literal in node:
-            trunk.branchmap[literal] = BranchContext(trunk, literal)
-
-    assert len(trunk.branchmap) == 2*len(unresolved_nodes)
+            todo_branches.remove(implied)
+            stack_push(implied)
 
 
 def resolve_branches(trunk):
     resolved = BranchContextBase(trunk)
 
-    for literal, branch in iteritems(trunk.branchmap):
-        try:
-            initialize_branch(branch)
-        except ContextError:
-            assert not branch.valid
+    for branch in trunk.branchset():
         if not branch.valid:
-            # Can't hold references to an inverted branch since it can be
-            # swapped with another one later. So add an inverted literal.
-            resolved.todo.add(~literal)  # TODO reason
-
-    for literal, branch in resolved.iter_todo_away():
-        resolved.update(branch)
+            resolved.update(~branch)
 
     while resolved:
         trunk.update(resolved)
@@ -509,7 +495,7 @@ def resolve_branches(trunk):
 
         next_resolved = BranchContextBase(trunk)
 
-        for branch in set(itervalues(trunk.branchmap)):
+        for branch in trunk.branchset():
             assert branch.valid, 'only valid branches must have left'
 
             try:
@@ -522,7 +508,7 @@ def resolve_branches(trunk):
 
 
 def combine_branches(trunk):
-    all_branches = sorted(set(itervalues(trunk.branchmap)),
+    all_branches = sorted(trunk.branchset(),
             key=lambda branch: len(branch) / float(branch.cost+1),
             reverse=True)  # bigger and cheaper go first
 
@@ -553,11 +539,18 @@ def combine_branches(trunk):
 
         branch_unions = list()
         for pair in pairs:
-            branch = pair[0] | pair[1]
-            branch.components = pair[0].components | pair[1].components
+            components = pair[0].components | pair[1].components
+            if components in unionmap:
+                continue
 
-            assert branch.components not in unionmap
-            unionmap[branch.components] = branch
+            branch = unionmap[components] = pair[0] | pair[1]
+            branch.components = components
+
+            if not branch.valid:
+                for n, each in enumerate(pair):
+                    each.update(~pair[not n])
+                for each in pair:
+                    each.handle_todos()
 
             branch_unions.append(branch)
 
@@ -596,7 +589,7 @@ def solve(pgraph, initial_values):
 
     prepare_branches(trunk, nodes-trunk.nodes)
     resolve_branches(trunk)
-    combine_branches(trunk)
+    # combine_branches(trunk)
 
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
