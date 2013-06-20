@@ -6,13 +6,16 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-12-14"
 
 
-from itertools import izip
+from collections import defaultdict
+from itertools import chain
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
 from core import Error
-from pdag import *
+from pgraph import *
+from util import bools
 
+from compat import *
 import logs as log
 
 
@@ -25,16 +28,13 @@ class InstanceNodeBase(object):
         super(InstanceNodeBase, self).__init__()
 
         self._parent = parent
-        self._childmap = {}
+        self._childmap = defaultdict(dict)
 
     def get_child(self, key, value):
         return self._childmap[key][value]
 
-    def _create_children(self, key, values):
-        try:
-            vmap = self._childmap[key]
-        except KeyError:
-            vmap = self._childmap[key] = {}
+    def _create_children(self, key, *values):
+        vmap = self._childmap[key]
 
         for value in values:
             if value in vmap:
@@ -48,7 +48,7 @@ class InstanceNodeBase(object):
         return cls(parent=self)
 
     def iter_children(self, key):
-        return self._childmap[key].iteritems()
+        return iteritems(self._childmap[key])
 
 
 class InstanceNode(InstanceNodeBase):
@@ -76,7 +76,7 @@ class InstanceNode(InstanceNodeBase):
     def add_provided(self, expr):
         self._provideds.append(expr)
 
-    def make_decisions(self, module_expr, option=None, values=(True, False)):
+    def make_decisions(self, module_expr, option=None, values=bools):
         """
         Either retrieves an already taken decision (in case of replaying),
         or creates a new child for each value from 'values' iterable returning
@@ -91,14 +91,14 @@ class InstanceNode(InstanceNodeBase):
 
         except KeyError:
             values = tuple(values)
-            return izip(values, self._create_children(key, values))
+            return zip(values, self._create_children(key, *values))
 
         else:
-            return ((value, self),)
+            return [(value, self)]
 
     def extend_decisions(self, module, option, value):
         key = module, option
-        child, = self._create_children(key, (value,))
+        child, = self._create_children(key, value)
         return value, child
 
     def _cond_pnode(self, g, module_expr, option, value):
@@ -110,36 +110,33 @@ class InstanceNode(InstanceNodeBase):
             # here value is bool
             pnode = g.pnode_for(module_expr)
             if not value:
-                pnode = g.new(Not, pnode)
+                pnode = Not(g, pnode)
 
         return pnode
 
     def create_pnode(self, g):
-        constraints = g.new(And,
-            *(g.pnode_for(expr) for expr in self._constraints))
-
         def iter_conjuncts():
-            for (module_expr, option), vmap in self._childmap.iteritems():
-                for value, child in vmap.iteritems():
+            for (module_expr, option), vmap in iteritems(self._childmap):
+                for value, child in iteritems(vmap):
 
-                    yield g.new(Implies,
+                    yield Implies(g,
                         self._cond_pnode(g, module_expr, option, value),
                         child.create_pnode(g))
 
-        return g.new(And, constraints, *iter_conjuncts())
+        return And(g, *chain(map(g.pnode_for, self._constraints),
+                             iter_conjuncts()))
 
     def create_decisions_pnode(self, g):
         def iter_conjuncts():
-            for (module_expr, option), value in self._decisions.iteritems():
+            for (module_expr, option), value in iteritems(self._decisions):
                 yield self._cond_pnode(g, module_expr, option, value)
 
-        return g.new(And, *iter_conjuncts())
+        return And(g, *iter_conjuncts())
 
     def __repr__(self):
-        decisions = self._decisions
         return ', '.join('%s%s=%s' %
-                (module, '.' + option if option else '', value)
-            for (module, option), value in decisions.iteritems())
+                    (module, '.' + option if option else '', value)
+                for (module, option), value in iteritems(self._decisions))
 
 class Instance(object):
 
@@ -191,7 +188,10 @@ class Instance(object):
     def _decide_option(self, mslice, option):
         module = mslice._module
 
-        def domain_gen():
+        def domain_gen(node):
+            # This is made through a generator so that in case of replaying
+            # everything below (check, subscribing, etc.) is skipped.
+
             if not hasattr(mslice, option):
                 raise AttributeError("'%s' module has no attribute '%s'" %
                                      (module._name, option))
@@ -199,12 +199,10 @@ class Instance(object):
             # Option without the module itself is meaningless.
             self.constrain(mslice)
 
-            # Need to read and save the currnet node here
-            # because '_make_decision' overwrites self._node it with its child.
-            saved_node = self._node
             def on_domain_extend(new_value):
-                _, child_node = saved_node.extend_decisions(module, option,
-                                                            new_value)
+                # NB: using 'node', not 'self._node'
+                _, child_node = node.extend_decisions(module, option,
+                                                      new_value)
                 self._spawn(child_node)
 
             option_domain = self._context.domain_for(module, option)
@@ -213,7 +211,9 @@ class Instance(object):
             for value in option_domain:
                 yield value
 
-        return self._make_decision(module, option, domain_gen())
+        # The 'node' is bound here (the argument of 'domain_gen') because
+        # '_make_decision' overwrites 'self._node' with its child.
+        return self._make_decision(module, option, domain_gen(self._node))
 
     def _make_decision(self, module_expr, option=None, domain=(True, False)):
         """
@@ -224,7 +224,7 @@ class Instance(object):
 
         try:
             # Retrieve the first one (if any) to return it.
-            ret_value, self._node = decisions.next()
+            ret_value, self._node = next(decisions)
 
         except StopIteration:
             raise InstanceError('No viable choice to take')
@@ -234,9 +234,8 @@ class Instance(object):
                       '.' + option if option else '', ret_value)
 
         # Spawn for the rest ones.
-        spawn = self._spawn
         for _, node in decisions:
-            spawn(node)
+            self._spawn(node)
 
         return ret_value
 

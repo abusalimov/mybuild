@@ -27,16 +27,16 @@ from util import InstanceBoundTypeMixin
 class Module(object):
     """A basic building block of Mybuild."""
 
-    def __init__(self, fxn):
-        self._init_fxn = fxn
-        self._name = fxn.__name__
+    def __init__(self, func):
+        self._init_func = func
+        self._name = func.__name__
 
         class ModuleType(object):
             __slots__ = ()
             _module = self
             _module_name = self._name
 
-        self._options = Optuple._new_type_options(ModuleType, fxn)
+        self._options = Optuple._new_type_options(ModuleType, func)
 
     def __call__(self, **kwargs):
         return self._options._ellipsis._replace(**kwargs)
@@ -57,13 +57,16 @@ class Optuple(InstanceBoundTypeMixin):
                 (v for v in self if v is not Ellipsis))
 
     def _iterpairs(self, with_ellipsis=False):
-        return self._izipwith(self._fields, with_ellipsis, swap=True)
+        return self._zipwith(self._fields, with_ellipsis, swap=True)
 
-    def _izipwith(self, other, with_ellipsis=False, swap=False):
+    def _zipwith(self, other, with_ellipsis=False, swap=False):
         it = zip(self, other) if not swap else zip(other, self)
         self_idx = int(bool(swap))
         return (it if with_ellipsis else
                 (pair for pair in it if pair[self_idx] is not Ellipsis))
+
+    def _mapwith(self, func):
+        return self._make(map(func, self))
 
     def _to_optuple(self):
         return self
@@ -79,10 +82,10 @@ class Optuple(InstanceBoundTypeMixin):
         return self._type_hash() ^ tuple.__hash__(self)
 
     @classmethod
-    def _options_from_fxn(cls, fxn):
+    def _options_from_func(cls, func):
         """Converts a function argspec into a list of Option objects."""
 
-        args, va, kw, defaults = getargspec(fxn)
+        args, va, kw, defaults = getargspec(func)
         defaults = defaults or ()
 
         if va is not None:
@@ -116,8 +119,8 @@ class Optuple(InstanceBoundTypeMixin):
                 for option, name in zip(head + tail, option_args)]
 
     @classmethod
-    def _new_type_options(cls, module_type, fxn):
-        options = cls._options_from_fxn(fxn)
+    def _new_type_options(cls, module_type, func):
+        options = cls._options_from_func(func)
 
         optuple_base = namedtuple('OptupleBase',
                                   (option._name for option in options))
@@ -146,7 +149,7 @@ class Option(object):
         super(Option, self).__init__()
 
         self.default = values[0] if values else Ellipsis
-        self.allow_others = True
+        self.extendable = True
 
         self._values = set(values)
         if Ellipsis in self._values:
@@ -156,27 +159,58 @@ class Option(object):
 
     def set(self, **flags):
         if 'default' in flags:
-            default = flags.pop('default')
-            self.default = default
-            if default is not Ellipsis and default not in self._values:
+            default = flags['default']
+            if flags.pop('_check_default', False):
+                if default not in self._values:
+                    raise ValueError('default value (%r) not in values' %
+                                     default)
+            elif default is not Ellipsis:
                 self._values.add(default)
 
-        for attr in 'allow_others', '_name', '_module':
+        for attr in 'default', 'extendable', '_check_func', '_name', '_module':
             if attr in flags:
                 setattr(self, attr, flags.pop(attr))
 
         if flags:
-            raise TypeError('Unrecognized flags: %s' % ', '.join(flags.keys()))
+            raise TypeError('Unrecognized flag(s): %s' % ', '.join(flags))
 
         return self
 
+    def _check(self, *values):
+        if not self.extendable and set(values)-self._values:
+            return False
+
+        if all(map(getattr(self, '_check_func', lambda: True), values)):
+            return False
+
+        return True
+
     @classmethod
     def enum(cls, *values):
-        return cls(*values, allow_others=False)
+        return cls(*values, extendable=False)
 
     @classmethod
     def bool(cls, default=False):
-        return cls(True, False, default=default, allow_others=False)
+        return cls(False, True, default=default,
+                   extendable=False, _check_default=True)
+
+    @classmethod
+    def tristate(cls, default=None):
+        return cls(None, False, True, default=default,
+                   extendable=False, _check_default=True)
+
+    @classmethod
+    def str(cls, default=Ellipsis):
+        return cls.of_type(str, default)
+
+    @classmethod
+    def of_type(cls, types, default=Ellipsis):
+        ret = cls(_check_func=partial(isinstance, classinfo=types))
+
+        if default is not Ellipsis:
+            ret.set(default=default)
+
+        return ret
 
 
 class Error(Exception):
@@ -207,5 +241,8 @@ class Error(Exception):
                                  fmt_args)
 
 class InternalError(Exception):
-    """Unrecoverable application errors indicating that goes really wrong."""
+    """
+    Unrecoverable application errors indicating that something goes really
+    wrong.
+    """
 

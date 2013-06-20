@@ -11,8 +11,8 @@ from compat import *
 class Pair(namedtuple('_Pair', 'false true')):
     __slots__ = ()
 
-    def _map_with(self, fxn):
-        return Pair._make(map(fxn, self))
+    def _mapwith(self, func):
+        return Pair._make(map(func, self))
 
 bools = Pair(False, True)
 
@@ -62,17 +62,17 @@ def send_next_iter(it, first=None):
             yield  # from send
 
 
-def until_fixed(fxn):
-    prev = fxn()
+def until_fixed(func):
+    prev = func()
     yield prev
 
-    next = fxn()
+    next = func()
 
     while prev != next:
         yield next
 
         prev = next
-        next = fxn()
+        next = func()
 
 def unique(iterable, key=id):
     """
@@ -127,11 +127,11 @@ class NotifyingMixin(object):
         self.__subscribers = []
 
     def _notify(self, *args, **kwargs):
-        for fxn in self.__subscribers:
-            fxn(*args, **kwargs)
+        for func in self.__subscribers:
+            func(*args, **kwargs)
 
-    def subscribe(self, fxn):
-        self.__subscribers.append(fxn)
+    def subscribe(self, func):
+        self.__subscribers.append(func)
 
 
 class InstanceBoundTypeMixin(object):

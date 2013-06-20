@@ -35,6 +35,7 @@ __all__ = [
 
 from collections import Mapping
 from collections import namedtuple
+from itertools import combinations
 
 from compat import *
 
@@ -84,6 +85,10 @@ class Pgraph(object):
     class NodeBase(object):
         __slots__ = ()
 
+        class __metaclass__(type):
+            def __call__(cls, pgraph, *args, **kwargs):
+                return pgraph.new_node(cls, *args, **kwargs)
+
         def __new__(cls, *args, **kwargs):
             try:
                 cls._pgraph
@@ -102,7 +107,8 @@ class Pgraph(object):
             try:
                 ret = cache[cache_key]
             except KeyError:
-                ret = cache[cache_key] = cls(*args, **kwargs)
+                ret = cache[cache_key] = super(Pgraph.NodeBase.__metaclass__,
+                                               cls).__call__(*args, **kwargs)
 
             return ret
 
@@ -199,6 +205,12 @@ class Node(Pgraph.NodeBase, Pair):
 
         for literal, literal_cost in zip(self, Pair._make(costs)):
             literal.cost = literal_cost
+
+    def implies(self, other, why=None):
+        self[True].therefore(other[True], why)
+
+    def equivalent(self, other, why_therefore=None, why_becauseof=None):
+        self[True].equivalent(other[True], why_therefore, why_becauseof)
 
 
 class Literal(object):
@@ -404,16 +416,21 @@ def to_nvdict(mapping_pairs_or_literals, check=True):
 
 class AtomicNode(Node):
     """Marker class for leaf nodes."""
+    __slots__ = ()
 
 
 @Pgraph.node_type
 class Atom(AtomicNode):
     """To be extended by the client."""
+    __slots__ = ()
+
     _costs = (0, 1)
 
 
 class ConstNode(AtomicNode):
     """Constrains a node to take a constant value."""
+    __slots__ = ()
+
     types = Pair(None, None)  # overwritten below
     const_value = None  # overridden by subclasses
 
@@ -427,9 +444,9 @@ class ConstNode(AtomicNode):
 
 
 @Pgraph.node_type
-class FalseConst(ConstNode): const_value = False
+class FalseConst(ConstNode): __slots__ = (); const_value = False
 @Pgraph.node_type
-class TrueConst(ConstNode):  const_value = True
+class TrueConst(ConstNode):  __slots__ = (); const_value = True
 
 ConstNode.types = Pair(FalseConst, TrueConst)
 
@@ -676,9 +693,23 @@ class AllEqual(OperandSetNode):
     def __init__(self, *operands):
         super(AllEqual, self).__init__(*operands)
 
+        why_func = self.why_self_equals_all_operands
         for operand in operands:
             self[False].equivalent(operand[False],
-                                   why=self.why_self_equals_all_operands)
+                                   why_becauseof=why_func,
+                                   why_therefore=why_func)
+
+    @classmethod
+    def _new(cls, *operands):
+        if 1 <= len(operands) <= 3:
+            why_func = cls.why_self_equals_all_operands
+            for one, two in combinations(operands, 2):
+                one[False].equivalent(two[False],
+                                      why_becauseof=why_func,
+                                      why_therefore=why_func)
+            return operands[0]
+        else:
+            return super(AllEqual, self)._new(*operands)
 
     @classmethod
     def _new_one_operand(cls, operand):
