@@ -25,9 +25,9 @@ from util import pop_iter
 import logs as log
 
 
-class Context(object):
+class Solution(object):
     """
-    Context backed by sets of nodes and their literals.
+    Solution backed by sets of nodes and their literals.
     """
 
     @property
@@ -39,7 +39,7 @@ class Context(object):
         return sum(literal.cost for literal in self.literals)
 
     def __init__(self):
-        super(Context, self).__init__()
+        super(Solution, self).__init__()
 
         self.nodes    = set()
         self.literals = set()
@@ -91,13 +91,13 @@ class Context(object):
         self |= other
 
         if check and not self.valid:
-            raise ContextError(self)
+            raise SolutionError(self)
 
     def difference_update(self, other, check=True):
         self -= other
 
         if check and not self.valid:
-            raise ContextError(self)
+            raise SolutionError(self)
 
     def add_literal(self, literal, reason=None):
         self.literals .add(literal)
@@ -106,11 +106,11 @@ class Context(object):
             self.reasons.add(reason)
 
 
-class TrunkContext(Context):
-    """docstring for TrunkContext"""
+class TrunkSolution(Solution):
+    """docstring for TrunkSolution"""
 
     def __init__(self):
-        super(TrunkContext, self).__init__()
+        super(TrunkSolution, self).__init__()
 
         self.branchmap = dict()  # maps gen literals to branches
         self.neglefts = dict()   # neglasts to sets of left literals
@@ -125,7 +125,7 @@ class TrunkContext(Context):
         for neglast, negexcl in iteritems(branch.negexcls):
             self.neglefts[neglast] -= negexcl
 
-        return super(TrunkContext, self).__ior__(branch)
+        return super(TrunkSolution, self).__ior__(branch)
 
     def __isub__(self, other):
         return NotImplemented
@@ -134,11 +134,11 @@ class TrunkContext(Context):
         return set(itervalues(self.branchmap))
 
 
-class BranchContextBase(Context):
-    """docstring for BranchContextBase"""
+class BranchSolutionBase(Solution):
+    """docstring for BranchSolutionBase"""
 
     def __init__(self, trunk):
-        super(BranchContextBase, self).__init__()
+        super(BranchSolutionBase, self).__init__()
 
         self.trunk        = trunk
         self.gen_literals = set()  # literals
@@ -147,7 +147,7 @@ class BranchContextBase(Context):
         self.negexcls     = defaultdict(set)  # {neglast: literals...}
 
     def copy(self):
-        new = super(BranchContextBase, self).copy()
+        new = super(BranchSolutionBase, self).copy()
 
         new.trunk         = self.trunk
         new.gen_literals = set()  # this is not copied
@@ -190,7 +190,7 @@ class BranchContextBase(Context):
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__ior__, negexcl)
 
-        return super(BranchContextBase, self).__ior__(other)
+        return super(BranchSolutionBase, self).__ior__(other)
 
     def __isub__(self, other):
         if self.trunk is not other.trunk:
@@ -201,15 +201,15 @@ class BranchContextBase(Context):
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__isub__, negexcl)
 
-        return super(BranchContextBase, self).__isub__(other)
+        return super(BranchSolutionBase, self).__isub__(other)
 
     def update(self, other, check=True, handle_todos=False):
-        super(BranchContextBase, self).update(other, check)
+        super(BranchSolutionBase, self).update(other, check)
         if handle_todos:
             self.handle_todos()
 
     def difference_update(self, other, check=True, handle_todos=False):
-        super(BranchContextBase, self).difference_update(other, check)
+        super(BranchSolutionBase, self).difference_update(other, check)
         if handle_todos:
             self.handle_todos()
 
@@ -228,18 +228,18 @@ class BranchContextBase(Context):
     def clear(self):
         self.todo     .clear()
         self.negexcls .clear()
-        super(BranchContextBase, self).clear()
+        super(BranchSolutionBase, self).clear()
 
     def dispose(self):
         del self.todo
         del self.negexcls
-        super(BranchContextBase, self).dispose()
+        super(BranchSolutionBase, self).dispose()
 
     def add_literal(self, literal, reason=None):
         for neglast in literal.neglasts:
             self.__do_neglast(neglast, operator.methodcaller('add', literal))
 
-        super(BranchContextBase, self).add_literal(literal, reason)
+        super(BranchSolutionBase, self).add_literal(literal, reason)
 
     def __do_neglast(self, neglast, op, *args):
         negleft = self.trunk.neglefts[neglast]
@@ -270,7 +270,7 @@ class BranchContextBase(Context):
                     continue  # included in the trunk, i.e. unconditionally
 
                 assert ~literal in trunk.literals
-                raise ContextError(self)
+                raise SolutionError(self)
 
             yield literal, implied
 
@@ -292,8 +292,8 @@ class BranchContextBase(Context):
                                        for literal in self.gen_literals))
 
 
-class BranchContext(BranchContextBase):
-    """docstring for BranchContext"""
+class BranchSolution(BranchSolutionBase):
+    """docstring for BranchSolution"""
 
     @property
     def valid(self):
@@ -304,7 +304,7 @@ class BranchContext(BranchContextBase):
         return not self.todo
 
     def __init__(self, trunk, gen_literal):
-        super(BranchContext, self).__init__(trunk)
+        super(BranchSolution, self).__init__(trunk)
 
         self.error = None
         self.gen_literals.add(gen_literal)
@@ -315,13 +315,13 @@ class BranchContext(BranchContextBase):
         self.todo |= gen_literal.implies
 
     def copy(self):
-        new = super(BranchContext, self).copy()
+        new = super(BranchSolution, self).copy()
         new.error = None
         return new
 
 
 def create_trunk(pgraph, initial_literals=[]):
-    trunk = TrunkContext()
+    trunk = TrunkSolution()
 
     nodes    = trunk.nodes
     literals = trunk.literals
@@ -386,7 +386,7 @@ def create_trunk(pgraph, initial_literals=[]):
         todo     |= newly_seen
 
     if not trunk.valid:
-        raise ContextError(trunk)
+        raise SolutionError(trunk)
 
     return trunk
 
@@ -394,7 +394,7 @@ def create_trunk(pgraph, initial_literals=[]):
 def prepare_branches(trunk, unresolved_nodes):
     for node in unresolved_nodes:
         for literal in node:
-            branch = trunk.branchmap[literal] = BranchContext(trunk, literal)
+            branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
             branch.todo_it = None
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
@@ -431,7 +431,7 @@ def prepare_branches(trunk, unresolved_nodes):
 
             if not implied.valid:
                 branch.todo.add(literal)
-                raise ContextError(branch)
+                raise SolutionError(branch)
 
             if implied.initialized:
                 branch.update(implied)
@@ -446,12 +446,12 @@ def prepare_branches(trunk, unresolved_nodes):
 
                 raise StopIteration  # forget about this branch
 
-        except ContextError as error:
+        except SolutionError as error:
             # print ' .' * len(stack), 'branch %r dies' % (id(branch) % 37)
             # unwind implication stack
             for implicant in pop_iter(stack, pop=stack_pop):
                 implicant.error = error
-                error = ContextError(implicant, error)
+                error = SolutionError(implicant, error)
 
         except StopIteration:
             # print ' .' * len(stack), 'branch %r done' % (id(branch) % 37)
@@ -480,7 +480,7 @@ def prepare_branches(trunk, unresolved_nodes):
 
 
 def resolve_branches(trunk):
-    resolved = BranchContextBase(trunk)
+    resolved = BranchSolutionBase(trunk)
 
     for branch in trunk.branchset():
         if not branch.valid:
@@ -493,7 +493,7 @@ def resolve_branches(trunk):
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
-        next_resolved = BranchContextBase(trunk)
+        next_resolved = BranchSolutionBase(trunk)
 
         for branch in trunk.branchset():
             assert branch.valid, 'only valid branches must have left'
@@ -501,7 +501,7 @@ def resolve_branches(trunk):
             try:
                 branch.difference_update(resolved, handle_todos=True)
 
-            except ContextError:
+            except SolutionError:
                 next_resolved.update(~branch)  # may raise as well
 
         resolved = next_resolved
@@ -558,7 +558,7 @@ def combine_branches(trunk):
         sum_valid = sum(valid_flags)
 
         if not sum_valid:
-            raise ContextError
+            raise SolutionError
         elif sum_valid == 1:
             print 'Yay!!!'
         elif sum_valid == 2:
@@ -599,11 +599,11 @@ def solve(pgraph, initial_values):
 class SolveError(Exception):
     """docstring for SolveError"""
 
-class ContextError(SolveError):
-    """docstring for ContextError"""
+class SolutionError(SolveError):
+    """docstring for SolutionError"""
 
     def __init__(self, context, cause=None):
-        super(ContextError, self).__init__()
+        super(SolutionError, self).__init__()
         self.context = context
         self.cause = cause
 
