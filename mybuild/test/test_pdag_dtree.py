@@ -118,6 +118,7 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
 
+    @unittest.skip("NIY")
     def test_06(self):
         g = self.pgraph
         A,B,C = self.atoms(g, 'ABC')
