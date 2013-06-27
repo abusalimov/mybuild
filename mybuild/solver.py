@@ -392,6 +392,9 @@ def create_trunk(pgraph, initial_literals=[]):
 
 
 def prepare_branches(trunk, unresolved_nodes):
+    """
+    Non-recursive DFS.
+    """
     for node in unresolved_nodes:
         for literal in node:
             branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
