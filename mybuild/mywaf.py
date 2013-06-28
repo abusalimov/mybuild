@@ -181,8 +181,6 @@ class MyFileFinder(object):
         """Try to find a loader for the specified 'fully.qualified.name'."""
 
         for namespace, (path, defaults) in iteritems(self._namespaces):
-            print '>>>', name, namespace, path, defaults
-
             if not name.startswith(namespace):
                 continue
 
@@ -193,12 +191,11 @@ class MyFileFinder(object):
             if restname and restname[0] == '.':
                 restname = restname[1:]
 
-            if path is None:
+            if not path:
                 path = sys.path
 
             for entry in path:
                 filename = self._find_mybuild(restname, entry)
-                print '>>> >>>', restname, entry, ':', filename
                 if filename:
                     return MybuildFileLoader(name, filename, defaults)
 
@@ -213,7 +210,7 @@ class MyFileFinder(object):
         was_empty = not self._namespaces
 
         defaults = dict(default_globals) if default_globals is not None else {}
-        if path is not None: path = list(path)
+        path = list(path) if path is not None else []
 
         self._namespaces[namespace] = (path, default_globals)
 
