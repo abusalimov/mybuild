@@ -8,29 +8,33 @@ import imp
 import sys
 import os
 
+from compat import *
+
+from util import OrderedDict
+
 from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
 
 def options(ctx):
-	print('mywaf: %r' % ctx)
+    print('mywaf: %r' % ctx)
 
 def configure(ctx):
-	print('mywaf: %r' % ctx)
+    print('mywaf: %r' % ctx)
 
 def load_myfiles(ctx, myfile_names, root_node=None):
-	if root_node is None:
-		root_node = ctx.path
-	myfiles_glob = ['**/' + f for f in wafutils.to_list(myfile_names)]
-	files = root_node.ant_glob(myfiles_glob)
-	print files
+    if root_node is None:
+        root_node = ctx.path
+    myfiles_glob = ['**/' + f for f in wafutils.to_list(myfile_names)]
+    files = root_node.ant_glob(myfiles_glob)
+    print files
 
 wafcontext.Context.load_myfiles = load_myfiles
 
 # Everything below is derived from py3k importlib.
 
 class SourceLoader(object):
-    __metaclass__ = abc.ABCMeta
     """Generic Python source loader."""
+    __metaclass__ = abc.ABCMeta
 
     def load_module(self, name):
         module = sys.modules.get(name)
@@ -59,7 +63,7 @@ class SourceLoader(object):
         module.__file__ = self.get_filename(name)
         module.__package__ = name
         if self.is_package(name):
-            module.__path__ = [self._get_path(module.__file__)]
+            module.__path__ = self._get_path_list(module.__file__)
         else:
             module.__package__ = module.__package__.rpartition('.')[0]
         module.__loader__ = self
@@ -94,7 +98,7 @@ class SourceLoader(object):
     def get_data(self, path):
         raise NotImplementedError
     @abc.abstractmethod
-    def _get_path(self, filename):
+    def _get_path_list(self, filename):
         raise NotImplementedError
 
 
@@ -126,85 +130,103 @@ class FileLoader(object):
         """Cache the module name and the path to the file found by the
         finder."""
         super(FileLoader, self).__init__()
-        self.name = name
-        self.filename = filename
+        self._name = name
+        self._filename = filename
 
-    @_check_arg('name')
+    @_check_arg('_name')
     def get_filename(self, name):
         """Return the path to the source file as found by the finder."""
-        return self.filename
+        return self._filename
 
-    @_check_arg('filename')
+    @_check_arg('_filename')
     def get_data(self, filename):
         """Return the data from path as raw bytes."""
         with open(filename, 'rb') as f:
             return f.read()
 
-    @_check_arg('filename')
-    def _get_path(self, filename):
-        return os.path.dirname(filename)
+    @_check_arg('_filename')
+    def _get_path_list(self, filename):
+        return [os.path.dirname(filename)]
 
 
 class SourceFileLoader(FileLoader, SourceLoader):
     """Concrete implementation of SourceLoader using the file system."""
 
-class ManifestFileLoader(SourceFileLoader):
-    """docstring for ManifestFileLoader"""
-
 class MybuildFileLoader(SourceFileLoader):
     """docstring for MybuildFileLoader"""
 
+    def __init__(self, name, filename, defaults):
+        super(MybuildFileLoader, self).__init__(name, filename)
+        self._defaults = defaults
+
     def _new_module(self, name):
         module = super(MybuildFileLoader, self)._new_module(name)
-
-        try:
-            manifest = sys.modules[name.partition('.')[0]]
-        except KeyError:
-            raise ImportError('Manifest is not loaded for %s' % name)
-
-        if hasattr(manifest, '__all__'):
-            attrs = manifest.__all__
-        else:
-            attrs = [attr for attr in dir(manifest)
-                     if not attr.startswith('_')]
-
-        for attr in attrs:
-            setattr(module, attr, getattr(manifest, attr))
-
+        module.__dict__.update(self._defaults)
         return module
+
+    @_check_arg('_filename')
+    def _get_path_list(self, filename):
+        return []  # our finder ignores it anyway
+
 
 class MyFileFinder(object):
 
-    MANIFEST_SUFFIX = '.MYMANIFEST'
     MYBUILD_FILENAME = 'Pybuild'
 
-    def __init__(self, path):
+    def __init__(self):
         super(MyFileFinder, self).__init__()
-        self.path = path
+        self._namespaces = OrderedDict()
 
-    def find_module(self, name):
+    def find_module(self, name, ignored_path=None):
         """Try to find a loader for the specified 'fully.qualified.name'."""
-        if not name.partition('.')[1]:
-            return self.find_manifest(name)
-        else:
-            return self.find_mybuild(name)
 
-    def find_manifest(self, name):
-        assert '.' not in name
-        filename = os.path.join(self.path, name + self.MANIFEST_SUFFIX)
-        if os.path.isfile(filename):
-            return ManifestFileLoader(name, filename)
+        for namespace, (path, defaults) in iteritems(self._namespaces):
+            print '>>>', name, namespace, path, defaults
 
-    def find_mybuild(self, name):
-        tailname = name.rpartition('.')[2]
-        basepath = os.path.join(self.path, tailname)
+            if not name.startswith(namespace):
+                continue
 
+            restname = name[len(namespace):]
+            if restname and namespace[-1] != '.' != restname[0]:
+                continue
+
+            if restname and restname[0] == '.':
+                restname = restname[1:]
+
+            if path is None:
+                path = sys.path
+
+            for entry in path:
+                filename = self._find_mybuild(restname, entry)
+                print '>>> >>>', restname, entry, ':', filename
+                if filename:
+                    return MybuildFileLoader(name, filename, defaults)
+
+    def _find_mybuild(self, restname, path):
+        basepath = os.path.join(path, *restname.split('.'))
         if os.path.isdir(basepath):
             filename = os.path.join(basepath, self.MYBUILD_FILENAME)
             if os.path.isfile(filename):
-                return MybuildFileLoader(name, filename)
+                return filename
+
+    def register_namespace(self, namespace, path=None, default_globals=None):
+        was_empty = not self._namespaces
+
+        defaults = dict(default_globals) if default_globals is not None else {}
+        if path is not None: path = list(path)
+
+        self._namespaces[namespace] = (path, default_globals)
+
+        if was_empty and self not in sys.meta_path:
+            sys.meta_path.insert(0, self)
+
+    def unregister_namespace(self, namespace):
+        del self._namespaces[namespace]
+
+        if not self._namespaces and self in sys.meta_path:
+            sys.meta_path.remove(self)
 
 
-if MyFileFinder not in sys.path_hooks:
-    sys.path_hooks.insert(0, MyFileFinder)
+my_file_importer = MyFileFinder()  # singleton instance
+
 
