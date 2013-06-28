@@ -34,10 +34,6 @@ class Solution(object):
     def valid(self):
         return len(self.nodes) == len(self.literals)
 
-    @property
-    def cost(self):
-        return sum(literal.cost for literal in self.literals)
-
     def __init__(self):
         super(Solution, self).__init__()
 
@@ -311,8 +307,8 @@ class BranchSolution(BranchSolutionBase):
 
         self.add_literal(gen_literal)
 
-        self.reasons.update(gen_literal.imply_reasons)
-        self.todo |= gen_literal.implies
+        self.reasons |= gen_literal.imply_reasons
+        self.todo    |= gen_literal.implies
 
     def copy(self):
         new = super(BranchSolution, self).copy()
@@ -355,7 +351,7 @@ def create_trunk(pgraph, initial_literals=[]):
         assert literal in literals, "must has already been added"
         nodes.add(literal.node)
 
-        reasons.update(literal.imply_reasons)
+        reasons |= literal.imply_reasons
 
         for neglast in literal.neglasts:
             negleft = neglefts[neglast]
@@ -482,12 +478,11 @@ def prepare_branches(trunk, unresolved_nodes):
             stack_push(implied)
 
 
-def resolve_branches(trunk):
+def resolve_branches(trunk, branches):
     resolved = BranchSolutionBase(trunk)
 
-    for branch in trunk.branchset():
-        if not branch.valid:
-            resolved.update(~branch)
+    for branch in branches:
+        resolved.update(branch)
 
     while resolved:
         trunk.update(resolved)
@@ -510,77 +505,15 @@ def resolve_branches(trunk):
         resolved = next_resolved
 
 
-def combine_branches(trunk):
-    all_branches = sorted(trunk.branchset(),
-            key=lambda branch: len(branch) / float(branch.cost+1),
-            reverse=True)  # bigger and cheaper go first
+def stepwise_resolve(trunk):
+    levelmap = defaultdict(set)
 
-    assert all(branch.valid for branch in all_branches)
+    for literal, branch in iteritems(trunk.branchmap):
+        if literal.level is not None:
+            levelmap[literal.level].add(branch)
 
-    unionmap = dict()
-    branches = list()
-    skipset  = set()
-
-    for branch in all_branches:
-        branch.components = frozenset(trunk.branchmap[literal]
-                                      for literal in branch.literals)
-        assert branch.components not in unionmap
-        unionmap[branch.components] = branch
-
-        if branch in skipset:
-            continue
-
-        branches.append(branch)
-        skipset.add(~branch)
-
-    assert len(all_branches) == 2*len(branches)
-
-    for pair in combinations(branches, 2):
-        # pairs = (~a|~b, ~a|b, a|~b, a|b)
-        pairs = tuple(product(*((~each, each) for each in pair)))
-        assert pair[::-1] not in pairs
-
-        branch_unions = list()
-        for pair in pairs:
-            components = pair[0].components | pair[1].components
-            if components in unionmap:
-                continue
-
-            branch = unionmap[components] = pair[0] | pair[1]
-            branch.components = components
-
-            if not branch.valid:
-                for n, each in enumerate(pair):
-                    each.update(~pair[not n])
-                for each in pair:
-                    each.handle_todos()
-
-            branch_unions.append(branch)
-
-        valid_flags = tuple(bool(branch.valid) for branch in branch_unions)
-        sum_valid = sum(valid_flags)
-
-        if not sum_valid:
-            raise SolutionError
-        elif sum_valid == 1:
-            print 'Yay!!!'
-        elif sum_valid == 2:
-            valid_mask = reduce(lambda x, nb: x | (nb[1]<<nb[0]),
-                                enumerate(valid_flags), 0)
-
-            if valid_mask == int('1001', 2) or valid_mask == int('0110', 2):
-                print 'Douh!', bin(valid_mask)
-                continue
-
-            print 'Yay!', bin(valid_mask)
-
-    # unresolved_nodes = set(literal.node for literal in trunk.branchmap)
-    # branch_pairs = [] for node in unresolved_nodes
-
-    from pprint import pprint
-    pprint([(len(branch), float(branch.cost+1), branch)
-            for branch in branches])
-    pprint(dict((k, (v, v.valid)) for k,v in iteritems(unionmap)))
+    for branchset in map(levelmap.get, sorted(levelmap)):
+        resolve_branches(trunk, branchset & trunk.branchset())
 
 
 def solve(pgraph, initial_values):
@@ -591,8 +524,9 @@ def solve(pgraph, initial_values):
     #     print 'trunk', literal
 
     prepare_branches(trunk, nodes-trunk.nodes)
-    resolve_branches(trunk)
-    # combine_branches(trunk)
+    resolve_branches(trunk, (~branch for branch in trunk.branchset()
+                             if not branch.valid))
+    stepwise_resolve(trunk)
 
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)

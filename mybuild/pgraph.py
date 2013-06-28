@@ -183,8 +183,6 @@ class Node(Pgraph.NodeBase, Pair):
     """
     __slots__ = ()
 
-    _costs = (0, 0)
-
     def __new__(cls, *args, **kwargs):
         new_node = super(Node, cls).__new__(cls,
                                             false=Literal(), true=Literal())
@@ -196,15 +194,6 @@ class Node(Pgraph.NodeBase, Pair):
             assert new_node[bool_value].value == bool_value
 
         return new_node
-
-    def __init__(self, costs=None):
-        super(Node, self).__init__()
-
-        if costs is None:
-            costs = self._costs
-
-        for literal, literal_cost in zip(self, Pair._make(costs)):
-            literal.cost = literal_cost
 
     def implies(self, other, why=None):
         self[True].therefore(other[True], why)
@@ -220,16 +209,19 @@ class Literal(object):
 
     Literal object is tightly related to its node. Do not construct it manually.
     """
-    __slots__ = 'node', 'cost', 'implies', 'imply_reasons', 'neglasts'
+    __slots__ = 'node', 'level', 'implies', 'imply_reasons', 'neglasts'
 
     value = property(lambda self: self is self.node[True])
 
     def __init__(self):
         super(Literal, self).__init__()
+        # node property is initialized by the Node itself
 
-        self.implies = set()         # what to include among with this one
-        self.imply_reasons = list()  # precreated reason objects
-        self.neglasts = set()        # from where to exclude
+        self.level = None
+
+        self.implies       = set()  # what to include among with this one
+        self.imply_reasons = set()  # precreated reason objects
+        self.neglasts      = set()  # from where to exclude
 
     def __invert__(self):
         """Returns the opposite literal."""
@@ -242,7 +234,7 @@ class Literal(object):
     @staticmethod
     def __imply(if_, then, why=None):
         if_.implies.add(then)
-        if_.imply_reasons.append(Reason(why, then, if_))
+        if_.imply_reasons.add(Reason(why, then, if_))
 
     def therefore(self, other, why=None):
         """Implication: self => other"""
@@ -314,7 +306,8 @@ class Literal(object):
         return other
 
     def __repr__(self):
-        return "%r=%r" % (self.node, self.value)
+        return "%s%r" % ('' if self.value else '~', self.node)
+        # return "%r=%r" % (self.node, self.value)
 
 class Neglast(object):
     """
@@ -423,8 +416,6 @@ class AtomicNode(Node):
 class Atom(AtomicNode):
     """To be extended by the client."""
     __slots__ = ()
-
-    _costs = (0, 1)
 
 
 class ConstNode(AtomicNode):
@@ -546,6 +537,10 @@ class LatticeOpNode(OperandSetNode):
     @classmethod
     def _new_no_operands(cls):
         return cls._pgraph.new_const(cls.identity)
+
+    @classmethod
+    def _new_one_operand(cls, operand):
+        return operand
 
     def __repr__(self):
         return self._repr_sign.join(map(repr, self._operands)).join('()')

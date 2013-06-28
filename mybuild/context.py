@@ -118,6 +118,8 @@ class ModuleAtom(Atom):
         super(ModuleAtom, self).__init__()
         self.module = module
 
+        self[False].level = 0  # first of all, try not to build a module
+
     def __repr__(self):
         return self.module._name
 
@@ -127,9 +129,16 @@ class OptionValueAtom(Atom):
 
     def __init__(self, module, option, value):
         super(OptionValueAtom, self).__init__()
+
         self.module = module
         self.option = option
         self.value  = value
+
+        is_default = (value == getattr(module._options, option).default)
+        if is_default:
+            # Whenever possible prefer default option value,
+            # but do it after a stage of disabling modules.
+            self[True].level = 1
 
     def __repr__(self):
         return '(%s.%s==%r)' % (self.module._name, self.option, self.value)
