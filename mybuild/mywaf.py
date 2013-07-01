@@ -8,6 +8,8 @@ import imp
 import sys
 import os
 
+from contextlib import contextmanager
+
 from compat import *
 
 from util import OrderedDict
@@ -21,14 +23,40 @@ def options(ctx):
 def configure(ctx):
     print('mywaf: %r' % ctx)
 
-def load_myfiles(ctx, myfile_names, root_node=None):
-    if root_node is None:
-        root_node = ctx.path
-    myfiles_glob = ['**/' + f for f in wafutils.to_list(myfile_names)]
-    files = root_node.ant_glob(myfiles_glob)
-    print files
+def my_load(ctx, namespace, path=None, defaults=None,
+            myfile_names=['Pybuild']):
 
-wafcontext.Context.load_myfiles = load_myfiles
+    myfile_names = wafutils.to_list(myfile_names)
+    myfiles_glob = ['**/' + f for f in myfile_names]
+
+    if path is not None:
+        path_nodes = [ctx.path.find_node(path) for entry in path]
+    else:
+        path_nodes = [ctx.path]
+
+    path = [node.abspath() for node in path_nodes]
+
+    found_names = sorted(set(found.parent.path_from(node)
+                             for node in path_nodes
+                             for found in node.ant_glob(myfiles_glob)))
+
+    with my_file_importer.using_namespace(namespace, path, defaults):
+        for dirname in found_names:
+            if '.' in dirname:
+                if dirname != '.':
+                    Logs.warn("A dot in '{dirname}' path, skipping")
+                continue
+
+            package = dirname.replace(os.path.sep, '.')
+            try:
+                __import__(namespace + '.' + package)
+            except ImportError as e:
+                ctx.fatal('Unable to import {package} found in {dirname}'
+                          .format(locals()), e)
+
+    return __import__(namespace)
+
+wafcontext.Context.my_load = my_load
 
 # Everything below is derived from py3k importlib.
 
@@ -206,16 +234,30 @@ class MyFileFinder(object):
             if os.path.isfile(filename):
                 return filename
 
-    def register_namespace(self, namespace, path=None, default_globals=None):
+    @contextmanager
+    def using_namespace(self, namespace, path=None, defaults=None):
+        saved = self.register_namespace(namespace, path, defaults)
+        try:
+            yield
+        finally:
+            if saved is not None:
+                self.register_namespace(namespace, *saved)
+            else:
+                self.unregister_namespace(namespace)
+
+    def register_namespace(self, namespace, path=None, defaults=None):
+        defaults = dict(defaults) if defaults is not None else {}
+        path     = list(path)     if path     is not None else []
+
         was_empty = not self._namespaces
+        prev = self._namespaces.get(namespace)
 
-        defaults = dict(default_globals) if default_globals is not None else {}
-        path = list(path) if path is not None else []
-
-        self._namespaces[namespace] = (path, default_globals)
+        self._namespaces[namespace] = (path, defaults)
 
         if was_empty and self not in sys.meta_path:
             sys.meta_path.insert(0, self)
+
+        return prev
 
     def unregister_namespace(self, namespace):
         del self._namespaces[namespace]
