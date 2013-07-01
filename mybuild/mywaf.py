@@ -30,7 +30,7 @@ def my_load(ctx, namespace, path=None, defaults=None,
     myfiles_glob = ['**/' + f for f in myfile_names]
 
     if path is not None:
-        path_nodes = [ctx.path.find_node(path) for entry in path]
+        path_nodes = [ctx.path.find_node(entry) for entry in path]
     else:
         path_nodes = [ctx.path]
 
