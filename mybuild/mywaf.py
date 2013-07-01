@@ -44,15 +44,16 @@ def my_load(ctx, namespace, path=None, defaults=None,
         for dirname in found_names:
             if '.' in dirname:
                 if dirname != '.':
-                    Logs.warn("A dot in '{dirname}' path, skipping")
+                    Logs.warn("A dot in '{dirname}' path, skipping"
+                              .format(**locals()))
                 continue
 
-            package = dirname.replace(os.path.sep, '.')
+            package = namespace + '.' + dirname.replace(os.path.sep, '.')
             try:
-                __import__(namespace + '.' + package)
+                __import__(package)
             except ImportError as e:
                 ctx.fatal('Unable to import {package} found in {dirname}'
-                          .format(locals()), e)
+                          .format(**locals()), e)
 
     return __import__(namespace)
 
@@ -190,6 +191,11 @@ class MybuildFileLoader(SourceFileLoader):
     def _new_module(self, name):
         module = super(MybuildFileLoader, self)._new_module(name)
         module.__dict__.update(self._defaults)
+
+        namespace_root, dot, _ = name.partition('.')
+        if dot:
+            setattr(module, namespace_root, sys.modules[namespace_root])
+
         return module
 
     @_check_arg('_filename')
