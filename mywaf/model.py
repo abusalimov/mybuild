@@ -5,6 +5,30 @@ from mybuild.solver import solve
 from mybuild.compat import *
 
 
+from waflib.Task import Task
+from waflib.TaskGen import feature, extension, after_method
+from waflib.Tools import ccroot
+
+
+def build_true_graph(bld, solution):
+    ret = dict()
+    for pnode, value in iteritems(solution):
+        if isinstance(pnode, InstanceAtom):
+            if str(pnode) != 'conf()':
+                if value == True:
+                    print '+++', pnode
+
+                    src = getattr(pnode.instance, 'sources', [])
+                    fullsrc = 'src/hello/' + str(src)
+                    bld(features='mylink', source=fullsrc, target='test')
+                
+                    print(src)
+            else:
+                print '---', pnode
+    
+    return ret
+
+
 def create_model(bld):
     def get_defaults():
         from mybuild import module, option
@@ -22,6 +46,16 @@ def create_model(bld):
 
     solution = solve(g, {g.atom_for(conf):True})
 
-    for pnode, value in iteritems(solution):
-        if isinstance(pnode, InstanceAtom):
-            print '>>>', value, pnode
+    true_g = build_true_graph(bld, solution)
+    
+
+
+@after_method('process_source')
+@feature('mylink')
+def call_apply_link(self):
+        print(self)
+        
+@extension('.c')
+def process_ext(self, node):
+        #self.create_compiled_task('ext2o', node)
+        print(node)
