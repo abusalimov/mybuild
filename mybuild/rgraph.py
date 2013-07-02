@@ -5,12 +5,11 @@ Graph for reasons of pgraph solution
 __author__ = "Vita Loginova"
 __date__ = "2013-06-28"
 
-class Node:
+class Node(object):
     """meta types for nodes in reason graph"""
     def __init__(self):
         self.consequenses = set()
         self.reasons = set()
-        self.isInitial = False
         
     def compare_literals(self, literals):
         return False
@@ -21,16 +20,11 @@ class Node:
 class SingleNode(Node):
     """type for nodes containing only one literal"""   
     def __init__(self, literal):
-        Node.__init__(self)
+        super(SingleNode, self).__init__()
         self.literal = literal
         
     def compare_literals(self, literals):
-        if len(literals) != 1:
-            return False
-        for literal in literals:
-            if literal != self.literal:
-                return False
-        return True
+        return len(literals) == 1 and self.literal in set(literals)
     
     def get_literals(self):
         s = set();
@@ -41,16 +35,11 @@ class SingleNode(Node):
 class MultipleNode(Node):
     """type for nodes containing two or more literals"""  
     def __init__(self, literals):
-        Node.__init__(self)
+        super(MultipleNode, self).__init__()
         self.literals = literals
         
     def compare_literals(self, literals):
-        if len(literals) != len(self.literals):
-            return False
-        for literal in literals:
-            if not (literal in self.literals):
-                return False
-        return True 
+        return (set(literals) == self.literals)
     
     def get_literals(self):
         return self.literals
@@ -66,7 +55,7 @@ class Rgraph(object):
         self.nodes = set()  
         for r in reasons:
             if len(r.cause_literals) > 1:
-                node = MultipleNode(self.convert_to_set(r.cause_literals))
+                node = MultipleNode(set(r.cause_literals))
                 self.nodes.add(node)
         for l in literals:
             node = SingleNode(l)
@@ -74,12 +63,6 @@ class Rgraph(object):
         for r in reasons:
             self.fill_data(r)
         #self.mark_initial_states(initial_values)
-    
-    def convert_to_set(self, literals): 
-        s = set()
-        for l in literals:
-            s.add(l) 
-        return s  
         
     def get_node_by_literals(self, literals): 
         for n in self.nodes:
