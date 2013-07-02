@@ -35,23 +35,44 @@ def import_all(ctx, relative_dirnames, namespace, path=None, defaults=None):
         return __import__(namespace)
 
 
-class MybuildPackageLoader(GenericLoader):
-    """
-    Dummy package module which is filled by contents of Pybuild or Yaml
-    modules.
-    """
+class PackageLoader(GenericLoader):
 
-    def __init__(self, path):
-        super(MybuildPackageLoader, self).__init__()
-        self.path = path
+    def __init__(self, package_path=None):
+        super(PackageLoader, self).__init__()
+        if package_path is None:
+            package_path = []
+        self.path = package_path
 
     def _init_module(self, module):
         fullname = module.__name__
 
         module.__file__    = '<mybuild>'
         module.__package__ = fullname
-        module.__path__    = [self.path]
+        module.__path__    = self.path
         module.__loader__  = self
+
+
+class NamespacePackageLoader(PackageLoader):
+    """
+    Loads package modules corresponding to a namespace being used.
+
+    For example, performing 'my.ns.pkg' import inside 'my.ns' namespace will
+    create two modules ('my' and 'my.ns') using this loader.
+    """
+
+class SubPackageLoader(PackageLoader):
+    """
+    Loads sub package modules and fills them by contents of Pybuild or Yaml
+    modules.
+
+    This is used to create 'my.ns.pkg' module when importing it within 'my.ns'
+    namespace.
+    """
+
+    def _init_module(self, module):
+        super(SubPackageLoader, self)._init_module(module)
+
+        fullname = module.__name__
 
         for sub_name in PYBUILD_MODULE, MYYAML_MODULE:
             try:
@@ -115,34 +136,36 @@ class MybuildImporter(MetaPathFinder):
 
     def find_module(self, fullname, package_path=None):
         """Try to find a loader for the specified 'fully.qualified.name'."""
-        print '>>>', fullname
 
         for namespace, (path, defaults) in iteritems(self._namespaces):
-            if not fullname.startswith(namespace):
+
+            is_namespace_package = (namespace + '.').startswith(fullname + '.')
+            if is_namespace_package:
+                return NamespacePackageLoader()
+
+            within_namespace = (fullname + '.').startswith(namespace + '.')
+            if not within_namespace:
                 continue
 
-            restname = fullname[len(namespace):]
-            if restname and namespace[-1] != '.' != restname[0]:
-                continue
+            tailname = fullname[len(namespace):].rpartition('.')[2]
+            try:
+                filename, loader_type = self.MODULE_TO_FILE_LOADER[tailname]
 
-            if restname and restname[0] == '.':
-                restname = restname[1:]
-
-            headname, _, tailname = restname.rpartition('.')
-            filename, loader_type = self.MODULE_TO_FILE_LOADER.get(tailname,
-                                        (None, None))
-
-            if filename:
+            except KeyError:
                 def find_loader_in(entry):
-                    foundpath = self._find_file(headname, filename, entry)
-                    return foundpath and loader_type(fullname, foundpath,
-                                                     defaults)
+                    foundpath = self._find_package(tailname, entry)
+                    return foundpath and SubPackageLoader([foundpath])
+
             else:
                 def find_loader_in(entry):
-                    foundpath = self._find_package(restname, entry)
-                    return foundpath and MybuildPackageLoader(foundpath)
+                    foundpath = self._find_file(filename, entry)
+                    return foundpath and loader_type(fullname, foundpath,
+                                                     defaults)
 
-            if not path:
+            if package_path:
+                path = package_path
+
+            elif not path:
                 path = sys.path
 
             for loader in map(find_loader_in, path):
@@ -150,15 +173,13 @@ class MybuildImporter(MetaPathFinder):
                     return loader
 
 
-    def _find_file(self, restname, filename, path):
-        basepath = os.path.join(path, *restname.split('.'))
-        if os.path.isdir(basepath):
-            filepath = os.path.join(basepath, filename)
-            if os.path.isfile(filepath):
-                return filepath
+    def _find_file(self, filename, path):
+        filepath = os.path.join(path, filename)
+        if os.path.isfile(filepath):
+            return filepath
 
-    def _find_package(self, restname, path):
-        basepath = os.path.join(path, *restname.split('.'))
+    def _find_package(self, tailname, path):
+        basepath = os.path.join(path, tailname)
         if os.path.isdir(basepath):
             return basepath
 
