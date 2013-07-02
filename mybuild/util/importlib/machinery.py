@@ -4,20 +4,20 @@ Backport of Py3k importlib module.
 
 from __future__ import absolute_import
 
+import abc
 import functools
 import imp
 import sys
 import os.path
 
-from . import abc
+from . import abc as abc_
 
 from ..compat import *
 
 
 # Everything below is derived from py3k importlib
 
-class SourceLoader(abc.SourceLoader):
-    """Generic Python source loader."""
+class GenericLoader(abc_.Loader):
 
     def load_module(self, fullname):
         module = sys.modules.get(fullname)
@@ -38,6 +38,13 @@ class SourceLoader(abc.SourceLoader):
 
     def _new_module(self, fullname):
         return imp.new_module(fullname)
+
+    @abc.abstractmethod
+    def _init_module(self, module):
+        raise NotImplementedError
+
+class SourceLoader(GenericLoader, abc_.SourceLoader):
+    """Generic Python source loader."""
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -84,7 +91,7 @@ def _check_arg(attr):
     return decorator
 
 
-class FileLoader(abc.ResourceLoader, abc.ExecutionLoader):
+class FileLoader(abc_.ResourceLoader, abc_.ExecutionLoader):
     """Implements the loader protocol methods that require file system
     usage."""
 
