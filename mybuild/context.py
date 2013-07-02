@@ -24,7 +24,7 @@ from pgraph import *
 from util import NotifyingMixin
 from util import pop_iter
 
-from compat import *
+from util.compat import *
 import logs as log
 
 # from mybuild.common.module import ModuleBuildOps

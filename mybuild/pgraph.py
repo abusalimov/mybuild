@@ -37,7 +37,7 @@ from collections import Mapping
 from collections import namedtuple
 from itertools import combinations
 
-from compat import *
+from util.compat import *
 
 from util import bools
 from util import Pair

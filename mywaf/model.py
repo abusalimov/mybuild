@@ -1,8 +1,8 @@
-from mybuild import mywaf
+from mybuild import loader
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
 
-from mybuild.compat import *
+from mybuild.util.compat import *
 
 
 from waflib.Task import Task
@@ -21,11 +21,11 @@ def build_true_graph(bld, solution):
                     src = getattr(pnode.instance, 'sources', [])
                     fullsrc = 'src/hello/' + str(src)
                     bld(features='mylink', source=fullsrc, target='test')
-                
+
                     print(src)
             else:
                 print '---', pnode
-    
+
     return ret
 
 
@@ -47,15 +47,16 @@ def create_model(bld):
     solution = solve(g, {g.atom_for(conf):True})
 
     true_g = build_true_graph(bld, solution)
-    
+
 
 
 @after_method('process_source')
 @feature('mylink')
 def call_apply_link(self):
         print(self)
-        
+
 @extension('.c')
 def process_ext(self, node):
         #self.create_compiled_task('ext2o', node)
         print(node)
+

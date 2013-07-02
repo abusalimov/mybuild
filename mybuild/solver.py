@@ -17,7 +17,7 @@ from itertools import combinations
 from itertools import product
 import operator
 
-from compat import *
+from util.compat import *
 from pgraph import *
 
 from util import pop_iter

@@ -20,7 +20,7 @@ from collections import namedtuple
 from inspect import getargspec
 from operator import attrgetter
 
-from compat import *
+from util.compat import *
 from util import InstanceBoundTypeMixin
 
 

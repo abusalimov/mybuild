@@ -15,7 +15,7 @@ from core import Error
 from pgraph import *
 from util import bools
 
-from compat import *
+from util.compat import *
 import logs as log
 
 
