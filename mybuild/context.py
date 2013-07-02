@@ -60,6 +60,7 @@ class Context(object):
             job_func()
 
     def consider(self, module, option=None, value=Ellipsis):
+        print(module)
         domain = self.domain_for(module)
         if option is not None:
             domain.consider_option(option, value)
