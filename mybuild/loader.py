@@ -135,7 +135,30 @@ class MybuildImporter(MetaPathFinder):
         self._namespaces = OrderedDict()
 
     def find_module(self, fullname, package_path=None):
-        """Try to find a loader for the specified 'fully.qualified.name'."""
+        """
+        Try to find a loader for the specified module.
+
+        Args:
+            fullname (str): 'fully.qualified.name'
+            package_path:
+                None   - when importing root package;
+                []     - importing anything within a namespace package;
+                [path] - within a regular (sub-)package;
+
+        Returns:
+            A loader if the module has been located, None otherwise.
+
+        For example, to import 'my.ns.pkg.PYBUILD' inside 'my.ns', this method
+        is called four times:
+
+            fullname              package_path   returns
+            -------------------   ------------   ----------------------
+            'my'                  None           NamespacePackageLoader
+            'my.ns'               []             NamespacePackageLoader
+            'my.ns.pkg'           []             SubPackageLoader
+            'my.ns.pkg.PYBUILD'   [path]         PybuildFileLoader
+
+        """
 
         for namespace, (path, defaults) in iteritems(self._namespaces):
 
@@ -153,14 +176,15 @@ class MybuildImporter(MetaPathFinder):
 
             except KeyError:
                 def find_loader_in(entry):
-                    foundpath = self._find_package(tailname, entry)
-                    return foundpath and SubPackageLoader([foundpath])
+                    basepath = os.path.join(entry, tailname)
+                    if os.path.isdir(basepath):
+                        return SubPackageLoader([basepath])
 
             else:
                 def find_loader_in(entry):
-                    foundpath = self._find_file(filename, entry)
-                    return foundpath and loader_type(fullname, foundpath,
-                                                     defaults)
+                    filepath = os.path.join(entry, filename)
+                    if os.path.isfile(filepath):
+                        return loader_type(fullname, filepath, defaults)
 
             if package_path:
                 path = package_path
@@ -171,17 +195,6 @@ class MybuildImporter(MetaPathFinder):
             for loader in map(find_loader_in, path):
                 if loader is not None:
                     return loader
-
-
-    def _find_file(self, filename, path):
-        filepath = os.path.join(path, filename)
-        if os.path.isfile(filepath):
-            return filepath
-
-    def _find_package(self, tailname, path):
-        basepath = os.path.join(path, tailname)
-        if os.path.isdir(basepath):
-            return basepath
 
     @contextlib.contextmanager
     def using_namespace(self, namespace, path=None, defaults=None):
