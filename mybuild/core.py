@@ -19,6 +19,7 @@ __all__ = [
 from collections import namedtuple
 from inspect import getargspec
 from operator import attrgetter
+import sys
 
 from util.compat import *
 from util import InstanceBoundTypeMixin
@@ -29,7 +30,8 @@ class Module(object):
 
     def __init__(self, func):
         self._init_func = func
-        self._name = func.__name__
+        self._name = func.__module__ + '.' + func.__name__
+        self._file = sys.modules[func.__module__].__file__
 
         class ModuleType(object):
             __slots__ = ()

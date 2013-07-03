@@ -14,7 +14,7 @@ def build_true_graph(bld, solution):
     ret = dict()
     for pnode, value in iteritems(solution):
         if isinstance(pnode, InstanceAtom):
-            if str(pnode) != 'conf()':
+            if str(pnode) != 'prj.conf.PYBUILD.conf()':
                 if value == True:
                     print '+++', pnode
 

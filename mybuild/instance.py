@@ -157,6 +157,7 @@ class Instance(object):
     _context = property(attrgetter('_domain.context'))
     _optuple = property(attrgetter('_domain.optuple'))
     _spawn   = property(attrgetter('_domain.post_new'))
+    module  = property(attrgetter('_domain.module'))
 
     def __init__(self, domain, node):
         super(Instance, self).__init__()
@@ -238,9 +239,9 @@ class Instance(object):
             self._spawn(node)
 
         return ret_value
-
-    def __getattr__(self, attr):
-        return ModuleOptionHolder(getattr(self._optuple, attr))
+    #TODO what is this
+    #def __getattr__(self, attr):
+    #    return ModuleOptionHolder(getattr(self._optuple, attr))
 
     def __repr__(self):
         optuple = self._optuple
