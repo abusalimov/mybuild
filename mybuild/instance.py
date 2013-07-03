@@ -11,12 +11,11 @@ from itertools import chain
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
-from core import Error
-from pgraph import *
-from util import bools
+from .core import Error
+from .pgraph import *
+from .util import bools
 
-from util.compat import *
-import logs as log
+from .util.compat import *
 
 
 class InstanceNodeBase(object):
@@ -157,7 +156,7 @@ class Instance(object):
     _context = property(attrgetter('_domain.context'))
     _optuple = property(attrgetter('_domain.optuple'))
     _spawn   = property(attrgetter('_domain.post_new'))
-    module  = property(attrgetter('_domain.module'))
+    module   = property(attrgetter('_domain.module'))
 
     def __init__(self, domain, node):
         super(Instance, self).__init__()
@@ -230,32 +229,17 @@ class Instance(object):
         except StopIteration:
             raise InstanceError('No viable choice to take')
 
-        else:
-            log.debug('mybuild: deciding %s%s=%s', module_expr,
-                      '.' + option if option else '', ret_value)
-
         # Spawn for the rest ones.
         for _, node in decisions:
             self._spawn(node)
 
         return ret_value
-    #TODO what is this
-    #def __getattr__(self, attr):
-    #    return ModuleOptionHolder(getattr(self._optuple, attr))
 
     def __repr__(self):
         optuple = self._optuple
         node_str = str(self._node)
         return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
 
-
-# Required for be compatible with Pybuild
-# Just covers raw value with object
-class ModuleOptionHolder():
-    def __init__(self, obj):
-        self.obj = obj
-    def value(self, ctx):
-        return self.obj
 
 class InstanceError(Error):
     """

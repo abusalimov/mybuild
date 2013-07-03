@@ -21,8 +21,9 @@ from inspect import getargspec
 from operator import attrgetter
 import sys
 
-from util.compat import *
-from util import InstanceBoundTypeMixin
+from .util import InstanceBoundTypeMixin
+
+from .util.compat import *
 
 
 class Module(object):
@@ -30,8 +31,10 @@ class Module(object):
 
     def __init__(self, func):
         self._init_func = func
-        self._name = func.__module__ + '.' + func.__name__
-        self._file = sys.modules[func.__module__].__file__
+
+        pymodule = sys.modules[func.__module__]
+        self._name = pymodule.__package__ + '.' + func.__name__
+        self._file = pymodule.__file__
 
         class ModuleType(object):
             __slots__ = ()

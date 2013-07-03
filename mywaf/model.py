@@ -16,7 +16,7 @@ def add_mytask(bld, pnode):
     mod = pnode.instance.module
     fullfile = mod._file
     fnode = bld.root.find_node(fullfile)
-    
+
     bld.pre_recurse(fnode)
     folder = fnode.parent
     src = getattr(pnode.instance, 'sources', [])
@@ -27,16 +27,16 @@ def add_mytask(bld, pnode):
     print('sources = ' + str(src))
     bld.post_recurse(fnode)
     print('+++++++++++++++++++++++')
-    
+
 
 def build_true_graph(bld, solution):
     ret = dict()
     for pnode, value in iteritems(solution):
         if isinstance(pnode, InstanceAtom):
-            if str(pnode) != 'prj.conf.PYBUILD.conf()':
+            if str(pnode) != 'prj.conf.conf()':
                 if value == True:
                     add_mytask(bld, pnode)
-    
+
     return ret
 
 
@@ -58,7 +58,7 @@ def create_model(bld):
     solution = solve(g, {g.atom_for(conf):True})
 
     true_g = build_true_graph(bld, solution)
-    
+
 
 
 @after_method('process_source')
@@ -66,7 +66,7 @@ def create_model(bld):
 def call_apply_link(self):
     print('link')
     print(self)
-        
+
 @extension('.c')
 def process_ext(self, node):
     #self.create_compiled_task('ext2o', node)

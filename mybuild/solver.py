@@ -17,12 +17,10 @@ from itertools import combinations
 from itertools import product
 import operator
 
-from util.compat import *
-from pgraph import *
+from .pgraph import *
+from .util import pop_iter
 
-from util import pop_iter
-
-import logs as log
+from .util.compat import *
 
 
 class Solution(object):

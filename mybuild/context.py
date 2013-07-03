@@ -16,19 +16,18 @@ from itertools import chain
 from itertools import product
 from operator import attrgetter
 
-from core import *
-from instance import Instance
-from instance import InstanceError
-from instance import InstanceNode
-from pgraph import *
-from util import NotifyingMixin
-from util import pop_iter
+from .core import *
+from .instance import Instance
+from .instance import InstanceError
+from .instance import InstanceNode
+from .pgraph import *
+from .util import NotifyingMixin
+from .util import pop_iter
 
-from util.compat import *
+from .util.compat import *
+
 import logs as log
 
-# from mybuild.common.module import ModuleBuildOps
-ModuleBuildOps = object
 
 class Context(object):
     """docstring for Context"""
@@ -287,7 +286,7 @@ class InstanceDomain(DomainBase):
 
 
 @ContextPgraph.node_type
-class InstanceAtom(Atom, ModuleBuildOps):
+class InstanceAtom(Atom):
 
     def __init__(self, instance):
         super(InstanceAtom, self).__init__()
@@ -296,24 +295,6 @@ class InstanceAtom(Atom, ModuleBuildOps):
     def __repr__(self):
         return repr(self.instance)
 
-    def is_building(self, model):
-        #return model[self]
-        return True
-
-    def get_sources(self):
-        return getattr(self.instance, 'sources', [])
-
-    def get_options(self):
-        return []
-
-    def qualified_name(self):
-        return getattr(self.instance, 'qualified_name', '')
-
-    def islib(self):
-        return False
-
-    def __getattr__(self, attr):
-        return getattr(self.instance, attr)
 
 if __name__ == '__main__':
     from mybuild import module, option

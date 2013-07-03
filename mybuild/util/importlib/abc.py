@@ -5,11 +5,6 @@ Abstract base classes related to import. Primarily for documentation purposes.
 from __future__ import absolute_import
 
 import abc
-import imp
-import marshal
-import sys
-import tokenize
-import warnings
 
 from ..compat import *
 

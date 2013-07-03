@@ -37,12 +37,10 @@ from collections import Mapping
 from collections import namedtuple
 from itertools import combinations
 
-from util.compat import *
+from .util import bools
+from .util import Pair
 
-from util import bools
-from util import Pair
-
-import logs as log
+from .util.compat import *
 
 
 class PgraphMeta(type):
@@ -313,6 +311,7 @@ class Literal(object):
         return "%s%r" % ('' if self.value else '~', self.node)
         # return "%r=%r" % (self.node, self.value)
 
+
 class Neglast(object):
     """
     Neglast unites a set of literals, that can't coexist all together: at
@@ -440,6 +439,7 @@ class ConstNode(AtomicNode):
 
 @Pgraph.node_type
 class FalseConst(ConstNode): __slots__ = (); const_value = False
+
 @Pgraph.node_type
 class TrueConst(ConstNode):  __slots__ = (); const_value = True
 
@@ -674,6 +674,7 @@ class AtMostOne(SingleZeroLatticeOpNode, Or):
 
     When there is no operands, evaluates to False.
     """
+
 
 @Pgraph.node_type
 class AllEqual(OperandSetNode):
