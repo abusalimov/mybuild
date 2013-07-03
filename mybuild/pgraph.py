@@ -53,9 +53,9 @@ class PgraphMeta(type):
 
     def node_type(cls, target):
         if not (isinstance(target, type) and
-                issubclass(target, Pgraph.NodeBase)):
+                issubclass(target, NodeBase)):
             raise TypeError('Deco must be applied to a subclass '
-                            'of Pgraph.NodeBase, got %s object instead: %r' %
+                            'of NodeBase, got %s object instead: %r' %
                             (type(target).__name__, target))
 
         if any(target in types
@@ -78,51 +78,8 @@ class PgraphMeta(type):
                 yield node_type
 
 
-class Pgraph(object):
+class Pgraph(with_metaclass(PgraphMeta)):
     """docstring for Pgraph"""
-    __metaclass__ = PgraphMeta
-
-    class NodeBase(object):
-        __slots__ = ()
-
-        class __metaclass__(type):
-            def __call__(cls, pgraph, *args, **kwargs):
-                return pgraph.new_node(cls, *args, **kwargs)
-
-        def __new__(cls, *args, **kwargs):
-            try:
-                cls._pgraph
-            except AttributeError:
-                raise RuntimeError("Don't instantiate this class directly, "
-                                   "use pgraph.new_node(%s, ...) instead" %
-                                   cls.__name__)
-            else:
-                return super(Pgraph.NodeBase, cls).__new__(cls, *args, **kwargs)
-
-        @classmethod
-        def _new(cls, *args, **kwargs):
-            cache = cls._pgraph._node_map
-            cache_key = cls, cls._canonical_args(*args, **kwargs)
-
-            try:
-                ret = cache[cache_key]
-            except KeyError:
-                ret = cache[cache_key] = super(Pgraph.NodeBase.__metaclass__,
-                                               cls).__call__(*args, **kwargs)
-
-            return ret
-
-        @classmethod
-        def _canonical_args(cls, *args, **kwargs):
-            """
-            Implementation must return a canonical representation of given
-            arguments.
-            """
-            return cls._starargs(*args, **kwargs)
-
-        @classmethod
-        def _starargs(cls, *args, **kwargs):
-            return (args, frozenset(iteritems(kwargs)))
 
     nodes = property(lambda self: set(itervalues(self._node_map)))
 
@@ -152,14 +109,20 @@ class Pgraph(object):
         return the same object.
         """
         try:
-            node_type = self._node_types[node_type]
+            cls = self._node_types[node_type]
 
         except KeyError:
-            raise KeyError('Must register %s class using @%s.node_type' %
-                           (node_type.__name__, type(self).__name__))
+            raise TypeError('Must register %s class using @%s.node_type' %
+                            (node_type.__name__, type(self).__name__))
 
-        else:
-            return node_type._new(*args, **kwargs)
+        cache_key = cls, cls._canonical_args(*args, **kwargs)
+
+        try:
+            ret = self._node_map[cache_key]
+        except KeyError:
+            ret = self._node_map[cache_key] = cls._new(*args, **kwargs)
+
+        return ret
 
     def new_const(self, const_value, node=None, why=None):
         """
@@ -176,7 +139,48 @@ class Pgraph(object):
         return node
 
 
-class Node(Pgraph.NodeBase, Pair):
+class NodeMeta(type):
+    """
+    Allows a Node to be instantiated as usual by passing a pgraph instance
+    as the first argument.
+    """
+
+    def __call__(cls, pgraph, *args, **kwargs):
+        return pgraph.new_node(cls, *args, **kwargs)
+
+
+class NodeBase(with_metaclass(NodeMeta)):
+    """
+    Subclasses may want to overload NodeBase._new classmethod to customize
+    instance creation instead of using __new__.
+    """
+    __slots__ = ()
+
+    @classmethod
+    def _new(cls, *args, **kwargs):
+        try:
+            cls._pgraph
+        except AttributeError:
+            raise TypeError("Don't instantiate this class directly, "
+                            "use pgraph.new_node(%s, ...) instead" %
+                            cls.__name__)
+        else:
+            return super(NodeMeta, cls).__call__(*args, **kwargs)
+
+    @classmethod
+    def _canonical_args(cls, *args, **kwargs):
+        """
+        Implementation must return a canonical representation of given
+        arguments.
+        """
+        return cls._starargs(*args, **kwargs)
+
+    @classmethod
+    def _starargs(cls, *args, **kwargs):
+        return (args, frozenset(iteritems(kwargs)))
+
+
+class Node(NodeBase, Pair):
     """
     Each node is effectively a pair of two literals:
     one for False, and one for True. See Literal class below.
