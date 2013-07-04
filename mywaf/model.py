@@ -1,5 +1,6 @@
 import os
 
+import mybuild
 from mybuild import loader
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
@@ -22,7 +23,22 @@ def create_model(bld):
         from mybuild import module, option
         return locals()
 
-    prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], get_defaults(), ['Pybuild'])
+    defaults = get_defaults()
+
+    def create_module(pymodule_name, dictionary):
+        print dictionary
+        def module_func(self):
+            for key, value in dictionary:
+                setattr(self, key, value)
+        module_func.__module__ = pymodule_name
+        module_func.__name__ = dictionary.pop('id')
+        return mybuild.module(module_func)
+
+    defaults['!module'] = create_module
+
+    prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], defaults, ['Pybuild'])
+
+    print '>>>>>>>>', prj.hello.yaml_module
 
     ################################
     conf = prj.conf.PYBUILD.conf

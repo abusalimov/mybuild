@@ -4,10 +4,12 @@ meta path importer.
 """
 
 import contextlib
+import functools
 import sys
 import os.path
 
 from .util.collections import OrderedDict
+from .util.importlib.abc import Loader
 from .util.importlib.abc import MetaPathFinder
 from .util.importlib.machinery import GenericLoader
 from .util.importlib.machinery import SourceFileLoader
@@ -18,8 +20,8 @@ from .util.compat import *
 PYBUILD_MODULE   = 'PYBUILD'
 PYBUILD_FILENAME = 'Pybuild'
 
-MYYAML_MODULE   = 'MYYAML'
-MYYAML_FILENAME = 'MyYaml'
+MY_YAML_MODULE   = 'MYYAML'
+MY_YAML_FILENAME = 'MyYaml'
 
 def import_all(ctx, relative_dirnames, namespace, path=None, defaults=None):
     """
@@ -35,10 +37,11 @@ def import_all(ctx, relative_dirnames, namespace, path=None, defaults=None):
         return __import__(namespace)
 
 
-class PackageLoader(GenericLoader):
+class PackageLoaderBase(GenericLoader):
+    """Performs basic initialization required to load a sourceless package."""
 
     def __init__(self, package_path=None):
-        super(PackageLoader, self).__init__()
+        super(PackageLoaderBase, self).__init__()
         if package_path is None:
             package_path = []
         self.path = package_path
@@ -52,7 +55,7 @@ class PackageLoader(GenericLoader):
         module.__loader__  = self
 
 
-class NamespacePackageLoader(PackageLoader):
+class NamespacePackageLoader(PackageLoaderBase):
     """
     Loads package modules corresponding to a namespace being used.
 
@@ -60,7 +63,7 @@ class NamespacePackageLoader(PackageLoader):
     create two modules ('my' and 'my.ns') using this loader.
     """
 
-class SubPackageLoader(PackageLoader):
+class SubPackageLoader(PackageLoaderBase):
     """
     Loads sub package modules and fills them by contents of Pybuild or Yaml
     modules.
@@ -74,7 +77,7 @@ class SubPackageLoader(PackageLoader):
 
         fullname = module.__name__
 
-        for sub_name in PYBUILD_MODULE, MYYAML_MODULE:
+        for sub_name in PYBUILD_MODULE, MY_YAML_MODULE:
             try:
                 __import__(fullname + '.' + sub_name)
             except ImportError:
@@ -91,8 +94,15 @@ class SubPackageLoader(PackageLoader):
                 setattr(module, attr, getattr(sub_module, attr))
 
 
-class PybuildFileLoader(SourceFileLoader):
-    """Customization of a Python-like importer.
+class SourceFileLoaderBase(SourceFileLoader):
+    """Customization of a Python-like importer."""
+
+    def is_package(self, fullname):
+        return False
+
+
+class PybuildFileLoader(SourceFileLoaderBase):
+    """Loads Pybuild files and executes them as regular Python scripts.
 
     Upon creation of a new module initializes its namespace with defaults taken
     from the dictionary passed in __init__. Also adds a global variable
@@ -100,8 +110,10 @@ class PybuildFileLoader(SourceFileLoader):
     """
 
     def __init__(self, fullname, path, defaults):
-        super(PybuildFileLoader, self).__init__(fullname, path)
-        self._defaults = defaults
+        super(SourceFileLoaderBase, self).__init__(fullname, path)
+        self._defaults = dict((key, value)
+                              for key, value in iteritems(defaults)
+                              if key[0] != '!')
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -112,23 +124,69 @@ class PybuildFileLoader(SourceFileLoader):
         if dot:
             setattr(module, namespace_root, sys.modules[namespace_root])
 
-        super(PybuildFileLoader, self)._init_module(module)
-
-    def is_package(self, fullname):
-        return True
+        super(SourceFileLoaderBase, self)._init_module(module)
 
 
-class YamlFileLoader(SourceFileLoader):
-    def __init__(self, fullname, path, defaults):
-        super(YamlFileLoader, self).__init__(fullname, path)
-        self._defaults = defaults
+try:
+    import yaml
+
+except ImportError:
+    class MyYamlFileLoader(Loader):
+        def load_module(self, fullname):
+            raise ImportError('PyYaml is not installed')
+
+else:
+    try:
+        from yaml import CLoader as YamlLoader
+    except ImportError:
+        from yaml import YamlLoader
+
+    class MyYamlFileLoader(SourceFileLoaderBase):
+        """Loads YAML files using PyYaml library."""
+
+        def __init__(self, fullname, path, defaults):
+            super(MyYamlFileLoader, self).__init__(fullname, path)
+            self._defaults = dict((key, value)
+                                  for key, value in iteritems(defaults)
+                                  if key[0] == '!')
+
+        def get_code(self, fullname):
+            return None
+
+        def _exec_module(self, module):
+            fullname = module.__name__
+
+            class MyYamlLoader(YamlLoader):
+                pass
+
+            for tag, func in iteritems(self._defaults):
+                @functools.wraps(func)
+                def constructor(loader, node):
+                    return func(fullname, loader.construct_mapping(node))
+
+                yaml.add_constructor(tag, constructor, Loader=MyYamlLoader)
+
+            try:
+                stream = file(self.get_filename(fullname), 'r')
+                docs = yaml.load_all(stream, Loader=MyYamlLoader)
+
+            except IOError:
+                raise ImportError("IO error while reading a stream")
+            except yaml.YamlError as e:
+                raise e  # XXX convert into SyntaxError
+
+            else:
+                for doc in docs:
+                    if not hasattr(doc, '__name__'):
+                        continue
+                    setattr(module, doc.__name__, doc)
 
 
 class MybuildImporter(MetaPathFinder):
 
     MODULE_TO_FILE_LOADER = {
         PYBUILD_MODULE: (PYBUILD_FILENAME, PybuildFileLoader),
-        MYYAML_MODULE:  (MYYAML_FILENAME, YamlFileLoader),
+        MY_YAML_MODULE: (MY_YAML_FILENAME, MyYamlFileLoader),
     }
 
     def __init__(self):
