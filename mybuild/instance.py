@@ -239,7 +239,29 @@ class Instance(object):
         optuple = self._optuple
         node_str = str(self._node)
         return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
+    
+    def build(self, bld):
+        src = getattr(self, 'sources', [])
+        bld(features='mylink', source=src, target='test')
+        print('+++++++++ add task ++++')
+        print('module = ' + str(self))
+        print('sources = ' + str(src))
+        print('+++++++++++++++++++++++')
 
+from waflib.Task import Task
+from waflib.TaskGen import feature, extension, after_method
+from waflib.Tools import ccroot
+
+@after_method('process_source')
+@feature('mylink')
+def call_apply_link(self):
+    print('link')
+    print(self)
+
+@extension('.c')
+def process_ext(self, node):
+    #self.create_compiled_task('ext2o', node)
+    print(node)
 
 class InstanceError(Error):
     """

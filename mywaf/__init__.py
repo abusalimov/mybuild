@@ -6,6 +6,7 @@ import os.path
 
 from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
+from waflib import Errors  as waferrors
 
 from mybuild.loader import mybuild_importer
 from mybuild.util.collections import OrderedDict
@@ -54,3 +55,21 @@ def my_load(ctx, namespace, path=None, defaults=None,
     return __import__(namespace)
 
 wafcontext.Context.my_load = my_load
+
+def my_recurse(ctx, instances, name=None, mandatory=True, once=True):
+    for instance in instances:
+        node = ctx.root.find_node(instance.module._file)
+        
+        ctx.pre_recurse(node)
+        try:
+            user_function = getattr(instance, (name or ctx.fun), None)
+            if not user_function:
+                if not mandatory:
+                    continue
+                raise waferrors.WafError('No function %s defined in %s' % (name or ctx.fun, instance))
+            user_function(ctx)
+        finally:
+            ctx.post_recurse(node)
+
+
+wafcontext.Context.my_recurse = my_recurse
