@@ -255,13 +255,18 @@ from waflib.Tools import ccroot
 @after_method('process_source')
 @feature('mylink')
 def call_apply_link(self):
-    print('link')
-    print(self)
+    print('linking' + str(self))
+
+class mylink(ccroot.link_task):
+    run_str = 'cat ${SRC} > ${TGT}'
+
+class ext2o(Task):
+    run_str = 'cp ${SRC} ${TGT}'
 
 @extension('.c')
 def process_ext(self, node):
-    #self.create_compiled_task('ext2o', node)
-    print(node)
+    self.create_compiled_task('ext2o', node)
+    
 
 class InstanceError(Error):
     """
