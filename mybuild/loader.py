@@ -103,15 +103,16 @@ class PybuildFileLoader(SourceFileLoader):
         super(PybuildFileLoader, self).__init__(fullname, path)
         self._defaults = defaults
 
-    def _new_module(self, fullname):
-        module = super(PybuildFileLoader, self)._new_module(fullname)
+    def _init_module(self, module):
+        fullname = module.__name__
+
         module.__dict__.update(self._defaults)
 
         namespace_root, dot, _ = fullname.partition('.')
         if dot:
             setattr(module, namespace_root, sys.modules[namespace_root])
 
-        return module
+        super(PybuildFileLoader, self)._init_module(module)
 
     def is_package(self, fullname):
         return True
