@@ -45,20 +45,19 @@ class SourceLoader(GenericLoader, abc_.SourceLoader):
 
     def _init_module(self, module):
         fullname = module.__name__
-        code_object = self.get_code(fullname)
 
         module.__file__ = self.get_filename(fullname)
         module.__package__ = fullname
         if self.is_package(fullname):
-            module.__path__ = self._get_package_path(module.__file__)
+            module.__path__ = [os.path.dirname(module.__file__)]
         else:
             module.__package__ = module.__package__.rpartition('.')[0]
         module.__loader__ = self
 
-        exec(code_object, module.__dict__)
+        self._exec_module(module)
 
-    def _get_package_path(self, filename):
-        return [os.path.dirname(filename)]
+    def _exec_module(self, module):
+        exec(self.get_code(module.__name__), module.__dict__)
 
     def is_package(self, fullname):
         """Concrete implementation of InspectLoader.is_package by checking if
@@ -108,6 +107,7 @@ class FileLoader(abc_.ResourceLoader, abc_.ExecutionLoader):
         """Return the data from path as raw bytes."""
         with open(path, 'rb') as f:
             return f.read()
+
 
 class SourceFileLoader(FileLoader, SourceLoader):
     """Concrete implementation of SourceLoader using the file system."""
