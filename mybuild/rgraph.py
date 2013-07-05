@@ -133,7 +133,7 @@ class Rgraph(object):
         return st
     
     '''
-    This algorithm a common  Dijkstra’s algorithm with small modification:
+    This algorithm a common  Dijkstra's algorithm with small modification:
     if node is Multiple then we put it in end of stack and handle it later.
     We do this because of proposition that cost of node gained before
     rest multiple nodes and they's consequences is minimal. (TODO: modify).
