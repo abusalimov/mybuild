@@ -1,12 +1,6 @@
 """
-Integrates Mybuild-files into Python modules infrastructure by using custom
-meta path importer.
+Namespace-related loaders that don't run any code directly.
 """
-
-import contextlib
-import functools
-import sys
-import os.path
 
 from ..util.importlib.machinery import GenericLoader
 

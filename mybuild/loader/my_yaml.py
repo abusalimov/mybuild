@@ -1,12 +1,8 @@
 """
-Integrates Mybuild-files into Python modules infrastructure by using custom
-meta path importer.
+Loader for YAML files. Uses PyYaml library.
 """
 
-import contextlib
 import functools
-import sys
-import os.path
 
 from ..util.importlib.abc import Loader
 from ..util.importlib.machinery import SourceFileLoader
@@ -33,7 +29,9 @@ else:
         from yaml import YamlLoader
 
     class MyYamlFileLoader(SourceFileLoader):
-        """Loads YAML files using PyYaml library."""
+        """Loads YAML files.
+
+        TODO Does not fully comply InspectLoader protocol."""
 
         def __init__(self, fullname, path, defaults):
             super(MyYamlFileLoader, self).__init__(fullname, path)
