@@ -41,6 +41,7 @@ class NamespacePackageLoader(PackageLoaderBase):
     def __init__(self):
         super(NamespacePackageLoader, self).__init__()
 
+
 class SubPackageLoader(PackageLoaderBase):
     """
     Loads sub package modules and fills them by contents of Pybuild or Yaml
