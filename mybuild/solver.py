@@ -340,6 +340,9 @@ def create_trunk(pgraph, initial_literals=[]):
     # because of keeping more reason chains for all literals.
     todo = to_lset(initial_literals)
     todo.update(pgraph.const_literals)
+    
+    for literal in todo:
+        reasons.add(Reason(None, literal))
 
     literals |= todo
 
