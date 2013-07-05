@@ -20,6 +20,9 @@ class Node(object):
     
     def get_literals(self):
         return set()
+    
+    def __lt__(self, other):
+        return self.length < other.length
         
 class SingleNode(Node):
     """type for nodes containing only one literal"""   
@@ -133,42 +136,36 @@ class Rgraph(object):
         return st
     
     '''
-    This algorithm a common  Dijkstra's algorithm with small modification:
-    if node is Multiple then we put it in end of stack and handle it later.
-    We do this because of proposition that cost of node gained before
-    rest multiple nodes and they's consequences is minimal. (TODO: modify).
+    This algorithm a common  Dijkstra's algorithm with small modification,
+    length of Multiple node is computed as sum of it's reasons.
     After function applying each node contains field length, the length of 
     the shortest way to the initial nodes. If node is Single it also contains
     parent - the previous node in the shortest way. If node is Multiple then
     its parents are reasons.
     '''            
     def find_shortest_ways(self):
-        stack = []
+        stack = Queue.PriorityQueue()
         used = set()
         for node in self.initials:
-            stack.append(node)
+            stack.put_nowait(node)
             node.length = 0
             node.parent = node
             used.add(node)
             
-        while stack:
-            node = stack.pop()
-            
-            if isinstance(node, MultipleNode):
-                    node.length = 0;
-                    for r in node.reasons:
-                        node.length += r.length
-            
+        while not stack.empty():
+            node = stack.get_nowait()
+                 
             for cons in node.consequenses:
                 if isinstance(cons, SingleNode):
                     if cons.length > node.length + 1:
                         cons.length = node.length + 1
                         cons.parent = node
-                    if cons not in used:      
-                        stack.append(cons)
-                        used.add(cons)
+                            
+                if isinstance(cons, MultipleNode):
+                    cons.length = 0;
+                    for r in cons.reasons:
+                        cons.length += r.length
                         
-                if isinstance(cons, MultipleNode):   
-                    if cons not in used:      
-                        stack.insert(0, cons)   
-                        used.add(cons)
+                if cons not in used:      
+                    stack.put_nowait(cons)
+                    used.add(cons)
