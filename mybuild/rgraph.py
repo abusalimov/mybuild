@@ -13,7 +13,7 @@ class Node(object):
     def __init__(self):
         self.consequenses = set()
         self.reasons = set()
-        self.length = sys.maxint
+        self.length = float("+inf")
         
     def compare_literals(self, literals):
         return False
@@ -59,24 +59,21 @@ class Rgraph(object):
     """  
     
     def __init__(self, literals, reasons):
-        self.nodes = set() 
         self.initials = set() 
         
-        for l in literals:
-            node = SingleNode(l)
-            self.nodes.add(node)
+        self.nodes = set(SingleNode(literal) for literal in literals)
             
         for r in reasons:
             if len(r.cause_literals) > 1:
                 node = MultipleNode(set(r.cause_literals))
                 self.nodes.add(node)
-            if len(r.cause_literals) == 0:
+            if not r.cause_literals:
                 s = set()
                 s.add(r.literal)
                 self.initials.add(self.get_node_by_literals(s))
                 
         for r in reasons:
-            if len(r.cause_literals) > 0:
+            if r.cause_literals:
                 self.fill_data(r)
         
     def get_node_by_literals(self, literals): 
@@ -102,11 +99,11 @@ class Rgraph(object):
             if isinstance(n, MultipleNode):
                 self.fill_multiple_node(n)
     
-    '''
-    Simple way to print reason graph. Multiple nodes are printed in new line without offset.
-    ToDo: print by using reason.why
-    '''
     def print_graph(self):
+        """
+        Simple way to print reason graph. Multiple nodes are printed in new line without offset.
+        ToDo: print by using reason.why
+        """
         queue = Queue.LifoQueue()
         used = set()
         
@@ -134,16 +131,16 @@ class Rgraph(object):
         for i in range(0, depth) :
             st = st + '  '  
         return st
-    
-    '''
-    This algorithm a common  Dijkstra's algorithm with small modification,
-    length of Multiple node is computed as sum of it's reasons.
-    After function applying each node contains field length, the length of 
-    the shortest way to the initial nodes. If node is Single it also contains
-    parent - the previous node in the shortest way. If node is Multiple then
-    its parents are reasons.
-    '''            
+               
     def find_shortest_ways(self):
+        """
+        This algorithm a common  Dijkstra's algorithm with small modification,
+        length of Multiple node is computed as sum of it's reasons.
+        After function applying each node contains field length, the length of 
+        the shortest way to the initial nodes. If node is Single it also contains
+        parent - the previous node in the shortest way. If node is Multiple then
+        its parents are reasons.
+        """ 
         stack = Queue.PriorityQueue()
         used = set()
         for node in self.initials:
@@ -162,9 +159,7 @@ class Rgraph(object):
                         cons.parent = node
                             
                 if isinstance(cons, MultipleNode):
-                    cons.length = 0;
-                    for r in cons.reasons:
-                        cons.length += r.length
+                    cons.length = sum(r.length for r in cons.reasons)
                         
                 if cons not in used:      
                     stack.put_nowait(cons)
