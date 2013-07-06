@@ -9,7 +9,7 @@ import sys
 import os.path
 
 from . import my_yaml
-from . import mybuild
+from . import myfile
 from . import pybuild
 from . import package
 
@@ -37,7 +37,7 @@ class MybuildImporter(MetaPathFinder):
 
     MODULE_MAP = {
         my_yaml.MODULE: (my_yaml.FILENAME, my_yaml.MyYamlFileLoader),
-        mybuild.MODULE: (mybuild.FILENAME, mybuild.MybuildFileLoader),
+        myfile.MODULE:  (myfile.FILENAME,  myfile.MybuildFileLoader),
         pybuild.MODULE: (pybuild.FILENAME, pybuild.PybuildFileLoader),
     }
 
