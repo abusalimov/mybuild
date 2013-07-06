@@ -21,10 +21,7 @@ except ImportError:
             raise ImportError('PLY is not installed')
 
 else:
-    try:
-        from ply import CLoader as YamlLoader
-    except ImportError:
-        from ply import YamlLoader
+    pass
 
 
 class MybuildFileLoader(SourceFileLoader):

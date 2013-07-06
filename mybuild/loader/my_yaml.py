@@ -26,7 +26,7 @@ else:
     try:
         from yaml import CLoader as YamlLoader
     except ImportError:
-        from yaml import YamlLoader
+        from yaml import Loader as YamlLoader
 
     class MyYamlFileLoader(SourceFileLoader):
         """Loads YAML files.
