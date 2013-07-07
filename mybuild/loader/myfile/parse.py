@@ -77,19 +77,26 @@ def p_array(p):
 
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_scope(p, Object(parent_scope(p)))
+    p[0] = push_object(p, Object(scope_object(p)))
 
 def p_init_object(p):
     """init_object : object_header
        init_object : object_header object_body
        init_object : object_body"""
-    pop_scope(p)
+    pop_object(p)
 
 
 def p_object_header(p):
     """object_header : qualname object_name object_args"""
     # need to set a name prior to entering object body
-    cur_scope(p).init_header(type_name=p[1], type_args=to_rdict(p[3]), name=p[2])
+    this  = this_object(p)
+    scope = scope_object(p)
+
+    this.init_header(type_name=p[1], type_args=to_rdict(p[3]), name=p[2])
+
+    if this.__qualname__:
+        p.parser.exports[this.__qualname__] = this
+    p.parser.references.append((p[1], scope))
 
 def p_object_name(p):
     """object_name : empty
@@ -118,25 +125,25 @@ def p_parameter(p):
 
 def p_object_body(p):
     """object_body : LBRACE enter_scope docstring object_members RBRACE"""
-    cur_scope(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
+    this_object(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
     p.parser.nesting_depth -= 1
 
 def p_enter_scope(p):
     """enter_scope :"""
     p.parser.nesting_depth += 1
 
-def parent_scope(p):
-    return p.parser.scope_objects[p.parser.nesting_depth]
+def scope_object(p):
+    return p.parser.object_stack[p.parser.nesting_depth]
 
-def cur_scope(p):
-    return p.parser.scope_objects[-1]
+def this_object(p):
+    return p.parser.object_stack[-1]
 
-def push_scope(p, o):
-    p.parser.scope_objects.append(o)
+def push_object(p, o):
+    p.parser.object_stack.append(o)
     return o
 
-def pop_scope(p):
-    return p.parser.scope_objects.pop()
+def pop_object(p):
+    return p.parser.object_stack.pop()
 
 
 def p_docstring_0(p):
@@ -188,10 +195,11 @@ def parse(text, **kwargs):
     parser.exports    = {}  # {qualname: object}
     parser.references = []  # (name, scope)
 
-    parser.scope_objects = [None]
+    parser.object_stack = [None]
     parser.nesting_depth = 0
 
-    return parser.parse(text, lexer=lex.lexer, **kwargs)
+    return (parser.parse(text, lexer=lex.lexer, **kwargs),
+            parser.exports, parser.references)
 
 
 text = '''
