@@ -58,7 +58,7 @@ def t_error(t):
     print("Illegal character %s" % repr(t.value[0]))
     t.lexer.skip(1)
 
-lexer = ply.lex.lex(optimize=1, debug=True, lextab=None)
+lexer = ply.lex.lex(optimize=1, lextab=None)
 
 if __name__ == "__main__":
     ply.lex.runmain(lexer)
