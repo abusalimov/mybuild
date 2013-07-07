@@ -1,193 +1,220 @@
+from collections import namedtuple
+from operator import itemgetter
 import ply.yacc
 
 from . import lex
 
-# Get the token map
+from ...util.compat import *
+from ...util.collections import OrderedDict
+
+
+class Object(object):
+    """docstring for Object"""
+
+    def __init__(self, attrs, docstring, type_name=None, type_args=None,
+                 name=None, scope_name=None):
+        super(Object, self).__init__()
+
+        self.attrs = attrs
+        self.__doc__ = docstring
+
+        self.type_name = type_name
+        if type_args is None:
+            type_args = {}
+        self.type_args = type_args
+
+        if name:
+            self.__name__ = name
+            if scope_name:
+                self.__qualname__ = scope_name + '.' + name
+            else:
+                self.__qualname__ = name
+
+    def __repr__(self):
+        return '{type} {name}(**{type_args}) {attrs}'.format(
+                    type=self.type_name,
+                    name=getattr(self, '__qualname__', ''),
+                    type_args=dict(self.type_args),
+                    attrs=dict(self.attrs))
+
+
+def to_rlist(reversed_list):
+    return reversed_list[::-1]
+
+def to_rdict(reversed_pairs):
+    return OrderedDict(reversed(reversed_pairs))
+
+
 tokens = lex.tokens
-
-p_cnt = 0
-def p(rule, fxn=None):
-    if fxn is None:
-        def fxn(p): pass
-
-    global p_cnt
-    p_cnt += 1
-
-    fxn.__name__ = 'p_rule_%d' % p_cnt
-    fxn.__doc__  = rule
-
-    globals[fxn.__name__] = fxn
-
-def p0(fxn):
-    if isinstance(fxn, int):
-        fxn = itemgetter(fxn)
-    def ret(p):
-        p[0] = fxn()
-    return ret
-
-def append(item_idx, list_idx):
-    def ret(p):
-        l = p[list_idx]
-        l.append[item_idx]
-        return l
-    return ret
-
-p('translation_unit : package imports entities', p0(lambda p: p[1:]))
-
-p('package :')
-p('package : PACKAGE qualified_name', p0(2))
-
-p('imports : ', p0(list))
-p('imports : import imports', p0(append(1, 2)))  # TODO reverse
-
-p('import : IMPORT qualified_name', p0(2))
-
-p('entities : ', p0(list))
-p('entities : annotated_type entities', p0(append(1, 2)))
-
-p('annotated_type : annotations type', 2)
-
-p('type : module_type', 1)
-p('type : interface', 1)
-p('type : annotation_type', 1)
+start = 'translation_unit'
 
 
-#
-# Annotation type.
-#
-
-p("annotation_type : ANNOTATION Identifier LBRACE annotation_members RBRACE")
-p("annotation_members : annotated_annotation_member annotation_members")
-p("annotation_members :")
-
-p("annotated_annotation_member : annotations option")
+def p_translation_unit(p):
+    """translation_unit : values"""
+    p[0] = p[1]
 
 
-#
-# Interfaces and features.
-#
+def p_values_0(p):
+    """values :
+       values : value"""
+    p[0] = [p[1]] if len(p) > 1 else []
+def p_values_1(p):
+    """values : value COMMA values"""
+    l = p[0] = p[3]
+    l.append(p[1])
 
-# interface Name (extends ...)? { ... }
-p("interface : INTERFACE Identifier super_interfaces LBRACE features RBRACE")
-
-# (extends ...)?
-p("super_interfaces : EXTENDS reference_list")
-p("super_interfaces :")
-
-# AnnotatedInterfaceMember*
-p("features : annotated_feature features")
-p("features :")
-
-p("annotated_feature : annotations feature")
-
-# feature Name (extends ...)?
-p("feature : FEATURE Identifier super_features")
-
-# (extends ...)?
-p("super_features : EXTENDS reference_list")
-p("super_features :")
-
-#
-# Modules.
-#
-
-# (abstract)? module Name (extends ...)? { ... }
-p("module_type : module_modifiers MODULE Identifier super_module "
-        "LBRACE module_members RBRACE")
-
-# ModuleModifier*
-p("module_modifiers : module_modifier module_modifiers")
-p("module_modifiers : ")
-
-p("module_modifier : STATIC")
-p("module_modifier : ABSTRACT")
-
-# (extends ...)?
-p("super_module : EXTENDS reference")
-p("super_module :")
-
-# AnnotatedModuleMember*
-p("module_members : annotated_module_member module_members")
-p("module_members :")
-
-p("annotated_module_member : annotations module_member")
-p("module_member : DEPENDS  reference_list")
-p("module_member : PROVIDES reference_list")
-p("module_member : REQUIRES reference_list")
-p("module_member : SOURCE   filename_list")
-p("module_member : OBJECT   filename_list")
-p("module_member : OPTION   option")
-
-# Item ( , Item )*
-p("reference_list : reference COMMA reference_list")
-p("reference_list : reference")
-
-# ( string | number | boolean | Type ) Name ( = ...)?
-p("option : option_type Identifier option_default_value")
-p("option_type : STRING")
-p("option_type : NUMBER")
-p("option_type : BOOLEAN")
-p("option_type : reference")
-
-p("option_default_value : EQUALS value")
-p("option_default_value :")
-
-p("filename_list : filename COMMA filename_list")
-p("filename_list : filename")
-
-p("filename : StringLiteral")
-
-p("annotations : annotation annotations")
-p("annotations :")
-
-p("annotation : AT reference annotation_initializer")
-p("annotation_initializer : LPAREN parameters_list RPAREN")
-p("annotation_initializer : LPAREN value RPAREN")
-p("annotation_initializer : ")
-
-#
-# Comma-separated list of param=value pairs.
-#
-
-p("parameters_list : parameter COMMA parameters_list")
-p("parameters_list : parameter")
-
-p("parameter : simple_reference EQUALS value")
-
-p("value : StringLiteral")
-p("value : NumberLiteral")
-p("value : BooleanLiteral")
-p("value : reference")
-
-#
-# Datatypes.
-#
-
-p("reference : qualified_name")
-p("simple_reference : Identifier")
-
-#
-# Extended identifiers.
-#
-
-p("qualified_name : Identifier PERIOD qualified_name")
-p("qualified_name : Identifier")
-
-p("qualified_name_with_wildcard : qualified_name WILDCARD")
-p("qualified_name_with_wildcard : qualified_name")
+def p_value(p):
+    """value : STRING
+       value : NUMBER
+       value : object
+       value : array"""
+    p[0] = p[1]
 
 
-def p_empty(t):
-    'empty : '
-    pass
+def p_array(p):
+    """array : LBRACKET values RBRACKET"""
+    p[0] = to_rlist(p[2])
+
+
+def p_object_0(p):
+    """object : object_header
+       object : object_header object_body"""
+    type_name, name, type_args = p[1]
+    attrs, docstring = p[2] if len(p) > 2 else ([], None)
+
+    p[0] = Object(to_rdict(attrs), docstring, type_name, to_rdict(type_args),
+                  name, scope_qualname(p))
+    p.parser.scope_names.pop()
+
+def p_object_1(p):
+    """object : object_body"""
+    p[0] = Object(*p[1])
+
+
+def p_object_header_0(p):
+    """object_header : qualname scope_name object_initializer"""
+    p[0] = [p[1], p[2], p[3]]
+
+def p_scope_name(p):
+    """scope_name :
+       scope_name : ID"""
+    name = p[0] = p[1] if len(p) > 1 else None
+    p.parser.scope_names.append(name)
+
+def p_object_initializer(p):
+    """object_initializer :
+       object_initializer : LPAREN new_scope parameters RPAREN"""
+    p[0] = to_rlist(p[3]) if len(p) > 1 else []
+    p.parser.scope_depth -= 1
+
+def p_new_scope(p):
+    """new_scope :"""
+    p.parser.scope_depth += 1
+
+def scope_qualname(p):
+    p = p.parser
+    return '.'.join(name for name in p.scope_names[:p.scope_depth] if name)
+
+def p_parameters_0(p):
+    """parameters :
+       parameters : parameter"""
+    p[0] = [p[1]] if len(p) > 1 else []
+def p_parameters_1(p):
+    """parameters : parameter COMMA parameters"""
+    l = p[0] = p[3]
+    l.append(p[1])
+
+def p_parameter(p):
+    """parameter : ID EQUALS value"""
+    p[0] = (p[1], p[3])
+
+def p_object_body(p):
+    """object_body : LBRACE docstring object_members RBRACE"""
+    p[0] = (to_rlist(p[3]), p[2])
+
+def p_docstring_0(p):
+    """docstring :
+       docstring : STRING
+       docstring : STRING COMMA"""
+    if len(p) > 1:
+        p[0] = p[1]
+
+def p_object_members_0(p):
+    """object_members :
+       object_members : object_member"""
+    p[0] = [p[1]] if len(p) > 1 else []
+def p_object_members_1(p):
+    """object_members : object_member COMMA object_members"""
+    l = p[0] = p[3]
+    l.append(p[1])
+
+def p_object_member(p):
+    """object_member : string_or_qualname COLON value"""
+    p[0] = (p[1], p[3])
+
+
+def p_qualname_0(p):
+    """qualname : ID"""
+    p[0] = p[1]
+def p_qualname_1(p):
+    """qualname : ID PERIOD qualname"""
+    p[0] = p[1] + """.""" + p[3]
+
+
+def p_string_or_qualname_0(p):
+    """string_or_qualname : STRING
+       string_or_qualname : qualname"""
+    p[0] = p[1]
+
 
 def p_error(t):
-    print("Whoa. We're hosed")
+    print("FUUUUUUUUUUUUUUUUUUUUUUUUUUUUU", t)
 
 
-parser = ply.yacc.yacc(method='LALR')
+parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
+
+def parse(text, **kwargs):
+    parser.scope_names = []
+    parser.scope_depth = 0
+    return parser.parse(text, lexer=lex.lexer, **kwargs)
+
+text = '''
+[1],
+module Kernel(debug = False) {
+    "Docstring!"
+
+    x: xxx xname() {},
+
+    source: "init.c",
+
+    depends: [
+        embox.arch./*[
+            libarch,
+            locore,
+            */cpu(endian="be")/*,
+        ] */{runtime: False},
+
+        embox.driver.diag.diag_api,
+    ],
+    depends: embox.kernel.stack,
+
+}
+
+
+'''
 
 if __name__ == "__main__":
-    ply.yacc.runmain(parser)
+    import traceback, sys, code
+    from pprint import pprint
+    try:
+        pprint(parse(text, debug=True))
+    except:
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
+        frame = last_frame().tb_frame
+        ns = dict(frame.f_globals)
+        ns.update(frame.f_locals)
+        code.interact(local=ns)
 
 
