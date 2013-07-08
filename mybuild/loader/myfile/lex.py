@@ -47,11 +47,14 @@ def t_NUMBER(t):
     return t
 
 # String literal
-t_STRING = r'\"([^\\\n]|(\\.))*?\"'
+def t_STRING(t):
+    r'\"([^\\\n]|(\\.))*?\"'
+    t.value = t.value[1:-1]
+    return t
 
 # Comments
 def t_comment(t):
-    r'/\*(.|\n)*?\*/'
+    r'(/\*(.|\n)*?\*/)|(//.*\n)'
     t.lexer.lineno += t.value.count('\n')
 
 def t_error(t):
