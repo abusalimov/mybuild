@@ -3,9 +3,11 @@ PLY-based parser for My-files grammar. Also provides some scoping features.
 """
 
 import ply.yacc
+from operator import attrgetter
 
 from . import lex
 
+from ...util import identity
 from ...util.collections import OrderedDict
 from ...util.compat import *
 
@@ -56,13 +58,7 @@ def p_object_header(p):
     """object_header : qualname object_name object_args"""
     # need to set a name prior to entering object body
     this  = this_object(p)
-    scope = scope_object(p)
-
-    this.init_header(type_name=p[1], type_args=to_rdict(p[3]), name=p[2])
-
-    if this.__qualname__:
-        p.parser.exports[this.__qualname__] = this
-    p.parser.references.append((p[1], scope))
+    this.init_header(ref_name=p[1], args=to_rdict(p[3]), name=p[2])
 
 def p_object_name(p):
     """object_name : empty
@@ -151,27 +147,80 @@ class Object(object):
 
     def __init__(self, parent=None):
         super(Object, self).__init__()
-        self.parent = parent
+        if parent is not None:
+            if not parent.name:
+                parent = parent.scope
+            assert parent.name
+        self.scope = parent
+        # self.exports = {}
+        self.ref = None
 
         self.init_header(None, {})
         self.init_body({}, None)
 
-    def init_header(self, type_name, type_args, name=None):
-        self.type_name = type_name
-        self.type_args = type_args
-        self.__name__ = self.__qualname__ = name
-        if name and self.parent and self.parent.__qualname__:
-            self.__qualname__ = self.parent.__qualname__ + '.' + name
+    def init_header(self, ref_name, args, name=None):
+        self.ref_name, self.ref_getter = ref_name, identity
+
+        if ref_name is not None:
+            self.ref_name, _, ref_attr = ref_name.partition('.')
+            if ref_attr:
+                self.ref_getter = attrgetter(ref_attr)
+
+        self.args = args
+        self.name = self.qualname = name
+
+        scope = self.scope
+        if scope is not None:
+            if name and scope.qualname:
+                self.qualname = scope.qualname + '.' + name
+            # try:
+            #     objects = scope.exports[name]
+            # except KeyError:
+            #     objects = scope.exports[name] = []
+            # objects.append(self)
 
     def init_body(self, attrs, docstring):
         self.attrs = attrs
         self.__doc__ = docstring
 
+    def link_local(self, local_exports):
+        if self.ref_name:
+            self.ref = self.resolve_local_ref(local_exports, self.ref_name)
+            print self.ref_name, ' -> ', self.ref
+
+    # def resolve_local_ref(self, ref_name):
+    #     for scope in self.iter_scope_chain():
+    #         try:
+    #             objects = scope.exports[name]
+    #         except KeyError:
+    #             pass
+    #         else:
+    #             if len(objects) != 1:
+    #                 raise  # XXX
+    #             return objects[0]
+
+    def resolve_local_ref(self, local_exports, lookup_name):
+        for s in self.iter_scope_chain():
+            try:
+                return local_exports[s.qualname + '.' + lookup_name]
+            except KeyError:
+                pass
+        try:
+            return local_exports[lookup_name]
+        except KeyError:
+            pass
+
+    def iter_scope_chain(self):
+        s = self.scope
+        while s is not None:
+            yield s
+            s = s.scope
+
     def __repr__(self):
-        return '{type} {name}({type_args}){attrs}'.format(
-                    type=self.type_name or '',
-                    name=self.__qualname__ or '',
-                    type_args=dict(self.type_args) or '',
+        return '{ref_name} {name}({args}){attrs}'.format(
+                    ref_name=self.ref_name or '',
+                    name=self.qualname or '',
+                    args=dict(self.args) or '',
                     attrs=dict(self.attrs) or '')
 
 
@@ -188,6 +237,7 @@ def scope_object(p):
     return p.parser.object_stack[p.parser.nesting_depth]
 
 def push_object(p, o):
+    p.parser.objects.add(o)  # also remember it in a global set
     p.parser.object_stack.append(o)
     return o
 def pop_object(p):
@@ -209,23 +259,35 @@ def parse(text, **kwargs):
         text (str) - data to parse
         **kwargs are passed directly to the underlying PLY parser
 
-    Returns a tuple (AST root, exports, references):
+    Returns a tuple (AST root, exports, unresolved):
       - AST root is always a list of values
       - exports is a dict mapping qualified names to corresponding objects
-      - references is a list of (name, scope object) tuples
+      - unresolved is a list of objects with unresolved references
     """
 
-    parser.exports    = {}  # {qualname: object}
-    parser.references = []  # (name, scope)
+    objects = parser.objects = set()
 
-    parser.object_stack = [None]
+    parser.object_stack  = [None]
     parser.nesting_depth = 0
 
-    return (parser.parse(text, lexer=lex.lexer, **kwargs),
-            parser.exports, parser.references)
+    result = parser.parse(text, lexer=lex.lexer, **kwargs)
+
+    export_pairs = list((o.qualname, o) for o in objects if o.qualname)
+    exports = dict(export_pairs)
+
+    if len(exports) != len(export_pairs):
+        raise  # Multiple definition.
+
+    for o in objects:
+        o.link_local(exports)
+
+    unresolved = list(o for o in objects if o.ref_name and not o.ref)
+
+    return (result, exports, unresolved)
 
 
 text = '''
+obj module,
 module Kernel(debug = False) {
     "Docstring!"
 

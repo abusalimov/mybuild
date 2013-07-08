@@ -8,6 +8,10 @@ from .collections import namedtuple as _namedtuple
 from .compat import *
 
 
+def identity(x):
+    return x
+
+
 class Pair(_namedtuple('_Pair', 'false true')):
     __slots__ = ()
 
