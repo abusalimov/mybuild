@@ -12,23 +12,42 @@ from .package import NamespacePackageLoader
 from .package import SubPackageLoader
 
 from ..util import identity
-from ..util.collections import OrderedDict
+from ..util.collections import OrderedDict, Mapping
 from ..util.importlib.abc import MetaPathFinder
 
 from ..util.compat import *
 
 
-def import_all(relative_dirnames, namespace, path=None, defaults=None):
+def import_all(relative_dirnames, namespace, path=None, loaders_init=None):
     """
     Goes through relative_dirnames converting them into module names within
     the specified namespace and importing by using mybuild_importer.
     """
 
-    with mybuild_importer.using_namespace(namespace, path) as ctx:
-        ctx.defaults=defaults  # XXX
+    with mybuild_importer.using_namespace(namespace, path,
+                                          loaders_init) as ctx:
         return ctx.import_all(dirname.replace(os.path.sep, '.')
                               for dirname in relative_dirnames
                               if '.' not in dirname)
+
+
+def normalize_loaders(loaders=None):
+    return_all = (loaders is None or '*' in loaders)
+
+    is_map = isinstance(loaders, Mapping)
+    if is_map:
+        default = loaders.get('*', {})
+
+    ret_type = (dict if is_map else set)
+    return ret_type(((name, loaders.get(name, default)) if is_map else name)
+                    for name in mybuild_importer.registered_loaders
+                    if return_all or name in loaders)
+
+
+def loader_filenames(loaders=None):
+    return dict((name, getattr(mybuild_importer.registered_loaders[name],
+                               'FILENAME', name))
+               for name in normalize_loaders(loaders))
 
 
 class MybuildImporter(MetaPathFinder):
@@ -65,7 +84,7 @@ class MybuildImporter(MetaPathFinder):
     def __init__(self):
         super(MybuildImporter, self).__init__()
         self._namespaces = OrderedDict()
-        self._loaders    = dict()
+        self.registered_loaders = dict()
 
     @contextlib.contextmanager
     def using_namespace(self, namespace, path=None, loaders_init=None):
@@ -80,19 +99,19 @@ class MybuildImporter(MetaPathFinder):
         if '.' in namespace:
             raise NotImplementedError('To keep things simple')
 
+        loaders_init = normalize_loaders(loaders_init)
+
         path = list(path) if path is not None else []
         loaders = dict()  # populated below
         ctx = self.Context(namespace, path, loaders)
 
-        init_kwargs = {}
-        for name, loader_type in iteritems(self._loaders):
-            if loaders_init is not None:
-                try:
-                    init_kwargs = loaders_init[name]
-                except KeyError:
-                    continue
-            ctx_init_func = getattr(loader_type, 'enter_ctx', identity)
-            loaders[name] = (loader_type, ctx_init_func(ctx, **init_kwargs))
+        for name, initials in iteritems(loaders_init):
+            loader_type = self.registered_loaders[name]
+            if hasattr(loader_type, 'init_ctx'):
+                loader_ctx = loader_type.init_ctx(ctx, initials)
+            else:
+                loader_ctx = ctx
+            loaders[name] = (loader_type, loader_ctx)
 
         nsmap = self._namespaces
         if not nsmap and self not in sys.meta_path:
@@ -130,21 +149,22 @@ class MybuildImporter(MetaPathFinder):
                 path (str): a file path
 
             loader_type may also provide two optional class methods:
-                enter_ctx:
-                    Accepts an importer context object, its return value is
-                    then replaces the first argument to the factory (ctx).
+                init_ctx:
+                    Accepts an importer context object and user-provided
+                    initials. Return value then replaces the first argument to
+                    the factory (ctx).
                 exit_ctx:
                     TODO
 
             If loader_type defines an optional FILENAME class attribute, it is
             used instead of the 'name' when searching a file.
             """
-            if name in self._loaders:
-                prev = self._loaders[name]
+            if name in self.registered_loaders:
+                prev = self.registered_loaders[name]
                 raise ValueError("Loader for '{name}' is already registered "
                                  "{prev}".format(**locals()))
 
-            self._loaders[name] = loader_type
+            self.registered_loaders[name] = loader_type
 
             return loader_type
 

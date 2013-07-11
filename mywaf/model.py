@@ -19,14 +19,7 @@ def build_true_graph(bld, solution):
 
 
 def create_model(bld):
-    def get_defaults():
-        from mybuild import module, option
-        return locals()
-
-    defaults = get_defaults()
-
     def create_module(pymodule_name, dictionary):
-        print dictionary
         def module_func(self):
             for key, value in dictionary:
                 setattr(self, key, value)
@@ -34,9 +27,17 @@ def create_model(bld):
         module_func.__name__ = dictionary.pop('id')
         return mybuild.module(module_func)
 
-    defaults['!module'] = create_module
+    def get_pybuild_defaults():
+        from mybuild import module, option
+        return locals()
 
-    prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], defaults, ['Pybuild'])
+    loaders_init = {
+        'Mybuild': {},
+        'MyYaml':  {'!module': create_module},
+        'Pybuild': get_pybuild_defaults(),
+    }
+
+    prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)
 
     print '>>>>>>>>', prj.hello.yaml_module
 

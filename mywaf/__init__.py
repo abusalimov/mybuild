@@ -9,6 +9,7 @@ from waflib import Utils   as wafutils
 from waflib import Errors  as waferrors
 
 from mybuild.loader import import_all
+from mybuild.loader import loader_filenames
 from mybuild.loader import my_yaml
 from mybuild.loader import myfile
 from mybuild.loader import pybuild
@@ -23,10 +24,8 @@ def configure(ctx):
     print('mywaf: %r' % ctx)
 
 
-def my_load(ctx, namespace, path=None, defaults=None,
-            myfile_names=[pybuild.FILENAME]):
-
-    myfile_names = wafutils.to_list(myfile_names)
+def my_load(ctx, namespace, path=None, loaders_init=None):
+    myfile_names = list(itervalues(loader_filenames(loaders_init)))
     myfiles_glob = ['**/' + f for f in myfile_names]
 
     if path is not None:
@@ -48,7 +47,8 @@ def my_load(ctx, namespace, path=None, defaults=None,
                           .format(**locals()))
         return not has_dot
 
-    return import_all(filter(no_dots, found_names), namespace, path, defaults)
+    return import_all(filter(no_dots, found_names), namespace, path,
+                      loaders_init)
 
 wafcontext.Context.my_load = my_load
 

@@ -31,11 +31,14 @@ class MyYamlFileLoader(SourceFileLoader):
 
     TODO Does not fully comply InspectLoader protocol."""
 
-    def __init__(self, ctx, fullname, path):
+    @classmethod
+    def init_ctx(cls, ctx, initials):
+        return initials  # defaults
+
+    def __init__(self, defaults, fullname, path):
         super(MyYamlFileLoader, self).__init__(fullname, path)
         self._defaults = dict((key, value)
-                              for key, value in iteritems(ctx.defaults)
-                              if key[0] == '!')
+                              for key, value in iteritems(defaults))
 
     def is_package(self, fullname):
         return False
