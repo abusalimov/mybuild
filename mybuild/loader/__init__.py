@@ -8,10 +8,8 @@ import functools
 import sys
 import os.path
 
-from . import my_yaml
-from . import myfile
-from . import pybuild
-from . import package
+from .package import NamespacePackageLoader
+from .package import SubPackageLoader
 
 from ..util.collections import OrderedDict
 from ..util.importlib.abc import MetaPathFinder
@@ -19,125 +17,167 @@ from ..util.importlib.abc import MetaPathFinder
 from ..util.compat import *
 
 
-def import_all(ctx, relative_dirnames, namespace, path=None, defaults=None):
+def import_all(relative_dirnames, namespace, path=None, defaults=None):
     """
     Goes through relative_dirnames converting them into module names within
     the specified namespace and importing by using mybuild_importer.
     """
 
-    with mybuild_importer.using_namespace(namespace, path, defaults):
-        for dirname in relative_dirnames:
-            if '.' not in dirname:
-                __import__(namespace + '.' + dirname.replace(os.path.sep, '.'))
-
-        return __import__(namespace)
+    with mybuild_importer.using_namespace(namespace,
+                                          path=path, defaults=defaults) as ctx:
+        return ctx.import_all(dirname.replace(os.path.sep, '.')
+                              for dirname in relative_dirnames
+                              if '.' not in dirname)
 
 
 class MybuildImporter(MetaPathFinder):
+    """
+    PEP 302 meta path import hook. Use a singleton instance defined below.
+    """
 
-    MODULE_MAP = {
-        my_yaml.MODULE: (my_yaml.FILENAME, my_yaml.MyYamlFileLoader),
-        myfile.MODULE:  (myfile.FILENAME,  myfile.MybuildFileLoader),
-        pybuild.MODULE: (pybuild.FILENAME, pybuild.PybuildFileLoader),
-    }
+    class Context(object):
+        """Context is an object associated with a namespace.
+
+        Do not instantiate directly, use MybuildImporter.using_namespace()
+        context manager instead.
+        """
+
+        def __init__(self, namespace, loaders, **setup_kwargs):
+            super(MybuildImporter.Context, self).__init__()
+            self.namespace = namespace
+            self.loaders = dict(loaders)
+            self.setup(**setup_kwargs)
+
+        def setup(self, path=None, defaults=None):
+            self.path     = list(path)     if path     is not None else []
+            self.defaults = dict(defaults) if defaults is not None else {}
+            return self
+
+        def import_all(self, rel_names=[], silent=False):
+            ns = self.namespace
+            ns_module = __import__(ns)
+
+            for rel_name in rel_names:
+                try:
+                    __import__(ns + '.' + rel_name)
+                except ImportError:
+                    if not silent:
+                        raise
+
+            return ns_module
 
     def __init__(self):
         super(MybuildImporter, self).__init__()
         self._namespaces = OrderedDict()
+        self._loaders    = dict()
 
-    def find_module(self, fullname, package_path=None):
+    @contextlib.contextmanager
+    def using_namespace(self, namespace, loader_names=None, **setup_kwargs):
+        if '.' in namespace:
+            raise NotImplementedError('To keep things simple')
+
+        if loader_names is None:
+            loaders = self._loaders
+        else:
+            loaders = (self._loaders[name] for name in loader_names)
+
+        ctx = self.Context(namespace, loaders, **setup_kwargs)
+        nsmap = self._namespaces
+
+        if not nsmap and self not in sys.meta_path:
+            sys.meta_path.insert(0, self)
+
+        saved = nsmap.get(namespace)
+        nsmap[namespace] = ctx
+
+        try:
+            yield ctx
+
+        finally:
+            if saved is not None:
+                nsmap[namespace] = saved
+            else:
+                del nsmap[namespace]
+
+            if not nsmap and self in sys.meta_path:
+                sys.meta_path.remove(self)
+
+    def loader_for(self, filename, name=None):
+        """
+        Deco-maker for registering loaders.
+        """
+        if name is None:
+            name = filename.upper()
+
+        def decorator(loader_type):
+            """
+            loader_type must be a loader factory which accepts three args:
+                ctx (Context): associated context
+                fullname (str): fully.qualified.name of a module to load
+                path (str): a file path
+            """
+            if name in self._loaders:
+                prev = self._loaders[name]
+                raise ValueError("Loader for '{name}' is already registered "
+                                 "{prev}".format(**locals()))
+
+            self._loaders[name] = (filename, loader_type)
+
+            return loader_type
+
+        return decorator
+
+    def find_module(self, fullname, path=None):
         """
         Try to find a loader for the specified module.
 
         Args:
             fullname (str): 'fully.qualified.name'
-            package_path:
-                None   - when importing root package;
-                []     - importing anything within a namespace package;
-                [path] - within a regular (sub-)package;
+            path (list or None):
+                None - when importing namespace root package
+                ctx.path - importing anything within a namespace package
+                pkg.__path__ - within a regular (sub-)package;
 
         Returns:
             A loader if the module has been located, None otherwise.
 
-        For example, to import 'my.ns.pkg.PYBUILD' inside 'my.ns', this method
-        is called four times:
+        For example, to import 'ns.pkg.PYBUILD' inside 'ns', this method is
+        called four times:
 
-            fullname              package_path   returns
-            -------------------   ------------   ----------------------
-            'my'                  None           NamespacePackageLoader
-            'my.ns'               []             NamespacePackageLoader
-            'my.ns.pkg'           []             SubPackageLoader
-            'my.ns.pkg.PYBUILD'   [path]         PybuildFileLoader
-
+            fullname           path           returns
+            ----------------   ------------   ----------------------
+            'ns'               None           NamespacePackageLoader
+            'ns.pkg'           ctx.path       SubPackageLoader
+            'ns.pkg.PYBUILD'   pkg.__path__   PybuildFileLoader
         """
 
-        for namespace, (path, defaults) in iteritems(self._namespaces):
-
-            is_namespace_package = (namespace + '.').startswith(fullname + '.')
-            if is_namespace_package:
-                return package.NamespacePackageLoader()
-
-            within_namespace = (fullname + '.').startswith(namespace + '.')
-            if not within_namespace:
-                continue
-
-            tailname = fullname[len(namespace):].rpartition('.')[2]
-            try:
-                filename, loader_type = self.MODULE_MAP[tailname]
-
-            except KeyError:
-                def find_loader_in(entry):
-                    basepath = os.path.join(entry, tailname)
-                    if os.path.isdir(basepath):
-                        return package.SubPackageLoader([basepath],
-                                                        list(self.MODULE_MAP))
-
-            else:
-                def find_loader_in(entry):
-                    filepath = os.path.join(entry, filename)
-                    if os.path.isfile(filepath):
-                        return loader_type(fullname, filepath, defaults)
-
-            if package_path:
-                path = package_path
-
-            elif not path:
-                path = sys.path
-
-            for loader in map(find_loader_in, path):
-                if loader is not None:
-                    return loader
-
-    @contextlib.contextmanager
-    def using_namespace(self, namespace, path=None, defaults=None):
-        saved = self.register_namespace(namespace, path, defaults)
+        namespace, _, restname = fullname.partition('.')
         try:
-            yield
-        finally:
-            if saved is not None:
-                self.register_namespace(namespace, *saved)
-            else:
-                self.unregister_namespace(namespace)
+            ctx = self._namespaces[namespace]
+        except KeyError:
+            return None
 
-    def register_namespace(self, namespace, path=None, defaults=None):
-        defaults = dict(defaults) if defaults is not None else {}
-        path     = list(path)     if path     is not None else []
+        if not restname:
+            return NamespacePackageLoader(ctx)
 
-        was_empty = not self._namespaces
-        prev = self._namespaces.get(namespace)
+        tailname = restname.rpartition('.')[2]
+        try:
+            filename, loader_type = ctx.loaders[tailname]
 
-        self._namespaces[namespace] = (path, defaults)
+        except KeyError:
+            def find_loader_in(entry):
+                basepath = os.path.join(entry, tailname)
+                if os.path.isdir(basepath):
+                    return SubPackageLoader(ctx, [basepath])
+        else:
+            def find_loader_in(entry):
+                filepath = os.path.join(entry, filename)
+                if os.path.isfile(filepath):
+                    return loader_type(ctx, fullname, filepath)
 
-        if was_empty and self not in sys.meta_path:
-            sys.meta_path.insert(0, self)
-
-        return prev
-
-    def unregister_namespace(self, namespace):
-        del self._namespaces[namespace]
-
-        if not self._namespaces and self in sys.meta_path:
-            sys.meta_path.remove(self)
+        for loader in map(find_loader_in, path or sys.path):
+            if loader is not None:
+                return loader
 
 
 mybuild_importer = MybuildImporter()  # singleton instance

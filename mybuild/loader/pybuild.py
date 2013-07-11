@@ -4,15 +4,15 @@ Python-like loader which is able to customize default global namespace.
 
 import sys
 
-from ..util.importlib.machinery import SourceFileLoader
+from . import mybuild_importer
 
+from ..util.importlib.machinery import SourceFileLoader
 from ..util.compat import *
 
 
-MODULE   = 'PYBUILD'
 FILENAME = 'Pybuild'
 
-
+@mybuild_importer.loader_for(FILENAME)
 class PybuildFileLoader(SourceFileLoader):
     """Loads Pybuild files and executes them as regular Python scripts.
 
@@ -21,10 +21,10 @@ class PybuildFileLoader(SourceFileLoader):
     pointing to a module corresponding to the namespace root.
     """
 
-    def __init__(self, fullname, path, defaults):
+    def __init__(self, ctx, fullname, path):
         super(PybuildFileLoader, self).__init__(fullname, path)
         self._defaults = dict((key, value)
-                              for key, value in iteritems(defaults)
+                              for key, value in iteritems(ctx.defaults)
                               if key[0] != '!')
 
     def is_package(self, fullname):

@@ -10,11 +10,12 @@ from ..util.compat import *
 class PackageLoaderBase(GenericLoader):
     """Performs basic initialization required to load a sourceless package."""
 
-    def __init__(self, package_path=None):
+    def __init__(self, ctx, path=None):
         super(PackageLoaderBase, self).__init__()
-        if package_path is None:
-            package_path = []
-        self.path = package_path
+        if path is None:
+            path = []
+        self.path = path
+        self.ctx  = ctx
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -29,11 +30,11 @@ class NamespacePackageLoader(PackageLoaderBase):
     """
     Loads package modules corresponding to a namespace being used.
 
-    For example, performing 'my.ns.pkg' import inside 'my.ns' namespace will
-    create two modules ('my' and 'my.ns') using this loader.
+    For example, performing 'ns.pkg' import inside 'ns' namespace will
+    create module for 'ns' using this loader.
     """
-    def __init__(self):
-        super(NamespacePackageLoader, self).__init__()
+    def __init__(self, ctx):
+        super(NamespacePackageLoader, self).__init__(ctx, ctx.path)
 
 
 class SubPackageLoader(PackageLoaderBase):
@@ -41,19 +42,18 @@ class SubPackageLoader(PackageLoaderBase):
     Loads sub package modules and fills them by contents of Pybuild or Yaml
     modules.
 
-    This is used to create 'my.ns.pkg' module when importing it within 'my.ns'
+    This is used to create 'ns.pkg' module when importing it within 'ns'
     namespace.
     """
-    def __init__(self, package_path, sub_module_names):
-        super(SubPackageLoader, self).__init__(package_path)
-        self._sub_module_names = sub_module_names
+    def __init__(self, ctx, path):
+        super(SubPackageLoader, self).__init__(ctx, path)
 
     def _init_module(self, module):
         super(SubPackageLoader, self)._init_module(module)
 
         fullname = module.__name__
 
-        for sub_name in self._sub_module_names:
+        for sub_name in self.ctx.loaders:
             try:
                 __import__(fullname + '.' + sub_name)
             except ImportError:
