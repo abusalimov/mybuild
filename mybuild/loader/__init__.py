@@ -25,7 +25,7 @@ def import_all(relative_dirnames, namespace, path=None, defaults=None):
     """
 
     with mybuild_importer.using_namespace(namespace, path) as ctx:
-        ctx.defaults=defaults
+        ctx.defaults=defaults  # XXX
         return ctx.import_all(dirname.replace(os.path.sep, '.')
                               for dirname in relative_dirnames
                               if '.' not in dirname)
@@ -113,9 +113,9 @@ class MybuildImporter(MetaPathFinder):
             if not nsmap and self in sys.meta_path:
                 sys.meta_path.remove(self)
 
-            for name, (loader_type, lctx) in iteritems(ctx.loaders):
+            for name, (loader_type, loader_ctx) in iteritems(ctx.loaders):
                 if hasattr(loader_type, 'exit_ctx'):
-                    loader_type.exit_ctx(lctx)
+                    loader_type.exit_ctx(loader_ctx)
 
     def loader_for(self, name):
         """
@@ -185,7 +185,7 @@ class MybuildImporter(MetaPathFinder):
 
         tailname = restname.rpartition('.')[2]
         try:
-            loader_type, lctx = ctx.loaders[tailname]
+            loader_type, loader_ctx = ctx.loaders[tailname]
 
         except KeyError:
             def find_loader_in(entry):
@@ -197,7 +197,7 @@ class MybuildImporter(MetaPathFinder):
             def find_loader_in(entry):
                 filepath = os.path.join(entry, filename)
                 if os.path.isfile(filepath):
-                    return loader_type(lctx, fullname, filepath)
+                    return loader_type(loader_ctx, fullname, filepath)
 
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
