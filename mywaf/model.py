@@ -41,7 +41,7 @@ def create_model(bld):
     print '>>>>>>>>', prj.hello.yaml_module
 
     ################################
-    conf = prj.conf.PYBUILD.conf
+    conf = prj.conf.conf
 
     context = Context()
     context.consider(conf)

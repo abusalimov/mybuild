@@ -11,6 +11,7 @@ import os.path
 from .package import NamespacePackageLoader
 from .package import SubPackageLoader
 
+from ..util import identity
 from ..util.collections import OrderedDict
 from ..util.importlib.abc import MetaPathFinder
 
@@ -23,8 +24,8 @@ def import_all(relative_dirnames, namespace, path=None, defaults=None):
     the specified namespace and importing by using mybuild_importer.
     """
 
-    with mybuild_importer.using_namespace(namespace,
-                                          path=path, defaults=defaults) as ctx:
+    with mybuild_importer.using_namespace(namespace, path) as ctx:
+        ctx.defaults=defaults
         return ctx.import_all(dirname.replace(os.path.sep, '.')
                               for dirname in relative_dirnames
                               if '.' not in dirname)
@@ -42,16 +43,11 @@ class MybuildImporter(MetaPathFinder):
         context manager instead.
         """
 
-        def __init__(self, namespace, loaders, **setup_kwargs):
+        def __init__(self, namespace, path, loaders):
             super(MybuildImporter.Context, self).__init__()
             self.namespace = namespace
-            self.loaders = dict(loaders)
-            self.setup(**setup_kwargs)
-
-        def setup(self, path=None, defaults=None):
-            self.path     = list(path)     if path     is not None else []
-            self.defaults = dict(defaults) if defaults is not None else {}
-            return self
+            self.path      = path
+            self.loaders   = loaders
 
         def import_all(self, rel_names=[], silent=False):
             ns = self.namespace
@@ -72,18 +68,33 @@ class MybuildImporter(MetaPathFinder):
         self._loaders    = dict()
 
     @contextlib.contextmanager
-    def using_namespace(self, namespace, loader_names=None, **setup_kwargs):
+    def using_namespace(self, namespace, path=None, loaders_init=None):
+        """
+        Three things to do here. Upon completion, everithing is restored in
+        a reversed order:
+          1. Tell registered loaders about a new context
+          2. Install ourselves into sys.meta_path, if needed
+          3. Adjust internal namespace mapping
+        """
+
         if '.' in namespace:
             raise NotImplementedError('To keep things simple')
 
-        if loader_names is None:
-            loaders = self._loaders
-        else:
-            loaders = (self._loaders[name] for name in loader_names)
+        path = list(path) if path is not None else []
+        loaders = dict()  # populated below
+        ctx = self.Context(namespace, path, loaders)
 
-        ctx = self.Context(namespace, loaders, **setup_kwargs)
+        init_kwargs = {}
+        for name, loader_type in iteritems(self._loaders):
+            if loaders_init is not None:
+                try:
+                    init_kwargs = loaders_init[name]
+                except KeyError:
+                    continue
+            ctx_init_func = getattr(loader_type, 'enter_ctx', identity)
+            loaders[name] = (loader_type, ctx_init_func(ctx, **init_kwargs))
+
         nsmap = self._namespaces
-
         if not nsmap and self not in sys.meta_path:
             sys.meta_path.insert(0, self)
 
@@ -91,7 +102,7 @@ class MybuildImporter(MetaPathFinder):
         nsmap[namespace] = ctx
 
         try:
-            yield ctx
+            yield ctx  # import, import, import...
 
         finally:
             if saved is not None:
@@ -102,26 +113,38 @@ class MybuildImporter(MetaPathFinder):
             if not nsmap and self in sys.meta_path:
                 sys.meta_path.remove(self)
 
-    def loader_for(self, filename, name=None):
+            for name, (loader_type, lctx) in iteritems(ctx.loaders):
+                if hasattr(loader_type, 'exit_ctx'):
+                    loader_type.exit_ctx(lctx)
+
+    def loader_for(self, name):
         """
         Deco-maker for registering loaders.
         """
-        if name is None:
-            name = filename.upper()
 
         def decorator(loader_type):
             """
             loader_type must be a loader factory which accepts three args:
-                ctx (Context): associated context
+                ctx: associated context
                 fullname (str): fully.qualified.name of a module to load
                 path (str): a file path
+
+            loader_type may also provide two optional class methods:
+                enter_ctx:
+                    Accepts an importer context object, its return value is
+                    then replaces the first argument to the factory (ctx).
+                exit_ctx:
+                    TODO
+
+            If loader_type defines an optional FILENAME class attribute, it is
+            used instead of the 'name' when searching a file.
             """
             if name in self._loaders:
                 prev = self._loaders[name]
                 raise ValueError("Loader for '{name}' is already registered "
                                  "{prev}".format(**locals()))
 
-            self._loaders[name] = (filename, loader_type)
+            self._loaders[name] = loader_type
 
             return loader_type
 
@@ -162,7 +185,7 @@ class MybuildImporter(MetaPathFinder):
 
         tailname = restname.rpartition('.')[2]
         try:
-            filename, loader_type = ctx.loaders[tailname]
+            loader_type, lctx = ctx.loaders[tailname]
 
         except KeyError:
             def find_loader_in(entry):
@@ -170,10 +193,11 @@ class MybuildImporter(MetaPathFinder):
                 if os.path.isdir(basepath):
                     return SubPackageLoader(ctx, [basepath])
         else:
+            filename = getattr(loader_type, 'FILENAME', tailname)
             def find_loader_in(entry):
                 filepath = os.path.join(entry, filename)
                 if os.path.isfile(filepath):
-                    return loader_type(ctx, fullname, filepath)
+                    return loader_type(lctx, fullname, filepath)
 
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
