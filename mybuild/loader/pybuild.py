@@ -10,9 +10,9 @@ from ..util.importlib.machinery import SourceFileLoader
 from ..util.compat import *
 
 
-FILENAME = 'Pybuild'
+LOADER_NAME = 'PYBUILD'
 
-@mybuild_importer.loader_for(FILENAME)
+@mybuild_importer.loader_for(LOADER_NAME)
 class PybuildFileLoader(SourceFileLoader):
     """Loads Pybuild files and executes them as regular Python scripts.
 
@@ -20,6 +20,8 @@ class PybuildFileLoader(SourceFileLoader):
     from the dictionary passed in __init__. Also adds a global variable
     pointing to a module corresponding to the namespace root.
     """
+
+    FILENAME = 'Pybuild'
 
     @classmethod
     def init_ctx(cls, ctx, initials):

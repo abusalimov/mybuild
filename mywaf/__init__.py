@@ -10,9 +10,6 @@ from waflib import Errors  as waferrors
 
 from mybuild.loader import import_all
 from mybuild.loader import loader_filenames
-from mybuild.loader import my_yaml
-from mybuild.loader import myfile
-from mybuild.loader import pybuild
 from mybuild.util.collections import OrderedDict
 
 from mybuild.util.compat import *

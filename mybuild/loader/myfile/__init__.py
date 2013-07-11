@@ -15,11 +15,13 @@ except ImportError:
     ply = None
 
 
-FILENAME = 'Mybuild'
+LOADER_NAME = 'MYBUILD'
 
-@mybuild_importer.loader_for(FILENAME)
+@mybuild_importer.loader_for(LOADER_NAME)
 class MybuildFileLoader(SourceFileLoader):
     """Loads Mybuild files."""
+
+    FILENAME = 'Mybuild'
 
     @classmethod
     def init_ctx(cls, ctx, initials):

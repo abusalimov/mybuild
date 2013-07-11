@@ -22,14 +22,15 @@ else:
     except ImportError:
         from yaml import Loader as YamlLoader
 
+LOADER_NAME = 'MY_YAML'
 
-FILENAME = 'MyYaml'
-
-@mybuild_importer.loader_for(FILENAME)
+@mybuild_importer.loader_for(LOADER_NAME)
 class MyYamlFileLoader(SourceFileLoader):
     """Loads YAML files.
 
     TODO Does not fully comply InspectLoader protocol."""
+
+    FILENAME = 'MyYaml'
 
     @classmethod
     def init_ctx(cls, ctx, initials):

@@ -1,7 +1,11 @@
 import os
 
 import mybuild
-from mybuild import loader
+
+from mybuild.loader import my_yaml
+from mybuild.loader import myfile
+from mybuild.loader import pybuild
+
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
 
@@ -32,9 +36,9 @@ def create_model(bld):
         return locals()
 
     loaders_init = {
-        'Mybuild': {},
-        'MyYaml':  {'!module': create_module},
-        'Pybuild': get_pybuild_defaults(),
+        myfile .LOADER_NAME: {},
+        my_yaml.LOADER_NAME: {'!module': create_module},
+        pybuild.LOADER_NAME: get_pybuild_defaults(),
     }
 
     prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)
