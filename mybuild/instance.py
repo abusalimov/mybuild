@@ -239,7 +239,7 @@ class Instance(object):
         optuple = self._optuple
         node_str = str(self._node)
         return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
-    
+
     def build(self, bld):
         src = getattr(self, 'sources', [])
         bld(features='mylink', source=src, target='test')
@@ -248,25 +248,28 @@ class Instance(object):
         print('sources = ' + str(src))
         print('+++++++++++++++++++++++')
 
-from waflib.Task import Task
-from waflib.TaskGen import feature, extension, after_method
-from waflib.Tools import ccroot
+try:
+    from waflib.Task import Task
+    from waflib.TaskGen import feature, extension, after_method
+    from waflib.Tools import ccroot
 
-@after_method('process_source')
-@feature('mylink')
-def call_apply_link(self):
-    print('linking' + str(self))
+    @after_method('process_source')
+    @feature('mylink')
+    def call_apply_link(self):
+        print('linking' + str(self))
 
-class mylink(ccroot.link_task):
-    run_str = 'cat ${SRC} > ${TGT}'
+    class mylink(ccroot.link_task):
+        run_str = 'cat ${SRC} > ${TGT}'
 
-class ext2o(Task):
-    run_str = 'cp ${SRC} ${TGT}'
+    class ext2o(Task):
+        run_str = 'cp ${SRC} ${TGT}'
 
-@extension('.c')
-def process_ext(self, node):
-    self.create_compiled_task('ext2o', node)
-    
+    @extension('.c')
+    def process_ext(self, node):
+        self.create_compiled_task('ext2o', node)
+
+except ImportError:
+    pass  # XXX move Waf-related stuff from here
 
 class InstanceError(Error):
     """
