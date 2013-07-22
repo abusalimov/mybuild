@@ -152,16 +152,25 @@ class Object(object):
                 parent = parent.scope
             assert parent.name
         self.scope = parent
-        # self.exports = {}
-        self.ref = None
 
-        self.init_header(None, {})
-        self.init_body({}, None)
+        # self.exports = {}
+
+        self.ref        = None
+        self.ref_name   = None
+        self.ref_getter = None
+        self.referrers  = []  # updated upon resolving links to this object
+
+        self.args     = []
+        self.name     = None
+        self.qualname = None
+
+        self.attrs     = []
+        self.docstring = None
 
     def init_header(self, ref_name, args, name=None):
         self.ref_name, self.ref_getter = ref_name, identity
 
-        if ref_name is not None:
+        if ref_name:
             self.ref_name, _, ref_attr = ref_name.partition('.')
             if ref_attr:
                 self.ref_getter = attrgetter(ref_attr)
@@ -169,19 +178,19 @@ class Object(object):
         self.args = args
         self.name = self.qualname = name
 
-        scope = self.scope
-        if scope is not None:
-            if name and scope.qualname:
-                self.qualname = scope.qualname + '.' + name
-            # try:
-            #     objects = scope.exports[name]
-            # except KeyError:
-            #     objects = scope.exports[name] = []
-            # objects.append(self)
+        if name:
+            scope = self.scope
+            if scope is not None and scope.qualname:
+                    self.qualname = scope.qualname + '.' + name
+                # try:
+                #     objects = scope.exports[name]
+                # except KeyError:
+                #     objects = scope.exports[name] = []
+                # objects.append(self)
 
     def init_body(self, attrs, docstring):
         self.attrs = attrs
-        self.__doc__ = docstring
+        self.docstring = docstring
 
     def link_local(self, local_exports):
         if self.ref_name:
@@ -251,12 +260,13 @@ def leave_scope(p):
 
 # The main entry point.
 
-def parse(text, **kwargs):
+def parse(text, builtins={}, **kwargs):
     """
     Parses the given text and returns the result.
 
     Args:
         text (str) - data to parse
+        builtins (dict) - builtin variables
         **kwargs are passed directly to the underlying PLY parser
 
     Returns a tuple (AST root, exports, unresolved):

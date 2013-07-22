@@ -10,9 +10,9 @@ from ...util.importlib.machinery import SourceFileLoader
 from ...util.compat import *
 
 try:
-    import ply
+    from .parse import parse
 except ImportError:
-    ply = None
+    parse = None
 
 
 LOADER_NAME = 'MYBUILD'
@@ -42,7 +42,7 @@ class MybuildFileLoader(SourceFileLoader):
         return None
 
     def _exec_module(self, module):
-        if ply is None:
+        if parse is None:
             raise ImportError('PLY is not installed')
 
         try:

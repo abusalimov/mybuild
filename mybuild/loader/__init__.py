@@ -3,6 +3,18 @@ Integrates Mybuild-files into Python modules infrastructure by using custom
 meta path importer.
 """
 
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-06-26"
+
+__all__ = [
+    "mybuild_importer",
+
+    "import_all",
+    "normalize_loaders",
+    "loader_filenames",
+]
+
+
 import contextlib
 import functools
 import sys
@@ -62,11 +74,11 @@ class MybuildImporter(MetaPathFinder):
         context manager instead.
         """
 
-        def __init__(self, namespace, path, loaders):
+        def __init__(self, namespace):
             super(MybuildImporter.Context, self).__init__()
             self.namespace = namespace
-            self.path      = path
-            self.loaders   = loaders
+
+            self.path = self.loaders = None  # initialized manually
 
         def import_all(self, rel_names=[], silent=False):
             ns = self.namespace
@@ -99,13 +111,12 @@ class MybuildImporter(MetaPathFinder):
         if '.' in namespace:
             raise NotImplementedError('To keep things simple')
 
-        loaders_init = normalize_loaders(loaders_init)
+        ctx = self.Context(namespace)
 
-        path = list(path) if path is not None else []
-        loaders = dict()  # populated below
-        ctx = self.Context(namespace, path, loaders)
+        ctx.path = list(path) if path is not None else []
+        ctx.loaders = loaders = dict()  # populated below
 
-        for name, initials in iteritems(loaders_init):
+        for name, initials in iteritems(normalize_loaders(loaders_init)):
             loader_type = self.registered_loaders[name]
             if hasattr(loader_type, 'init_ctx'):
                 loader_ctx = loader_type.init_ctx(ctx, initials)
@@ -154,7 +165,9 @@ class MybuildImporter(MetaPathFinder):
                     initials. Return value then replaces the first argument to
                     the factory (ctx).
                 exit_ctx:
-                    TODO
+                    Called upon exiting a context with a single argument which
+                    is the value returned by init_ctx (if any) or the importer
+                    context object.
 
             If loader_type defines an optional FILENAME class attribute, it is
             used instead of the 'name' when searching a file.
@@ -184,8 +197,8 @@ class MybuildImporter(MetaPathFinder):
         Returns:
             A loader if the module has been located, None otherwise.
 
-        For example, to import 'ns.pkg.PYBUILD' inside 'ns', this method is
-        called four times:
+        For example, to import 'ns.pkg.PYBUILD' inside 'ns', this method gets
+        called three times:
 
             fullname           path           returns
             ----------------   ------------   ----------------------
