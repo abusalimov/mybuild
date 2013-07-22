@@ -153,8 +153,6 @@ class Object(object):
             assert parent.name
         self.scope = parent
 
-        # self.exports = {}
-
         self.ref        = None
         self.ref_name   = None
         self.ref_getter = None
@@ -168,7 +166,8 @@ class Object(object):
         self.docstring = None
 
     def init_header(self, ref_name, args, name=None):
-        self.ref_name, self.ref_getter = ref_name, identity
+        self.ref_name   = ref_name
+        self.ref_getter = identity
 
         if ref_name:
             self.ref_name, _, ref_attr = ref_name.partition('.')
@@ -181,43 +180,23 @@ class Object(object):
         if name:
             scope = self.scope
             if scope is not None and scope.qualname:
-                    self.qualname = scope.qualname + '.' + name
-                # try:
-                #     objects = scope.exports[name]
-                # except KeyError:
-                #     objects = scope.exports[name] = []
-                # objects.append(self)
+                self.qualname = scope.qualname + '.' + name
 
     def init_body(self, attrs, docstring):
-        self.attrs = attrs
+        self.attrs     = attrs
         self.docstring = docstring
 
     def link_local(self, local_exports):
         if self.ref_name:
             self.ref = self.resolve_local_ref(local_exports, self.ref_name)
-            print self.ref_name, ' -> ', self.ref
-
-    # def resolve_local_ref(self, ref_name):
-    #     for scope in self.iter_scope_chain():
-    #         try:
-    #             objects = scope.exports[name]
-    #         except KeyError:
-    #             pass
-    #         else:
-    #             if len(objects) != 1:
-    #                 raise  # XXX
-    #             return objects[0]
 
     def resolve_local_ref(self, local_exports, lookup_name):
-        for s in self.iter_scope_chain():
+        for scope in self.iter_scope_chain():
             try:
-                return local_exports[s.qualname + '.' + lookup_name]
+                return local_exports[scope.qualname + '.' + lookup_name]
             except KeyError:
                 pass
-        try:
-            return local_exports[lookup_name]
-        except KeyError:
-            pass
+        return local_exports.get(lookup_name)
 
     def iter_scope_chain(self):
         s = self.scope
@@ -290,6 +269,7 @@ def parse(text, builtins={}, **kwargs):
 
     for o in objects:
         o.link_local(exports)
+        print o.ref_name, ' -> ', o.ref
 
     unresolved = list(o for o in objects if o.ref_name and not o.ref)
 
@@ -306,11 +286,7 @@ module Kernel(debug = False) {
     source: "init.c",
 
     depends: [
-        embox.arch./*[
-            libarch,
-            locore,
-            */cpu(endian="be")/*,
-        ] */{runtime: False},
+        embox.arch.cpu(endian="be"){runtime: False},
 
         embox.driver.diag.diag_api,
     ],
