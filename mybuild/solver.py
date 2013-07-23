@@ -22,6 +22,8 @@ from .util import pop_iter
 
 from .util.compat import *
 
+from .rgraph import *
+
 
 class Solution(object):
     """
@@ -517,7 +519,7 @@ def stepwise_resolve(trunk):
         resolve_branches(trunk, branchset & trunk.branchset())
 
 
-def solve(pgraph, initial_values):
+def get_trunk_solution(pgraph, initial_values):   
     nodes = pgraph.nodes
 
     trunk = create_trunk(pgraph, initial_values)
@@ -529,9 +531,20 @@ def solve(pgraph, initial_values):
                              if not branch.valid))
     stepwise_resolve(trunk)
 
+    return trunk
+
+def solve(pgraph, initial_values):  
+    nodes = pgraph.nodes
+    trunk = get_trunk_solution(pgraph, initial_values)
+    
+    rgraph = Rgraph(trunk.literals, trunk.reasons)
+    rgraph.print_graph() #prints a rgraph to console
+    rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
+    
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
     return ret
+    
 
 
 class SolveError(Exception):
