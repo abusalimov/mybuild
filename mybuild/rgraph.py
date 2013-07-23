@@ -7,11 +7,12 @@ __date__ = "2013-06-28"
 
 import sys
 import Queue
+from mybuild.pgraph import *
 
 class Node(object):
     """meta types for nodes in reason graph"""
     def __init__(self):
-        self.consequenses = set()
+        self.consequences = set()
         self.reasons = set()
         self.length = float("+inf")
         
@@ -70,11 +71,16 @@ class Rgraph(object):
             if not r.cause_literals:
                 s = set()
                 s.add(r.literal)
-                self.initials.add(self.get_node_by_literals(s))
+                touple = self.get_node_by_literals(s), r
+                self.initials.add(touple)
                 
         for r in reasons:
             if r.cause_literals:
                 self.fill_data(r)
+        
+        for n in self.nodes:        
+            if isinstance(n, MultipleNode):
+                self.fill_multiple_node(n)
         
     def get_node_by_literals(self, literals): 
         for n in self.nodes:
@@ -85,19 +91,24 @@ class Rgraph(object):
         for n in self.nodes:
             for r in node.literals:
                 if isinstance(n, SingleNode) and r == n.literal:
-                    n.consequenses.add(node) 
-                    node.reasons.add(n)       
+                    reason = Reason(None, n.literal, *node.literals)
+                    touple = n, reason
+                    node.reasons.add(touple)   
+                    touple = node, reason
+                    n.consequences.add(touple) 
+                        
             
     def fill_data(self, reason):
         for n in self.nodes:
             if n.compare_literals(reason.cause_literals):
                 s = set()
                 s.add(reason.literal)
-                n.consequenses.add(self.get_node_by_literals(s))
+                touple = self.get_node_by_literals(s), reason
+                n.consequences.add(touple)
             if isinstance(n, SingleNode) and reason.literal == n.literal:
-                n.reasons.add(self.get_node_by_literals(reason.cause_literals))
-            if isinstance(n, MultipleNode):
-                self.fill_multiple_node(n)
+                touple = self.get_node_by_literals(reason.cause_literals), reason
+                n.reasons.add(touple)
+            
     
     def print_graph(self):
         """
@@ -111,19 +122,19 @@ class Rgraph(object):
             queue.put(node)
         
         while not queue.empty():        
-            self.dfs(queue.get(), node.reasons, used, queue, 0)
+            self.dfs(queue.get(), used, queue, 0)
                 
-    def dfs(self, node, reason, used, queue, depth):
-        if node in used:
-            print self.get_offset(depth), node.get_literals(), 'because of', reason
+    def dfs(self, node, used, queue, depth):
+        if node[0] in used:
+            print self.get_offset(depth), node[1].why(node[1], node[1].literal, node[1].cause_literals)
             return
         
-        used.add(node)
-        print self.get_offset(depth), node.get_literals(), 'because of', reason
-        for cons in node.consequenses:
-            if isinstance(cons, SingleNode):
-                self.dfs(cons, node.get_literals(), used, queue, depth + 1)
-            if isinstance(cons, MultipleNode) and cons not in queue.queue:
+        used.add(node[0])
+        print self.get_offset(depth), node[1].why(node[1], node[1].literal, node[1].cause_literals)
+        for cons in node[0].consequences:
+            if isinstance(cons[0], SingleNode):
+                self.dfs(cons, used, queue, depth + 1)
+            if isinstance(cons[0], MultipleNode) and cons[0] not in queue.queue:
                 queue.put(cons)
     
     def get_offset(self, depth):
@@ -144,23 +155,26 @@ class Rgraph(object):
         stack = Queue.PriorityQueue()
         used = set()
         for node in self.initials:
-            stack.put_nowait(node)
-            node.length = 0
-            node.parent = node
-            used.add(node)
+            stack.put_nowait(node[0])
+            node[0].length = 0
+            node[0].parent = node[0]
+            used.add(node[0])
             
         while not stack.empty():
             node = stack.get_nowait()
                  
-            for cons in node.consequenses:
-                if isinstance(cons, SingleNode):
-                    if cons.length > node.length + 1:
-                        cons.length = node.length + 1
-                        cons.parent = node
+            for cons in node.consequences:
+                if isinstance(cons[0], SingleNode):
+                    if cons[0].length > node.length + 1:
+                        cons[0].length = node.length + 1
+                        cons[0].parent = node
                             
-                if isinstance(cons, MultipleNode):
-                    cons.length = sum(r.length for r in cons.reasons)
+                if isinstance(cons[0], MultipleNode):
+                    cons[0].length = sum(r[0].length for r in cons[0].reasons)
                         
-                if cons not in used:      
-                    stack.put_nowait(cons)
-                    used.add(cons)
+                if cons[0] not in used:      
+                    stack.put(cons[0], False)
+                    used.add(cons[0])
+                    
+                    
+                    
