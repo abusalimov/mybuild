@@ -38,27 +38,20 @@ def p_value(p):
     p[0] = p[1]
 
 
-def p_array(p):
-    """array : LBRACKET values RBRACKET"""
-    p[0] = to_rlist(p[2])
-
-
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_object(p, Object(scope_object(p)))
+    p[0] = push_object(p, Object(this_scope(p)))
 
 def p_init_object(p):
     """init_object : object_header
        init_object : object_header object_body
        init_object : object_body"""
-    pop_object(p)
+    p.parser.objects.add(pop_object(p))
 
 
 def p_object_header(p):
     """object_header : qualname object_name object_args"""
-    # need to set a name prior to entering object body
-    this  = this_object(p)
-    this.init_header(ref_name=p[1], args=to_rdict(p[3]), name=p[2])
+    this_object(p).init_header(ref_name=p[1], args=to_rdict(p[3]), name=p[2])
 
 def p_object_name(p):
     """object_name : empty
@@ -86,13 +79,13 @@ def p_parameter(p):
 
 
 def p_object_body(p):
-    """object_body : LBRACE enter_scope docstring object_members RBRACE"""
+    """object_body : LBRACE new_scope docstring object_members RBRACE"""
     this_object(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
-    leave_scope(p)
+    pop_scope(p)
 
-def p_enter_scope(p):
-    """enter_scope :"""
-    enter_scope(p)
+def p_new_scope(p):
+    """new_scope :"""
+    push_scope(p, ObjectScope(this_scope(p)))
 
 
 def p_docstring_0(p):
@@ -113,6 +106,11 @@ def p_object_members_1(p):
 def p_object_member(p):
     """object_member : string_or_qualname COLON value"""
     p[0] = (p[1], p[3])
+
+
+def p_array(p):
+    """array : LBRACKET values RBRACKET"""
+    p[0] = to_rlist(p[2])
 
 
 def p_qualname_0(p):
@@ -142,16 +140,67 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # Here go scoping-related stuff + some utils.
 
+class Scope(object):
+    def __getitem__(self, name):
+        raise KeyError
+    def __repr__(self):
+        return type(self).__name__.join('<>')
+
+class MutableScope(Scope):
+    def __setitem__(self, name, value):
+        pass
+
+
+class DelegatingScope(Scope):
+    """docstring for DelegatingScope"""
+
+    def __init__(self, parent=Scope()):
+        super(DelegatingScope, self).__init__()
+        self.parent = parent
+
+    def __missing__(self, key):
+        return self.parent[key]
+
+    def __repr__(self):
+        return '%s -> %r' % (super(DelegatingScope, self).__repr__(),
+                             self.parent)
+
+
+class DictScope(dict, MutableScope):
+    def __repr__(self):
+        return '<%s %r>' % (type(self).__name__, list(self))
+
+
+class ConflictsAwareDictScope(DictScope):
+    """Stores conflicting items detected upon setting a value for an existing
+    name."""
+
+    def __init__(self):
+        super(ConflictsAwareDictScope, self).__init__()
+        self.conflicts = dict()    # {name: [values]}
+
+    def __setitem__(self, name, value):
+        if name not in self.conflicts:
+            if name in self:
+                del self[name]
+            else:
+                super(ConflictsAwareDictScope, self).__setitem__(name, value)
+                return  # hot path
+
+            self.conflicts[name] = [old_value]
+        self.conflicts[name].append(value)
+
+
+class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
+    pass
+
+
 class Object(object):
     """docstring for Object"""
 
-    def __init__(self, parent=None):
+    def __init__(self, scope=None):
         super(Object, self).__init__()
-        if parent is not None:
-            if not parent.name:
-                parent = parent.scope
-            assert parent.name
-        self.scope = parent
+        self.scope = scope
 
         self.ref        = None
         self.ref_name   = None
@@ -160,7 +209,6 @@ class Object(object):
 
         self.args     = []
         self.name     = None
-        self.qualname = None
 
         self.attrs     = []
         self.docstring = None
@@ -175,39 +223,27 @@ class Object(object):
                 self.ref_getter = attrgetter(ref_attr)
 
         self.args = args
-        self.name = self.qualname = name
+        self.name = name
 
         if name:
-            scope = self.scope
-            if scope is not None and scope.qualname:
-                self.qualname = scope.qualname + '.' + name
+            self.scope[name] = self
 
     def init_body(self, attrs, docstring):
         self.attrs     = attrs
         self.docstring = docstring
 
-    def link_local(self, local_exports):
+    def link_local(self):
         if self.ref_name:
-            self.ref = self.resolve_local_ref(local_exports, self.ref_name)
-
-    def resolve_local_ref(self, local_exports, lookup_name):
-        for scope in self.iter_scope_chain():
             try:
-                return local_exports[scope.qualname + '.' + lookup_name]
+                self.ref = self.scope[self.ref_name]
             except KeyError:
                 pass
-        return local_exports.get(lookup_name)
-
-    def iter_scope_chain(self):
-        s = self.scope
-        while s is not None:
-            yield s
-            s = s.scope
 
     def __repr__(self):
-        return '{ref_name} {name}({args}){attrs}'.format(
+        return '{ref_name} in ({scope}) {name}({args}){attrs}'.format(
                     ref_name=self.ref_name or '',
-                    name=self.qualname or '',
+                    scope=self.scope,
+                    name=self.name or '',
                     args=dict(self.args) or '',
                     attrs=dict(self.attrs) or '')
 
@@ -219,22 +255,14 @@ def to_rdict(reversed_pairs):
     return OrderedDict(reversed(reversed_pairs))
 
 
-def this_object(p):
-    return p.parser.object_stack[-1]
-def scope_object(p):
-    return p.parser.object_stack[p.parser.nesting_depth]
+def this_scope(p):  return p.parser.scope_stack[-1]
+def this_object(p): return p.parser.object_stack[-1]
 
-def push_object(p, o):
-    p.parser.objects.add(o)  # also remember it in a global set
-    p.parser.object_stack.append(o)
-    return o
-def pop_object(p):
-    return p.parser.object_stack.pop()
+def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
+def pop_scope(p):  return p.parser.scope_stack.pop()
 
-def enter_scope(p):
-    p.parser.nesting_depth += 1
-def leave_scope(p):
-    p.parser.nesting_depth -= 1
+def push_object(p, obj):  p.parser.object_stack.append(obj); return obj
+def pop_object(p): return p.parser.object_stack.pop()
 
 
 # The main entry point.
@@ -254,29 +282,26 @@ def parse(text, builtins={}, **kwargs):
       - unresolved is a list of objects with unresolved references
     """
 
-    objects = parser.objects = set()
+    global_scope = ObjectScope(parent=DictScope(builtins))
 
+    parser.scope_stack   = [global_scope]
     parser.object_stack  = [None]
-    parser.nesting_depth = 0
+
+    objects = parser.objects = set()
 
     result = parser.parse(text, lexer=lex.lexer, **kwargs)
 
-    export_pairs = list((o.qualname, o) for o in objects if o.qualname)
-    exports = dict(export_pairs)
-
-    if len(exports) != len(export_pairs):
-        raise  # Multiple definition.
-
     for o in objects:
-        o.link_local(exports)
+        o.link_local()
         print o.ref_name, ' -> ', o.ref
 
     unresolved = list(o for o in objects if o.ref_name and not o.ref)
 
-    return (result, exports, unresolved)
+    return (result, dict(global_scope), unresolved)
 
 
 text = '''
+obj obj,
 obj module,
 module Kernel(debug = False) {
     "Docstring!"
