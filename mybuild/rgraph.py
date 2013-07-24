@@ -11,7 +11,7 @@ from mybuild.pgraph import *
 
 class NodeContainer(object):
     def __init__(self, literals):
-        self.literals = literals 
+        self.literals = frozenset(literals) 
         self.containers = set() #NodeContainrs set that contains nodes with current node as member 
         self.members = set() #Node set of nodes with one literal from node.literals
         self.consequences = {} #key = node, value = reason
@@ -31,42 +31,32 @@ class Rgraph(object):
     """  
     def __init__(self, literals, reasons):
         self.initial = NodeContainer(set())  
-        self.nodes = set()   
-        self.nodes.add(self.initial)
+        self.nodes = {}    
+        self.nodes[frozenset(set())] = self.initial
         
         for literal in literals:
-            self.nodes.add(NodeContainer(self.literal_to_set(literal)))
+            self.nodes[frozenset([literal])] = NodeContainer(frozenset([literal]))
                 
         for reason in reasons:
-            self.fill_data(reason)
-            
-    def literal_to_set(self, literal):
-        s = set()
-        s.add(literal)
-        return s
-                
-    def update_containers(self, node):
-        for literal in node.literals:
-            member = self.get_node_by_literals(self.literal_to_set(literal))
-            node.members.add(member)
-            member.containers.add(node)
-        
-    def get_node_by_literals(self, literals): 
-        for n in self.nodes:
-            if n.compare_literals(literals):
-                return n                      
+            self.fill_data(reason)              
             
     def fill_data(self, reason): 
         if len(reason.cause_literals) > 1:
-            s = set(reason.cause_literals)
-            self.nodes.add(NodeContainer(s))
-            self.update_containers(self.get_node_by_literals(s))
-                      
-        cause_node = self.get_node_by_literals(reason.cause_literals)
-        literal_node = self.get_node_by_literals(self.literal_to_set(reason.literal))
+            s = frozenset(reason.cause_literals)
+            self.nodes[s] = NodeContainer(s)
+            self.update_containers(self.nodes[s])
+                     
+        cause_node = self.nodes[frozenset(reason.cause_literals)]
+        literal_node = self.nodes[frozenset([reason.literal])]
         
         cause_node.consequences[literal_node] = reason
         literal_node.reasons[cause_node] = reason
+        
+    def update_containers(self, node):
+        for literal in node.literals:
+            member = self.nodes[frozenset([literal])]
+            node.members.add(member)
+            member.containers.add(node)  
     
     def print_graph(self):
         """
@@ -80,8 +70,8 @@ class Rgraph(object):
             queue.put((node, self.initial.consequences[node]))
         
         while not queue.empty():
-            node = queue.get()        
-            self.dfs(node[0], node[1], used, queue, 0)
+            node, reason = queue.get()        
+            self.dfs(node, reason, used, queue, 0)
                 
     def dfs(self, node, reason, used, queue, depth):
         if node in used:
@@ -100,13 +90,7 @@ class Rgraph(object):
                             queue.put((ccons, container.consequences[ccons]))
                             
     def print_reason(self, reason, depth):
-        print self.get_offset(depth), reason.why(reason, reason.literal, reason.cause_literals)
-    
-    def get_offset(self, depth):
-        st = ''  
-        for i in range(0, depth) :
-            st = st + '  '  
-        return st
+        print '  ' * depth, reason.why(reason, reason.literal, reason.cause_literals)
                
     def find_shortest_ways(self):
         """
