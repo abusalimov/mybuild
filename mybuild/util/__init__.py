@@ -12,6 +12,22 @@ def identity(x):
     return x
 
 
+class cached_property(object):
+    """
+    Non-data descriptor.
+    """
+    __slots__ = 'func'
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, cls=None):
+        func = self.func
+        ret = func(instance)
+        setattr(instance, func.__name__, ret)
+        return ret
+
+
 class Pair(_namedtuple('_Pair', 'false true')):
     __slots__ = ()
 
@@ -19,6 +35,7 @@ class Pair(_namedtuple('_Pair', 'false true')):
         return Pair._make(map(func, self))
 
 bools = Pair(False, True)
+
 
 def to_dict(iterable_or_mapping, check_exclusive=False):
     if isinstance(iterable_or_mapping, dict):

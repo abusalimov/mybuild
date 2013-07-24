@@ -7,7 +7,7 @@ from operator import attrgetter
 
 from . import lex
 
-from ...util import identity
+from ...util import cached_property
 from ...util.collections import OrderedDict
 from ...util.compat import *
 
@@ -40,7 +40,7 @@ def p_value(p):
 
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_object(p, Object(this_scope(p)))
+    p[0] = push_object(p, ObjectStub(this_scope(p)))
 
 def p_init_object(p):
     """init_object : object_header
@@ -51,7 +51,8 @@ def p_init_object(p):
 
 def p_object_header(p):
     """object_header : qualname object_name object_args"""
-    this_object(p).init_header(ref_name=p[1], args=to_rdict(p[3]), name=p[2])
+    this_object(p).init_header(type_name=p[1], name=p[2],
+                               kwargs=to_rdict(p[3]))
 
 def p_object_name(p):
     """object_name : empty
@@ -195,35 +196,60 @@ class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
     pass
 
 
-class Object(object):
-    """docstring for Object"""
+class Stub(object):
+    """docstring for Stub"""
+
+    def __init__(self, name=None, payload=None):
+        super(Stub, self).__init__()
+        self.name    = name
+        self.payload = payload
+
+        self.referrers = []    # updated upon resolving links to this object
+
+    def __repr__(self):
+        return '<%s %r>' % (type(self).__name__, self.payload)
+
+class ObjectStub(Stub):
+    """docstring for ObjectStub"""
+
+    @cached_property
+    def type_stub(self):
+        """Reference to a resolved type (ObjectStub)."""
+        if not self.type_name:
+            name = attr = None
+        else:
+            name, _, attr = self.type_name.partition('.')
+
+        try:
+            type_stub = self.scope[name]
+        except KeyError:
+            raise UnresolvedReferenceError("name '%s' is not defined" % name)
+
+        if attr:
+            try:
+                type_stub = attrgetter(attr)(type_stub)
+            except AttributeError as e:
+                raise UnresolvedAttributeError(*e.args)
+
+        type_stub.referrers.append(self)
+
+        return type_stub
 
     def __init__(self, scope=None):
-        super(Object, self).__init__()
+        super(ObjectStub, self).__init__()
         self.scope = scope
 
-        self.ref        = None
-        self.ref_name   = None
-        self.ref_getter = None
-        self.referrers  = []  # updated upon resolving links to this object
-
-        self.args     = []
-        self.name     = None
+        self.type_name  = None  # qualified name of a type
+        self.args   = []    # positional type arguments TODO unused
+        self.kwargs = {}    # keyword type arguments
 
         self.attrs     = []
         self.docstring = None
 
-    def init_header(self, ref_name, args, name=None):
-        self.ref_name   = ref_name
-        self.ref_getter = identity
-
-        if ref_name:
-            self.ref_name, _, ref_attr = ref_name.partition('.')
-            if ref_attr:
-                self.ref_getter = attrgetter(ref_attr)
-
-        self.args = args
-        self.name = name
+    def init_header(self, type_name, kwargs, name=None):
+        self.type_name = type_name
+        self.kwargs    = kwargs
+        self.name      = name
 
         if name:
             self.scope[name] = self
@@ -232,20 +258,23 @@ class Object(object):
         self.attrs     = attrs
         self.docstring = docstring
 
-    def link_local(self):
-        if self.ref_name:
-            try:
-                self.ref = self.scope[self.ref_name]
-            except KeyError:
-                pass
-
     def __repr__(self):
-        return '{ref_name} in ({scope}) {name}({args}){attrs}'.format(
-                    ref_name=self.ref_name or '',
+        return '{type_name} in ({scope}) {name}({kwargs}){attrs}'.format(
+                    type_name=self.type_name or '',
                     scope=self.scope,
                     name=self.name or '',
-                    args=dict(self.args) or '',
+                    kwargs=dict(self.kwargs) or '',
                     attrs=dict(self.attrs) or '')
+
+
+class LinkageError(Exception):
+    pass
+
+class UnresolvedReferenceError(LinkageError, NameError):
+    pass
+
+class UnresolvedAttributeError(LinkageError, AttributeError):
+    pass
 
 
 def to_rlist(reversed_list):
@@ -282,7 +311,11 @@ def parse(text, builtins={}, **kwargs):
       - unresolved is a list of objects with unresolved references
     """
 
-    global_scope = ObjectScope(parent=DictScope(builtins))
+    builtins.setdefault(None, dict)  # objects with no type info ({})
+
+    builtin_scope = DictScope((name, Stub(name, value))
+                              for name, value in iteritems(builtins))
+    global_scope = ObjectScope(parent=builtin_scope)
 
     parser.scope_stack   = [global_scope]
     parser.object_stack  = [None]
@@ -291,18 +324,18 @@ def parse(text, builtins={}, **kwargs):
 
     result = parser.parse(text, lexer=lex.lexer, **kwargs)
 
+    unresolved = list()
     for o in objects:
-        o.link_local()
-        print o.ref_name, ' -> ', o.ref
-
-    unresolved = list(o for o in objects if o.ref_name and not o.ref)
+        try:
+            print o.type_name, ' -> ', o.type_stub
+        except LinkageError as e:
+            unresolved.append(o)
+            print e
 
     return (result, dict(global_scope), unresolved)
 
 
 text = '''
-obj obj,
-obj module,
 module Kernel(debug = False) {
     "Docstring!"
 
@@ -337,8 +370,16 @@ x xxx {
 if __name__ == "__main__":
     import traceback, sys, code
     from pprint import pprint
+
+    def get_builtins():
+        class module(object):
+            pass
+        x = None
+        embox = 42
+        return locals()
+
     try:
-        pprint(parse(text, debug=0))
+        pprint(parse(text, builtins=get_builtins(), debug=0))
     except:
         type, value, tb = sys.exc_info()
         traceback.print_exc()
