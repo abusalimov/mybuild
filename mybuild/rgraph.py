@@ -9,133 +9,98 @@ import sys
 import Queue
 from mybuild.pgraph import *
 
-class Node(object):
-    """meta types for nodes in reason graph"""
-    def __init__(self):
-        self.consequences = set()
-        self.reasons = set()
+class NodeContainer(object):
+    def __init__(self, literals):
+        self.literals = literals 
+        self.containers = set() #NodeContainrs set that contains nodes with current node as member 
+        self.members = set() #Node set of nodes with one literal from node.literals
+        self.consequences = {} #key = node, value = reason
+        self.reasons = {} #key = node, value = reason
         self.length = float("+inf")
+        self.parent = None
         
-    def compare_literals(self, literals):
-        return False
-    
-    def get_literals(self):
-        return set()
-    
     def __lt__(self, other):
         return self.length < other.length
-        
-class SingleNode(Node):
-    """type for nodes containing only one literal"""   
-    def __init__(self, literal):
-        super(SingleNode, self).__init__()
-        self.literal = literal
-        
-    def compare_literals(self, literals):
-        return len(literals) == 1 and self.literal in set(literals)
     
-    def get_literals(self):
-        s = set();
-        s.add(self.literal)
-        return s
-        
-        
-class MultipleNode(Node):
-    """type for nodes containing two or more literals"""  
-    def __init__(self, literals):
-        super(MultipleNode, self).__init__()
-        self.literals = literals
-        
     def compare_literals(self, literals):
         return (set(literals) == self.literals)
-    
-    def get_literals(self):
-        return self.literals
 
 class Rgraph(object): 
     """
-    Rgraph or Reason graph is a graph of two node types. Each node has reasons
-    and consequences. Reasons is node set, each of that enough for node
-    correctness. Consequences is node set, each of that correct because of node.
+    Rgraph or Reason graph
     """  
-    
     def __init__(self, literals, reasons):
-        self.initials = set() 
+        self.initial = NodeContainer(set())  
+        self.nodes = set()   
+        self.nodes.add(self.initial)
         
-        self.nodes = set(SingleNode(literal) for literal in literals)
-            
-        for r in reasons:
-            if len(r.cause_literals) > 1:
-                node = MultipleNode(set(r.cause_literals))
-                self.nodes.add(node)
-            if not r.cause_literals:
-                s = set()
-                s.add(r.literal)
-                touple = self.get_node_by_literals(s), r
-                self.initials.add(touple)
+        for literal in literals:
+            self.nodes.add(NodeContainer(self.literal_to_set(literal)))
                 
-        for r in reasons:
-            if r.cause_literals:
-                self.fill_data(r)
-        
-        for n in self.nodes:        
-            if isinstance(n, MultipleNode):
-                self.fill_multiple_node(n)
+        for reason in reasons:
+            self.fill_data(reason)
+            
+    def literal_to_set(self, literal):
+        s = set()
+        s.add(literal)
+        return s
+                
+    def update_containers(self, node):
+        for literal in node.literals:
+            member = self.get_node_by_literals(self.literal_to_set(literal))
+            node.members.add(member)
+            member.containers.add(node)
         
     def get_node_by_literals(self, literals): 
         for n in self.nodes:
             if n.compare_literals(literals):
-                return n
-    
-    def fill_multiple_node(self, node):
-        for n in self.nodes:
-            for r in node.literals:
-                if isinstance(n, SingleNode) and r == n.literal:
-                    reason = Reason(None, n.literal, *node.literals)
-                    touple = n, reason
-                    node.reasons.add(touple)   
-                    touple = node, reason
-                    n.consequences.add(touple) 
-                        
+                return n                      
             
-    def fill_data(self, reason):
-        for n in self.nodes:
-            if n.compare_literals(reason.cause_literals):
-                s = set()
-                s.add(reason.literal)
-                touple = self.get_node_by_literals(s), reason
-                n.consequences.add(touple)
-            if isinstance(n, SingleNode) and reason.literal == n.literal:
-                touple = self.get_node_by_literals(reason.cause_literals), reason
-                n.reasons.add(touple)
-            
+    def fill_data(self, reason): 
+        if len(reason.cause_literals) > 1:
+            s = set(reason.cause_literals)
+            self.nodes.add(NodeContainer(s))
+            self.update_containers(self.get_node_by_literals(s))
+                      
+        cause_node = self.get_node_by_literals(reason.cause_literals)
+        literal_node = self.get_node_by_literals(self.literal_to_set(reason.literal))
+        
+        cause_node.consequences[literal_node] = reason
+        literal_node.reasons[cause_node] = reason
     
     def print_graph(self):
         """
-        Simple way to print reason graph. Multiple nodes are printed in new line without offset.
-        ToDo: print by using reason.why
+        Simple way to print reason graph. Nodes of more one reason are printed in new line without offset.
         """
         queue = Queue.LifoQueue()
         used = set()
         
-        for node in self.initials:
-            queue.put(node)
+        #queue contains touples (node, reason)
+        for node in self.initial.consequences:
+            queue.put((node, self.initial.consequences[node]))
         
-        while not queue.empty():        
-            self.dfs(queue.get(), used, queue, 0)
+        while not queue.empty():
+            node = queue.get()        
+            self.dfs(node[0], node[1], used, queue, 0)
                 
-    def dfs(self, node, used, queue, depth):
-        if node[0] in used:
-            print self.get_offset(depth), node[1].why(node[1], node[1].literal, node[1].cause_literals)
+    def dfs(self, node, reason, used, queue, depth):
+        if node in used:
+            self.print_reason(reason,depth)
             return
         
-        used.add(node[0])
-        print self.get_offset(depth), node[1].why(node[1], node[1].literal, node[1].cause_literals)
-        for cons in node[0].consequences:
-            if isinstance(cons[0], SingleNode):
-                self.dfs(cons, used, queue, depth + 1)
-            if isinstance(cons[0], MultipleNode) and cons[0] not in queue.queue:
-                queue.put(cons)
+        used.add(node)
+        self.print_reason(reason,depth)
+        for cons in node.consequences:
+            self.dfs(cons, node.consequences[cons], used, queue, depth + 1)
+            for container in cons.containers:
+                if container not in used:
+                    used.add(container)
+                    for ccons in container.consequences:
+                        if cons not in queue.queue:
+                            queue.put((ccons, container.consequences[ccons]))
+                            
+    def print_reason(self, reason, depth):
+        print self.get_offset(depth), reason.why(reason, reason.literal, reason.cause_literals)
     
     def get_offset(self, depth):
         st = ''  
@@ -145,36 +110,36 @@ class Rgraph(object):
                
     def find_shortest_ways(self):
         """
-        This algorithm a common  Dijkstra's algorithm with small modification,
-        length of Multiple node is computed as sum of it's reasons.
+        This algorithm a common Dijkstra's algorithm with small modification,
+        length of node of more one reason is computed as sum of it's reasons.
         After function applying each node contains field length, the length of 
-        the shortest way to the initial nodes. If node is Single it also contains
-        parent - the previous node in the shortest way. If node is Multiple then
-        its parents are reasons.
+        the shortest way to the initial nodes. Parent is the previous node in 
+        the shortest way.
         """ 
         stack = Queue.PriorityQueue()
         used = set()
-        for node in self.initials:
-            stack.put_nowait(node[0])
-            node[0].length = 0
-            node[0].parent = node[0]
-            used.add(node[0])
+        for node in self.initial.consequences:
+            stack.put_nowait(node)
+            node.length = 0
+            node.parent = node
+            used.add(node)
             
         while not stack.empty():
             node = stack.get_nowait()
                  
             for cons in node.consequences:
-                if isinstance(cons[0], SingleNode):
-                    if cons[0].length > node.length + 1:
-                        cons[0].length = node.length + 1
-                        cons[0].parent = node
-                            
-                if isinstance(cons[0], MultipleNode):
-                    cons[0].length = sum(r[0].length for r in cons[0].reasons)
+                if cons.length > node.length + 1:
+                    cons.length = node.length + 1
+                    cons.parent = node
                         
-                if cons[0] not in used:      
-                    stack.put(cons[0], False)
-                    used.add(cons[0])
+                if cons not in used:      
+                    stack.put_nowait(cons)
+                    used.add(cons)
+                    for container in cons.containers:
+                        container.length = sum(r.length for r in container.members)
+                        if container not in used:
+                            used.add(container)
+                            stack.put_nowait(container)
                     
                     
                     
