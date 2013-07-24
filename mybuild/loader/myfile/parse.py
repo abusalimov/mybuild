@@ -8,6 +8,7 @@ from operator import attrgetter
 from . import lex
 
 from ...util import cached_property
+from ...util import singleton
 from ...util.collections import OrderedDict
 from ...util.compat import *
 
@@ -40,7 +41,7 @@ def p_value(p):
 
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_object(p, ObjectStub(this_scope(p)))
+    p[0] = push_object(p, ObjectStub(this_scope(p), this_scope_object(p)))
 
 def p_init_object(p):
     """init_object : object_header
@@ -141,6 +142,7 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # Here go scoping-related stuff + some utils.
 
+
 class Scope(object):
     def __getitem__(self, name):
         raise KeyError
@@ -196,77 +198,6 @@ class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
     pass
 
 
-class Stub(object):
-    """docstring for Stub"""
-
-    def __init__(self, name=None, payload=None):
-        super(Stub, self).__init__()
-        self.name    = name
-        self.payload = payload
-
-        self.referrers = []    # updated upon resolving links to this object
-
-    def __repr__(self):
-        return '<%s %r>' % (type(self).__name__, self.payload)
-
-class ObjectStub(Stub):
-    """docstring for ObjectStub"""
-
-    @cached_property
-    def type_stub(self):
-        """Reference to a resolved type (ObjectStub)."""
-        if not self.type_name:
-            name = attr = None
-        else:
-            name, _, attr = self.type_name.partition('.')
-
-        try:
-            type_stub = self.scope[name]
-        except KeyError:
-            raise UnresolvedReferenceError("name '%s' is not defined" % name)
-
-        if attr:
-            try:
-                type_stub = attrgetter(attr)(type_stub)
-            except AttributeError as e:
-                raise UnresolvedAttributeError(*e.args)
-
-        type_stub.referrers.append(self)
-
-        return type_stub
-
-    def __init__(self, scope=None):
-        super(ObjectStub, self).__init__()
-        self.scope = scope
-
-        self.type_name  = None  # qualified name of a type
-        self.args   = []    # positional type arguments TODO unused
-        self.kwargs = {}    # keyword type arguments
-
-        self.attrs     = []
-        self.docstring = None
-
-    def init_header(self, type_name, kwargs, name=None):
-        self.type_name = type_name
-        self.kwargs    = kwargs
-        self.name      = name
-
-        if name:
-            self.scope[name] = self
-
-    def init_body(self, attrs, docstring):
-        self.attrs     = attrs
-        self.docstring = docstring
-
-    def __repr__(self):
-        return '{type_name} in ({scope}) {name}({kwargs}){attrs}'.format(
-                    type_name=self.type_name or '',
-                    scope=self.scope,
-                    name=self.name or '',
-                    kwargs=dict(self.kwargs) or '',
-                    attrs=dict(self.attrs) or '')
-
-
 class LinkageError(Exception):
     pass
 
@@ -275,6 +206,113 @@ class UnresolvedReferenceError(LinkageError, NameError):
 
 class UnresolvedAttributeError(LinkageError, AttributeError):
     pass
+
+
+class MyfileDeclarative(object):
+    """docstring for MyfileDeclarative"""
+
+    def my_getattr(self, attr):
+        return getattr(self, attr)
+
+
+class Stub(object):
+    """docstring for Stub"""
+
+    def __init__(self, name=None):
+        super(Stub, self).__init__()
+        self.name    = name
+
+        self.resolve_hooks = []  # updated upon resolving links to this object
+
+    def resolve_to(self, payload):
+        for hook in self.resolve_hooks:
+            hook(payload)
+
+
+class ObjectStub(Stub, MyfileDeclarative):
+    """docstring for ObjectStub"""
+
+    @cached_property
+    def type_root(self):
+        try:
+            return self.scope[self.type_name]
+        except KeyError:
+            raise UnresolvedReferenceError("name '%s' is not defined" %
+                                           self.type_name)
+
+    @cached_property
+    def type_or_stub(self):
+        """Reference to a resolved type (ObjectStub)."""
+        ret = self.type_root
+
+        try:
+            for attr in self.type_attrs:
+                if isinstance(ret, MyfileDeclarative):
+                    ret = ret.my_getattr(attr)
+                else:
+                    ret = getattr(ret, attr)
+
+        except AttributeError as e:
+            raise UnresolvedAttributeError(*e.args)
+
+        if isinstance(ret, Stub):
+            def resolve(payload):
+                self.type_or_stub = payload
+            ret.resolve_hooks.append(resolve)
+
+        return ret
+
+    def __init__(self, scope=None, parent=None):
+        super(ObjectStub, self).__init__()
+        self.scope = scope
+
+        if parent is not None:
+            if not parent.name:
+                parent = parent.named_parent
+            assert parent.name
+        self.named_parent = parent
+
+        self.type_name = None  # qualified name of a type
+
+        self.args   = []  # positional type arguments TODO unused
+        self.kwargs = {}  # keyword type arguments
+
+        self.attrs     = []
+        self.docstring = None
+
+    def init_header(self, type_name, kwargs, name=None):
+        name_frags = type_name.split('.') if type_name else [None]
+        self.type_name  = name_frags[0]
+        self.type_attrs = name_frags[1:]
+
+        self.kwargs = kwargs
+        self.name   = name
+
+        if name:
+            self.named_children = {}
+            self.scope[name] = self
+            parent = self.named_parent
+            if parent is not None:
+                parent.named_children[name] = self
+
+    def init_body(self, attrs, docstring):
+        self.attrs     = attrs
+        self.docstring = docstring
+
+    def my_getattr(self, attr):
+        try:
+            return self.named_children[attr]
+        except KeyError:
+            raise AttributeError  # TODO think about it
+
+    def __repr__(self):
+        return '{type_name} in ({scope}) {name}({kwargs}){attrs}'.format(
+                    type_name='.'.join([self.type_name] + self.type_attrs)
+                        if self.type_name else '',
+                    scope=self.scope,
+                    name=self.name or '',
+                    kwargs=dict(self.kwargs) or '',
+                    attrs=dict(self.attrs) or '')
 
 
 def to_rlist(reversed_list):
@@ -286,6 +324,9 @@ def to_rdict(reversed_pairs):
 
 def this_scope(p):  return p.parser.scope_stack[-1]
 def this_object(p): return p.parser.object_stack[-1]
+
+def this_scope_object(p):
+    return p.parser.object_stack[len(p.parser.scope_stack)-1]
 
 def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
 def pop_scope(p):  return p.parser.scope_stack.pop()
@@ -311,10 +352,10 @@ def parse(text, builtins={}, **kwargs):
       - unresolved is a list of objects with unresolved references
     """
 
-    builtins.setdefault(None, dict)  # objects with no type info ({})
 
-    builtin_scope = DictScope((name, Stub(name, value))
-                              for name, value in iteritems(builtins))
+    builtin_scope = DictScope(builtins)
+    builtin_scope.setdefault(None, dict)  # objects with no type info ({})
+
     global_scope = ObjectScope(parent=builtin_scope)
 
     parser.scope_stack   = [global_scope]
@@ -327,7 +368,7 @@ def parse(text, builtins={}, **kwargs):
     unresolved = list()
     for o in objects:
         try:
-            print o.type_name, ' -> ', o.type_stub
+            print o.type_name, ' -> ', o.type_or_stub
         except LinkageError as e:
             unresolved.append(o)
             print e
@@ -352,18 +393,6 @@ module Kernel(debug = False) {
 
 },
 
-x xxx {
-    a: {
-        aa: z zzz {
-
-        },
-        b: sss
-    },
-    c: r rrr {
-        d: bb bbb,
-    }
-}
-
 
 '''
 
@@ -372,11 +401,19 @@ if __name__ == "__main__":
     from pprint import pprint
 
     def get_builtins():
+        @singleton
+        class embox(object):
+            def __getattr__(self, attr):
+                return self
         class module(object):
             pass
-        x = None
-        embox = 42
-        return locals()
+        xxx = 42
+
+        return dict(locals(), **{
+                        'None':  None,
+                        'True':  True,
+                        'False': False,
+                    })
 
     try:
         pprint(parse(text, builtins=get_builtins(), debug=0))
