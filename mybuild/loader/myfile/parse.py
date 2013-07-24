@@ -143,6 +143,26 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 # Here go scoping-related stuff + some utils.
 
 
+def to_rlist(reversed_list):
+    return reversed_list[::-1]
+
+def to_rdict(reversed_pairs):
+    return OrderedDict(reversed(reversed_pairs))
+
+
+def this_scope(p):  return p.parser.scope_stack[-1]
+def this_object(p): return p.parser.object_stack[-1]
+
+def this_scope_object(p):
+    return p.parser.object_stack[len(p.parser.scope_stack)-1]
+
+def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
+def pop_scope(p):  return p.parser.scope_stack.pop()
+
+def push_object(p, obj):  p.parser.object_stack.append(obj); return obj
+def pop_object(p): return p.parser.object_stack.pop()
+
+
 class Scope(object):
     def __getitem__(self, name):
         raise KeyError
@@ -313,26 +333,6 @@ class ObjectStub(Stub, MyfileDeclarative):
                     name=self.name or '',
                     kwargs=dict(self.kwargs) or '',
                     attrs=dict(self.attrs) or '')
-
-
-def to_rlist(reversed_list):
-    return reversed_list[::-1]
-
-def to_rdict(reversed_pairs):
-    return OrderedDict(reversed(reversed_pairs))
-
-
-def this_scope(p):  return p.parser.scope_stack[-1]
-def this_object(p): return p.parser.object_stack[-1]
-
-def this_scope_object(p):
-    return p.parser.object_stack[len(p.parser.scope_stack)-1]
-
-def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
-def pop_scope(p):  return p.parser.scope_stack.pop()
-
-def push_object(p, obj):  p.parser.object_stack.append(obj); return obj
-def pop_object(p): return p.parser.object_stack.pop()
 
 
 # The main entry point.
