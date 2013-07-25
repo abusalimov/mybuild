@@ -71,6 +71,7 @@ class Rgraph(object):
         #queue contains touples (node, reason)
         for node in self.initial.therefore:
             queue.put((node, self.initial.therefore[node]))
+            self.__process_containers_dfs__(node, used, queue)
         
         while not queue.empty():
             node, reason = queue.get()        
@@ -85,12 +86,15 @@ class Rgraph(object):
         self.print_reason(reason,depth)
         for cons in node.therefore:
             self.dfs(cons, node.therefore[cons], used, queue, depth + 1)
-            for container in cons.containers:
-                if container not in used:
-                    used.add(container)
-                    for ccons in container.therefore:
-                        if cons not in queue.queue:
-                            queue.put((ccons, container.therefore[ccons]))
+            self.__process_containers_dfs__(cons, used, queue)
+                            
+    def __process_containers_dfs__(self, node, used, queue):
+        for container in node.containers:
+            if container not in used:
+                used.add(container)
+                for ccons in container.therefore:
+                    if node not in queue.queue:
+                        queue.put((ccons, container.therefore[ccons]))
                             
     def print_reason(self, reason, depth):
         print '  ' * depth, reason.why(reason, reason.literal, reason.cause_literals)
@@ -109,11 +113,12 @@ class Rgraph(object):
             queue.put_nowait(node)
             node.length = 0
             node.parent = node
-            used.add(node)
+            used.add(node) 
+            self.__process_containers_shortest_ways__(node, used, queue)
             
         while not queue.empty():
             node = queue.get_nowait()
-                 
+                     
             for cons in node.therefore:
                 if cons.length > node.length + 1:
                     cons.length = node.length + 1
@@ -122,11 +127,15 @@ class Rgraph(object):
                 if cons not in used:      
                     queue.put_nowait(cons)
                     used.add(cons)
-                    for container in cons.containers:
-                        container.length = sum(r.length for r in container.members)
-                        if container not in used:
-                            used.add(container)
-                            queue.put_nowait(container)
+                
+                self.__process_containers_shortest_ways__(cons, used, queue)
+
                     
-                    
-                    
+    def __process_containers_shortest_ways__(self, node, used, queue):         
+        for container in node.containers:
+            container.length = sum(r.length for r in container.members)
+            if container not in used:
+                used.add(container)
+                queue.put_nowait(container)   
+                
+                             
