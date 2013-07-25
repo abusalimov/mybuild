@@ -12,10 +12,12 @@ from mybuild.pgraph import *
 class NodeContainer(object):
     def __init__(self, literals):
         self.literals = frozenset(literals) 
-        self.containers = set() #NodeContainrs set that contains nodes with current node as member 
-        self.members = set() #Node set of nodes with one literal from node.literals
-        self.consequences = {} #key = node, value = reason
-        self.reasons = {} #key = node, value = reason
+        self.containers = set() #NodeContainrs set that contains nodes with
+                                #current node as member 
+        self.members = set()    #Node set of nodes with one literal from 
+                                #node.literals
+        self.therefore = {} #key = node, value = reason
+        self.becauseof = {} #key = node, value = reason
         self.length = float("+inf")
         self.parent = None
         
@@ -49,8 +51,8 @@ class Rgraph(object):
         cause_node = self.nodes[frozenset(reason.cause_literals)]
         literal_node = self.nodes[frozenset([reason.literal])]
         
-        cause_node.consequences[literal_node] = reason
-        literal_node.reasons[cause_node] = reason
+        cause_node.therefore[literal_node] = reason
+        literal_node.becauseof[cause_node] = reason
         
     def update_containers(self, node):
         for literal in node.literals:
@@ -60,14 +62,15 @@ class Rgraph(object):
     
     def print_graph(self):
         """
-        Simple way to print reason graph. Nodes of more one reason are printed in new line without offset.
+        Simple way to print reason graph. Nodes of more one reason are printed 
+        in new line without offset.
         """
         queue = Queue.LifoQueue()
         used = set()
         
         #queue contains touples (node, reason)
-        for node in self.initial.consequences:
-            queue.put((node, self.initial.consequences[node]))
+        for node in self.initial.therefore:
+            queue.put((node, self.initial.therefore[node]))
         
         while not queue.empty():
             node, reason = queue.get()        
@@ -80,14 +83,14 @@ class Rgraph(object):
         
         used.add(node)
         self.print_reason(reason,depth)
-        for cons in node.consequences:
-            self.dfs(cons, node.consequences[cons], used, queue, depth + 1)
+        for cons in node.therefore:
+            self.dfs(cons, node.therefore[cons], used, queue, depth + 1)
             for container in cons.containers:
                 if container not in used:
                     used.add(container)
-                    for ccons in container.consequences:
+                    for ccons in container.therefore:
                         if cons not in queue.queue:
-                            queue.put((ccons, container.consequences[ccons]))
+                            queue.put((ccons, container.therefore[ccons]))
                             
     def print_reason(self, reason, depth):
         print '  ' * depth, reason.why(reason, reason.literal, reason.cause_literals)
@@ -95,35 +98,35 @@ class Rgraph(object):
     def find_shortest_ways(self):
         """
         This algorithm a common Dijkstra's algorithm with small modification,
-        length of node of more one reason is computed as sum of it's reasons.
+        length of node of more one reason is computed as sum of it's becauseof.
         After function applying each node contains field length, the length of 
         the shortest way to the initial nodes. Parent is the previous node in 
         the shortest way.
         """ 
-        stack = Queue.PriorityQueue()
+        queue = Queue.PriorityQueue()
         used = set()
-        for node in self.initial.consequences:
-            stack.put_nowait(node)
+        for node in self.initial.therefore:
+            queue.put_nowait(node)
             node.length = 0
             node.parent = node
             used.add(node)
             
-        while not stack.empty():
-            node = stack.get_nowait()
+        while not queue.empty():
+            node = queue.get_nowait()
                  
-            for cons in node.consequences:
+            for cons in node.therefore:
                 if cons.length > node.length + 1:
                     cons.length = node.length + 1
                     cons.parent = node
                         
                 if cons not in used:      
-                    stack.put_nowait(cons)
+                    queue.put_nowait(cons)
                     used.add(cons)
                     for container in cons.containers:
                         container.length = sum(r.length for r in container.members)
                         if container not in used:
                             used.add(container)
-                            stack.put_nowait(container)
+                            queue.put_nowait(container)
                     
                     
                     
