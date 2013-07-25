@@ -491,6 +491,8 @@ def resolve_branches(trunk, branches):
         trunk.update(resolved)
 
         for literal in resolved.literals:
+            #TODO: it is just first version, we need remember violation way
+            trunk.reasons.add(Reason(None, literal))
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
@@ -540,7 +542,7 @@ def solve(pgraph, initial_values):
     rgraph = Rgraph(trunk.literals, trunk.reasons)
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
-    
+        
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
     return ret
