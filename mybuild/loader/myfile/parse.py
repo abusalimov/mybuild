@@ -6,12 +6,10 @@ import ply.yacc
 from operator import attrgetter
 
 from . import lex
-
-from .linkage import DictScope
+from .linkage import BuiltinScope
 from .linkage import ObjectScope
 from .linkage import ObjectStub
 
-from ...util import cached_property
 from ...util import singleton
 from ...util.collections import OrderedDict
 from ...util.compat import *
@@ -51,7 +49,7 @@ def p_init_object(p):
     """init_object : object_header
        init_object : object_header object_body
        init_object : object_body"""
-    p.parser.objects.add(pop_object(p))
+    p.parser.linker.all_objects.append(pop_object(p))
 
 
 def p_object_header(p):
@@ -87,7 +85,7 @@ def p_parameter(p):
 def p_object_body(p):
     """object_body : LBRACE new_scope docstring object_members RBRACE"""
     this_object(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
-    pop_scope(p)
+    p.parser.linker.all_scopes.append(pop_scope(p))
 
 def p_new_scope(p):
     """new_scope :"""
@@ -169,7 +167,7 @@ def pop_object(p): return p.parser.object_stack.pop()
 
 # The main entry point.
 
-def parse(text, builtins={}, **kwargs):
+def parse(text, linker, builtins={}, **kwargs):
     """
     Parses the given text and returns the result.
 
@@ -178,34 +176,25 @@ def parse(text, builtins={}, **kwargs):
         builtins (dict) - builtin variables
         **kwargs are passed directly to the underlying PLY parser
 
-    Returns a tuple (AST root, exports, unresolved):
-      - AST root is always a list of values
-      - exports is a dict mapping qualified names to corresponding objects
-      - unresolved is a list of objects with unresolved references
+    Returns:
+        a tuple (ast_root, global_scope).
+
+    Note:
+        This function is NOT reentrant.
     """
 
-
-    builtin_scope = DictScope(builtins)
-    builtin_scope.setdefault(None, dict)  # objects with no type info ({})
-
-    global_scope = ObjectScope(parent=builtin_scope)
+    global_scope = ObjectScope(parent=BuiltinScope(builtins))
 
     parser.scope_stack   = [global_scope]
     parser.object_stack  = [None]
 
-    objects = parser.objects = set()
+    parser.linker = linker
 
-    result = parser.parse(text, lexer=lex.lexer, **kwargs)
+    ast_root = parser.parse(text, lexer=lex.lexer, **kwargs)
 
-    unresolved = list()
-    for o in objects:
-        try:
-            print o.type_name, ' -> ', o.type_or_stub
-        except LinkageError as e:
-            unresolved.append(o)
-            print e
+    parser.linker.all_scopes.append(global_scope)
 
-    return (result, dict(global_scope), unresolved)
+    return (ast_root, dict(global_scope))
 
 
 text = '''
@@ -229,6 +218,7 @@ module Kernel(debug = False) {
 '''
 
 if __name__ == "__main__":
+    from .linkage import GlobalLinker, LocalLinker
     import traceback, sys, code
     from pprint import pprint
 
@@ -247,8 +237,10 @@ if __name__ == "__main__":
                         'False': False,
                     })
 
+    gl = GlobalLinker()
+    ll = LocalLinker(gl)
     try:
-        pprint(parse(text, builtins=get_builtins(), debug=0))
+        pprint(parse(text, linker=ll, builtins=get_builtins()))
     except:
         type, value, tb = sys.exc_info()
         traceback.print_exc()

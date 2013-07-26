@@ -2,17 +2,19 @@
 Loader for plain old Mybuild files.
 """
 
+from .linkage import GlobalLinker
+from .linkage import LocalLinker
+try:
+    from .parse import parse
+except ImportError:
+    parse = None
+
 from .. import mybuild_importer
 
 from ...util.importlib.abc import Loader
 from ...util.importlib.machinery import SourceFileLoader
 
 from ...util.compat import *
-
-try:
-    from .parse import parse
-except ImportError:
-    parse = None
 
 
 LOADER_NAME = 'MYBUILD'
@@ -24,16 +26,17 @@ class MybuildFileLoader(SourceFileLoader):
     FILENAME = 'Mybuild'
 
     @classmethod
-    def init_ctx(cls, ctx, initials):
-        return None  # FIXME linker object
+    def init_ctx(cls, ctx, builtins):
+        return GlobalLinker(), builtins
 
     @classmethod
-    def exit_ctx(cls, linker):
-        pass  # invoke global linkage here
+    def exit_ctx(cls, ctx):
+        linker, _ = ctx
+        linker.link_global()
 
-    def __init__(self, linker, fullname, path):
+    def __init__(self, ctx, fullname, path):
         super(MybuildFileLoader, self).__init__(fullname, path)
-        self.linker = linker
+        self.linker, self.builtins = ctx
 
     def is_package(self, fullname):
         return False
@@ -45,20 +48,20 @@ class MybuildFileLoader(SourceFileLoader):
         if parse is None:
             raise ImportError('PLY is not installed')
 
+        local_linker = LocalLinker(self.linker)
+
         try:
-            result = parse(self.get_source(module.__name__))
+            result = parse(self.get_source(module.__name__),
+                           linker=local_linker, builtins=self.builtins)
 
         except IOError:
             raise ImportError("IO error while reading a stream")
         except SyntaxError:
             raise
 
-        else:
-            print result
-            self._link_module(module, result)
+        local_linker.link_local()
 
-    def _link_module(self, module, result):
-        self.linker  # TODO tell linker about a new module
-
+        ast_root, global_scope = result
+        module.__dict__.update(global_scope)
 
 

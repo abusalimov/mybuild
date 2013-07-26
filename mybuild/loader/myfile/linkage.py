@@ -16,6 +16,13 @@ class MyfileDeclarative(object):
     def my_getattr(self, attr):
         return getattr(self, attr)
 
+    @classmethod
+    def my_getattr_of(cls, obj, attr):
+        if isinstance(obj, cls):
+            obj.my_getattr(attr)
+        else:
+            cls.my_getattr(obj, attr)
+
 
 class Stub(object):
     """docstring for Stub"""
@@ -27,8 +34,8 @@ class Stub(object):
         self.resolve_hooks = []  # updated upon resolving links to this object
 
     def resolve_to(self, payload):
-        for hook in self.resolve_hooks:
-            hook(payload)
+        self.resolve_hooks = [hook for hook in self.resolve_hooks
+                              if hook(payload)]
 
 
 class ObjectStub(Stub, MyfileDeclarative):
@@ -36,33 +43,60 @@ class ObjectStub(Stub, MyfileDeclarative):
 
     @cached_property
     def type_root(self):
+        """Resolved during linking a single my-file."""
         try:
             return self.scope[self.type_name]
         except KeyError:
-            raise UnresolvedReferenceError("name '%s' is not defined" %
+            raise UnresolvedNameError("name '%s' is not resolved" %
                                            self.type_name)
 
     @cached_property
     def type_or_stub(self):
-        """Reference to a resolved type (ObjectStub)."""
+        """Called during global stubs linking.
+
+        Some attributes may still remain unresolved.
+        """
         ret = self.type_root
 
+        nr_got = 0
         try:
-            for attr in self.type_attrs:
-                if isinstance(ret, MyfileDeclarative):
-                    ret = ret.my_getattr(attr)
-                else:
-                    ret = getattr(ret, attr)
+            for nr_got, attr in enumerate(self.type_attrs):
+                ret = MyfileDeclarative.my_getattr_of(ret, attr)
 
         except AttributeError as e:
-            raise UnresolvedAttributeError(*e.args)
+            if not isinstance(ret, Stub):
+                raise
+        finally:
+            del self.type_attrs[:nr_got]
 
         if isinstance(ret, Stub):
-            def resolve(payload):
-                self.type_or_stub = payload
+            def resolve(obj):
+                self.type_or_stub = obj
             ret.resolve_hooks.append(resolve)
 
+        return ret  # bypass AttributeError (if any)
+
+    @cached_property
+    def type_object(self):
+        """Resolved during final objects resolution."""
+
+        ret = self.type_or_stub
+
+        if isinstance(ret, Stub):
+            ret = ret.as_object
+
+        if self.type_attrs:
+            raise UnresolvedAttributeError()
+
         return ret
+
+    @cached_property
+    def as_object(self):
+        ret = self.type_or_stub
+
+        if isinstance(ret, Stub):
+            pass
+
 
     def __init__(self, scope=None, parent=None):
         super(ObjectStub, self).__init__()
@@ -171,14 +205,56 @@ class ConflictsAwareDictScope(DictScope):
 class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
     pass
 
+class BuiltinScope(DelegatingScope):
+    def __missing__(self, key):
+        if key is None:
+            return dict  # for objects with no type info ({})
+        return super(BuiltinScope, self).__missing__(key)
+
 
 class LinkageError(Exception):
     pass
 
-class UnresolvedReferenceError(LinkageError, NameError):
+class CompoundError(LinkageError):
+    def __init__(self, *causes):
+        super(CompoundError, self).__init__('\n'.join(map(str, causes)))
+
+class UnresolvedNameError(LinkageError, NameError):
     pass
 
 class UnresolvedAttributeError(LinkageError, AttributeError):
     pass
 
+
+class Linker(object):
+    """docstring for Linker"""
+
+    def __init__(self):
+        super(Linker, self).__init__()
+        self.all_objects = list()
+
+class GlobalLinker(object):
+    pass
+
+
+class LocalLinker(Linker):
+
+    def __init__(self, global_linker):
+        super(LocalLinker, self).__init__()
+        self.global_linker = global_linker
+        self.all_scopes = list()
+
+    def link_local(self):
+
+        def has_unresolved_type(obj):
+            try:
+                obj.type_root
+            except UnresolvedNameError as e:
+                return e
+
+        unresolved_errors = list(filter(has_unresolved_type, self.all_objects))
+        if unresolved_errors:
+            raise CompoundError(*unresolved_errors)
+
+        self.global_linker.all_objects += self.all_objects
 
