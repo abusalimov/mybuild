@@ -2,6 +2,10 @@
 Lexer definitions for My-files grammar.
 """
 
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-05"
+
+
 import ply.lex
 
 # Derived from ANSI C example.

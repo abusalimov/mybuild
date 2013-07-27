@@ -1,6 +1,10 @@
 """
-PLY-based parser for My-files grammar. Also provides some scoping features.
+PLY-based parser for Myfile grammar.
 """
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-05"
+
 
 import ply.yacc
 from operator import attrgetter
@@ -8,7 +12,7 @@ from operator import attrgetter
 from . import lex
 from .linkage import BuiltinScope
 from .linkage import ObjectScope
-from .linkage import ObjectStub
+from .linkage import Stub
 
 from ...util import singleton
 from ...util.collections import OrderedDict
@@ -43,7 +47,7 @@ def p_value(p):
 
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_object(p, ObjectStub(this_scope(p), this_scope_object(p)))
+    p[0] = push_object(p, Stub(this_scope(p), this_scope_object(p)))
 
 def p_init_object(p):
     """init_object : object_header
@@ -198,6 +202,9 @@ def parse(text, linker, builtins={}, **kwargs):
 
 
 text = '''
+obj obj,
+foo bar,
+module foo(xxx=bar),
 module Kernel(debug = False) {
     "Docstring!"
 
@@ -225,22 +232,29 @@ if __name__ == "__main__":
     def get_builtins():
         @singleton
         class embox(object):
+            def __call__(self, *args, **kwargs):
+                print self, args, kwargs
+                return self
             def __getattr__(self, attr):
                 return self
         class module(object):
-            pass
-        xxx = 42
+            def __init__(self, *args, **kwargs):
+                super(module, self).__init__()
+                print self, args, kwargs
+        xxx = lambda: 42
 
         return dict(locals(), **{
-                        'None':  None,
-                        'True':  True,
-                        'False': False,
+                        'None':  lambda: None,
+                        'True':  lambda: True,
+                        'False': lambda: False,
                     })
 
     gl = GlobalLinker()
     ll = LocalLinker(gl)
     try:
         pprint(parse(text, linker=ll, builtins=get_builtins()))
+        ll.link_local()
+        gl.link_global()
     except:
         type, value, tb = sys.exc_info()
         traceback.print_exc()

@@ -3,6 +3,7 @@ Scoping and linking logic.
 """
 
 __author__ = "Eldar Abusalimov"
+__date__ = "2013-07-26"
 
 
 from ...util import cached_property
@@ -19,87 +20,88 @@ class MyfileDeclarative(object):
     @classmethod
     def my_getattr_of(cls, obj, attr):
         if isinstance(obj, cls):
-            obj.my_getattr(attr)
+            return obj.my_getattr(attr)
         else:
-            cls.my_getattr(obj, attr)
+            return getattr(obj, attr)
 
 
 class Stub(object):
     """docstring for Stub"""
 
-    def __init__(self, name=None):
-        super(Stub, self).__init__()
-        self.name    = name
-
-        self.resolve_hooks = []  # updated upon resolving links to this object
-
-    def resolve_to(self, payload):
-        self.resolve_hooks = [hook for hook in self.resolve_hooks
-                              if hook(payload)]
-
-
-class ObjectStub(Stub, MyfileDeclarative):
-    """docstring for ObjectStub"""
+    @property
+    def type_name(self):
+        return '.'.join(self.type_name_frags)
 
     @cached_property
     def type_root(self):
-        """Resolved during linking a single my-file."""
+        """Resolved during linking a single my-file. May be a stub."""
         try:
-            return self.scope[self.type_name]
+            return self.scope[self.type_name_frags and self.type_name_frags[0]]
         except KeyError:
             raise UnresolvedNameError("name '%s' is not resolved" %
-                                           self.type_name)
-
-    @cached_property
-    def type_or_stub(self):
-        """Called during global stubs linking.
-
-        Some attributes may still remain unresolved.
-        """
-        ret = self.type_root
-
-        nr_got = 0
-        try:
-            for nr_got, attr in enumerate(self.type_attrs):
-                ret = MyfileDeclarative.my_getattr_of(ret, attr)
-
-        except AttributeError as e:
-            if not isinstance(ret, Stub):
-                raise
-        finally:
-            del self.type_attrs[:nr_got]
-
-        if isinstance(ret, Stub):
-            def resolve(obj):
-                self.type_or_stub = obj
-            ret.resolve_hooks.append(resolve)
-
-        return ret  # bypass AttributeError (if any)
+                                      self.type_name)
 
     @cached_property
     def type_object(self):
-        """Resolved during final objects resolution."""
+        """Resolved type object."""
+        ret = self.type_root
 
-        ret = self.type_or_stub
+        for attr in self.type_name_frags[1:]:
+            if isinstance(ret, Stub):
+                try:
+                    ret = ret.named_children[attr]
+                except KeyError:
+                    ret = Stub.to_object(ret)
+                else:
+                    continue
 
-        if isinstance(ret, Stub):
-            ret = ret.as_object
+            ret = MyfileDeclarative.my_getattr_of(ret, attr)
 
-        if self.type_attrs:
-            raise UnresolvedAttributeError()
+        return Stub.to_object(ret)
 
-        return ret
+    @cached_property
+    def type_args(self):
+        return list(map(Stub.to_object, self.args))
+
+    @cached_property
+    def type_kwargs(self):
+        return dict((kw, Stub.to_object(arg))
+                    for kw, arg in iteritems(self.kwargs))
 
     @cached_property
     def as_object(self):
-        ret = self.type_or_stub
+        """Called during global stubs linking.
 
-        if isinstance(ret, Stub):
-            pass
+        Safely resolves objects necessary to instantiate itself, and returns
+        the resulting object.
+        """
+        try:
+            self.__reent_guard
+        except AttributeError:
+            self.__reent_guard = None
+        else:
+            raise ReferenceLoopChain(chain_init=self)
 
+        try:
+            return self.type_object(*self.type_args, **self.type_kwargs)
+
+        except ReferenceLoopChain as chain_ex:
+            if chain_ex.chain_init is self:
+                raise ReferenceLoopError(chain_ex)
+            else:
+                raise chain_ex(self)
+
+        finally:
+            del self.__reent_guard
+
+    @classmethod
+    def to_object(cls, obj):
+        if isinstance(obj, Stub):
+            obj = obj.as_object
+        return obj
 
     def __init__(self, scope=None, parent=None):
-        super(ObjectStub, self).__init__()
+        super(Stub, self).__init__()
         self.scope = scope
 
         if parent is not None:
@@ -108,7 +110,9 @@ class ObjectStub(Stub, MyfileDeclarative):
             assert parent.name
         self.named_parent = parent
 
-        self.type_name = None  # qualified name of a type
+        self.name = None
+
+        self.type_name_frags = []  # parts of qualified name of a type
 
         self.args   = []  # positional type arguments TODO unused
         self.kwargs = {}  # keyword type arguments
@@ -117,9 +121,8 @@ class ObjectStub(Stub, MyfileDeclarative):
         self.docstring = None
 
     def init_header(self, type_name, kwargs, name=None):
-        name_frags = type_name.split('.') if type_name else [None]
-        self.type_name  = name_frags[0]
-        self.type_attrs = name_frags[1:]
+        if type_name:
+            self.type_name_frags = type_name.split('.')
 
         self.kwargs = kwargs
         self.name   = name
@@ -135,20 +138,21 @@ class ObjectStub(Stub, MyfileDeclarative):
         self.attrs     = attrs
         self.docstring = docstring
 
-    def my_getattr(self, attr):
-        try:
-            return self.named_children[attr]
-        except KeyError:
-            raise AttributeError  # TODO think about it
-
     def __repr__(self):
-        return '{type_name} in ({scope}) {name}({kwargs}){attrs}'.format(
-                    type_name='.'.join([self.type_name] + self.type_attrs)
-                        if self.type_name else '',
-                    scope=self.scope,
-                    name=self.name or '',
-                    kwargs=dict(self.kwargs) or '',
-                    attrs=dict(self.attrs) or '')
+        name_str = self.name.join('  ') if self.name else ''
+
+        if self.type_name:
+            args_str =   ', '.join(self.args)
+            kwargs_str = ', '.join('%s=%r' % kwarg
+                                   for kwarg in iteritems(self.kwargs))
+
+            return '{type_name}{name}({type_args})'.format(
+                type_name=self.type_name,
+                name=name_str,
+                type_args=', '.join(filter(None, (args_str, kwargs_str))))
+
+        else:
+            return '<object>'
 
 
 class Scope(object):
@@ -206,7 +210,7 @@ class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
     pass
 
 class BuiltinScope(DelegatingScope):
-    def __missing__(self, key):
+    def __getitem__(self, key):
         if key is None:
             return dict  # for objects with no type info ({})
         return super(BuiltinScope, self).__missing__(key)
@@ -225,6 +229,30 @@ class UnresolvedNameError(LinkageError, NameError):
 class UnresolvedAttributeError(LinkageError, AttributeError):
     pass
 
+class ReferenceLoopError(LinkageError, TypeError):
+    def __init__(self, chain_ex):
+        chain = reversed(chain_ex.chain)
+        chain_tree = '\n'.join('%s -> %s' % (' ' * (depth * 4), obj)
+                               for depth, obj in enumerate(chain))
+        super(ReferenceLoopError, self).__init__(
+                "%s object references itself (eventually)\n%s" %
+                (chain_ex.chain_init, chain_tree))
+
+class ReferenceLoopChain(Exception):
+    @property
+    def chain_init(self):
+        return self.chain[0]
+
+    def __init__(self, chain_init):
+        self.chain = [chain_init]
+
+    def __call__(self, chain_obj):
+        self.chain.append(chain_obj)
+        return self
+
+    def __str__(self):
+        return ' -> '.join(map(str, reversed(self.chain)))
+
 
 class Linker(object):
     """docstring for Linker"""
@@ -233,8 +261,24 @@ class Linker(object):
         super(Linker, self).__init__()
         self.all_objects = list()
 
-class GlobalLinker(object):
-    pass
+    def _raise_compound_if_any(self, errors):
+        if errors:
+            raise CompoundError(*errors)
+
+
+class GlobalLinker(Linker):
+
+    def link_global(self):
+
+        def iter_any_errors():
+            for obj in self.all_objects:
+                try:
+                    obj.as_object
+                except LinkageError as e:
+                    yield e
+
+        self._raise_compound_if_any(tuple(iter_any_errors()))
+
 
 
 class LocalLinker(Linker):
@@ -246,15 +290,14 @@ class LocalLinker(Linker):
 
     def link_local(self):
 
-        def has_unresolved_type(obj):
-            try:
-                obj.type_root
-            except UnresolvedNameError as e:
-                return e
+        def iter_type_root_errors():
+            for obj in self.all_objects:
+                try:
+                    obj.type_root
+                except UnresolvedNameError as e:
+                    yield e
 
-        unresolved_errors = list(filter(has_unresolved_type, self.all_objects))
-        if unresolved_errors:
-            raise CompoundError(*unresolved_errors)
+        self._raise_compound_if_any(tuple(iter_type_root_errors()))
 
         self.global_linker.all_objects += self.all_objects
 

@@ -2,6 +2,10 @@
 Loader for plain old Mybuild files.
 """
 
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-05"
+
+
 from .linkage import GlobalLinker
 from .linkage import LocalLinker
 try:
