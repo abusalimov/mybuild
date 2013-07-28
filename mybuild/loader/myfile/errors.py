@@ -6,11 +6,16 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-28"
 
 
+import traceback as _traceback
+
 from ...util.compat import *
 
 
 class MyfileError(Exception):
-    pass
+
+    def print_error(self, tb=None):
+        _traceback.print_exception(type(self), self, tb)
+
 
 class ParseError(MyfileError):
     pass
@@ -19,7 +24,7 @@ class LinkageError(MyfileError):
     pass
 
 
-class SyntaxErrorWloc(SyntaxError):
+class SyntaxErrorWloc(MyfileError, SyntaxError):
 
     def __init__(self, message, loc):
         super(SyntaxErrorWloc, self).__init__(message, loc.syntax_error_tuple)
@@ -37,6 +42,11 @@ class CompoundError(MyfileError):
     def __init__(self, causes, message="Multiple errors"):
         super(CompoundError, self).__init__(message)
         self.causes = tuple(causes)
+
+    def print_error(self, tb=None):
+        super(CompoundError, self).print_error(tb)
+        for cause in self.causes:
+            cause.print_error()
 
     @classmethod
     def raise_if_any(cls, errors):
@@ -68,11 +78,21 @@ class RepeatedKwargError(CompoundError, ParseError):
                 "repeated keyword argument '%s'" % kw)
 
 
-class UnresolvedNameError(LinkageError, NameError):
-    pass
+class UnresolvedNameError(LinkageError, SyntaxErrorWloc, NameError):
 
-class UnresolvedAttributeError(LinkageError, AttributeError):
-    pass
+    def __init__(self, stub, name, loc):
+        super(UnresolvedNameError, self).__init__(
+                "name '{name}' is not defined: "
+                "during resolving '{stub}' object".format(**locals()), loc)
+
+
+class UnresolvedAttributeError(LinkageError, SyntaxErrorWloc, AttributeError):
+
+    def __init__(self, stub, obj, attr, loc):
+        obj_type = type(obj)
+        super(UnresolvedAttributeError, self).__init__(
+                "'{obj_type}' object ({obj}) has no attribute '{attr}': "
+                "during resolving '{stub}' object".format(**locals()), loc)
 
 class MultipleDefinitionsError(CompoundError, LinkageError, NameError):
 
@@ -94,6 +114,11 @@ class ReferenceLoopError(CompoundError, LinkageError, TypeError):
                 "%s object references itself (eventually)" % chain_init)
 
 
-class InstantiationError(LinkageError, Occurrence, TypeError):
-    pass
+class InstantiationError(LinkageError, SyntaxErrorWloc, TypeError):
+
+    def __init__(self, exc, stub):
+        _, loc = stub.type_root_wloc
+        super(InstantiationError, self).__init__(
+                "{exc.message}: during creation of '{stub}' object"
+                    .format(**locals()), loc)
 

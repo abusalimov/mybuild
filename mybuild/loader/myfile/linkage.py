@@ -60,7 +60,7 @@ class Stub(object):
                         continue
                 ret = MyfileDeclarative.my_getattr_of(ret, attr)
             except AttributeError:
-                raise UnresolvedAttributeError(self, attr, attr_loc)
+                raise UnresolvedAttributeError(self, ret, attr, attr_loc)
             finally:
                 loc = attr_loc
 
@@ -106,9 +106,7 @@ class Stub(object):
             ret = type_object(*type_args, **type_kwargs)
 
         except TypeError as e:
-            raise InstantiationError("%s: during resolving '%s' object" %
-                                     (e.message, self.type_name),
-                                     self.type_root_wloc)
+            raise InstantiationError(e, self)
         else:
             linker.objects.append((self, ret))
             return ret
