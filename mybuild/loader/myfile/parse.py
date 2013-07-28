@@ -15,15 +15,117 @@ from .linkage import BuiltinScope
 from .linkage import ObjectScope
 from .linkage import Stub
 
-from ...util import singleton
+from ...util import cached_property
 from ...util.collections import OrderedDict
 from ...util.compat import *
 
 
-tokens = lex.tokens
-start = 'translation_unit'
+# Here go scoping-related stuff + some utils.
+
+def to_rlist(reversed_list):
+    return reversed_list[::-1]
+
+def to_rdict(reversed_pairs):
+    return OrderedDict(reversed(reversed_pairs))
+
+
+def this_scope(p): return p.parser.scope_stack[-1]
+def this_stub(p):  return p.parser.stub_stack[-1]
+
+def this_scope_stub(p):
+    return p.parser.stub_stack[len(p.parser.scope_stack)-1]
+
+def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
+def pop_scope(p):  return p.parser.scope_stack.pop()
+
+def push_stub(p, stub):  p.parser.stub_stack.append(stub); return stub
+def pop_stub(p):  return p.parser.stub_stack.pop()
+
+
+# Location tracking.
+
+class Fileinfo(object):
+    """Provides data necessary for lines and column lookup."""
+
+    @cached_property
+    def line_table(self):
+        """Just a list of lines."""
+        return self.text.splitlines(True)
+
+    @cached_property
+    def offset_table(self):
+        """A table of line offsets indexed by line numbers.
+
+        Has an extra element at the end, so its len is one more that len of
+        the line_table."""
+        offset = 0
+        table = [0]
+        for line_len in map(len, self.line_table):
+            offset += line_len
+            table.append(offset)
+        return table
+
+    def __init__(self, text, name=None):
+        super(Fileinfo, self).__init__()
+        self.text = text
+        self.name = name
+
+    def get_line(self, lineno):
+        return self.line_table[lineno-1]
+
+    def get_column(self, lineno, offset):
+        line_start, line_end = self.offset_table[lineno-1:lineno+1]
+        if not line_start <= offset < line_end:
+            raise ValueError("position %d does not fall within the line %d" %
+                             (offset, lineno))
+        return offset - line_start + 1
+
+
+class Location(object):
+    """Encapsulates info about symbol location provided by PLY."""
+    __slots__ = 'fileinfo', 'lineno', 'offset'
+
+    @property
+    def filename(self):
+        return self.fileinfo.name
+
+    @property
+    def line(self):
+        return self.fileinfo.get_line(self.lineno)
+
+    @property
+    def column(self):
+        return self.fileinfo.get_column(self.lineno, self.offset)
+
+    @property
+    def syntax_error_tuple(self):
+        """4-element tuple suitable to pass to a constructor of SyntaxError."""
+        return (self.filename, self.lineno, self.column, self.line)
+
+    def __init__(self, fileinfo, lineno, offset):
+        super(Location, self).__init__()
+        self.fileinfo = fileinfo
+        self.lineno = lineno  # 1-base indexed
+        self.offset = offset  # 0-based absolute char offset
+
+    def __iter__(self):
+        return iter(self.syntax_error_tuple)
+
+
+def loc(p, i):
+    return Location(p.parser.fileinfo, p.lineno(i), p.lexpos(i))
+
+def wloc(p, i):
+    return p[i], loc(p, i)
+
+def nolocs(iterable_wlocs):
+    return map(itemgetter(0), iterable_wlocs)
+
 
 def track_loc(func):
+    """
+    Decorator for rule functions. Copies location from the first RHS symbol.
+    """
     @functools.wraps(func)
     def decorated(p):
         # XXX accessing PLY internals
@@ -35,15 +137,11 @@ def track_loc(func):
 
     return decorated
 
-def loc(p, i):
-    # (filename, lineno, offset, badline)
-    return "", p.lineno(i), p.lexpos(i), ""  # XXX
 
-def wloc(p, i):
-    return p[i], loc(p, i)
+# Grammar definitions for PLY.
 
-def nolocs(iterable_wlocs):
-    return map(itemgetter(0), iterable_wlocs)
+tokens = lex.tokens
+start = 'translation_unit'
 
 
 def p_translation_unit(p):
@@ -183,38 +281,16 @@ def p_error(t):
 
 parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
-
-# Here go scoping-related stuff + some utils.
-
-def to_rlist(reversed_list):
-    return reversed_list[::-1]
-
-def to_rdict(reversed_pairs):
-    return OrderedDict(reversed(reversed_pairs))
-
-
-def this_scope(p): return p.parser.scope_stack[-1]
-def this_stub(p):  return p.parser.stub_stack[-1]
-
-def this_scope_stub(p):
-    return p.parser.stub_stack[len(p.parser.scope_stack)-1]
-
-def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
-def pop_scope(p):  return p.parser.scope_stack.pop()
-
-def push_stub(p, stub):  p.parser.stub_stack.append(stub); return stub
-def pop_stub(p):  return p.parser.stub_stack.pop()
-
-
 # The main entry point.
 
-def parse(text, linker, builtins={}, **kwargs):
+def parse(text, linker, builtins={}, filename=None, **kwargs):
     """
     Parses the given text and returns the result.
 
     Args:
         text (str) - data to parse
         builtins (dict) - builtin variables
+        filename (str) - file name to report in case of errors
         **kwargs are passed directly to the underlying PLY parser
 
     Returns:
@@ -228,6 +304,8 @@ def parse(text, linker, builtins={}, **kwargs):
     p = parser
     parser = None  # paranoia mode on
     try:
+        p.fileinfo = Fileinfo(text, filename)
+
         global_scope = ObjectScope(parent=BuiltinScope(builtins))
 
         p.scope_stack   = [global_scope]
@@ -245,12 +323,12 @@ def parse(text, linker, builtins={}, **kwargs):
         parser = p
 
 
-text = '''
-/*obj obj,
-foo bar,
-module foo(xxx=bar),*/
+text = '''//module Kernel,
 
-module Kernel,
+//obj obj,
+foo bar,
+module foo(xxx=bar),
+
 module Kernel(debug = False) {
     "Docstring!"
 
@@ -273,11 +351,14 @@ module Kernel(debug = False) {
 if __name__ == "__main__":
     from .linkage import GlobalLinker, LocalLinker
     from .errors import MyfileError, CompoundError
+    from ...util import singleton
+
     import traceback, sys, code
     from pprint import pprint
 
     def print_error(exc):
         traceback.print_exception(type(exc), exc, None)
+        print >>sys.stderr
         if isinstance(exc, CompoundError):
             for cause in exc.causes:
                 print_error(cause)
@@ -295,6 +376,9 @@ if __name__ == "__main__":
             def __init__(self, *args, **kwargs):
                 super(module, self).__init__()
                 print self, args, kwargs
+            def __call__(self, *args, **kwargs):
+                print self, args, kwargs
+                return self
         xxx = lambda: 42
 
         return dict(locals(), **{

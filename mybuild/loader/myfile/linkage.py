@@ -9,6 +9,7 @@ __date__ = "2013-07-26"
 from .errors import *
 
 from ...util import cached_property
+from ...util import send_next_iter
 from ...util.compat import *
 
 
@@ -39,7 +40,7 @@ class Stub(object):
         try:
             name_frags = self.type_name_wlocs
             name, loc = name_frags[0] if name_frags else (None, None)
-            return self.scope[name]
+            return self.scope[name], loc
         except KeyError:
             raise UnresolvedNameError(self, name, loc)
 
@@ -89,20 +90,28 @@ class Stub(object):
 
         reent_set.add(self)
         try:
-            ret = self.type_object(*self.type_args, **self.type_kwargs)
+            type_object = self.type_object
+            type_args   = self.type_args
+            type_kwargs = self.type_kwargs
 
         except ReferenceLoopChain as chain_exc:
             if chain_exc.chain_init is self:
                 raise ReferenceLoopError(self, reversed(chain_exc.chain_wlocs))
             else:
                 raise chain_exc(self)
+        finally:
+            reent_set.remove(self)
 
+        try:
+            ret = type_object(*type_args, **type_kwargs)
+
+        except TypeError as e:
+            raise InstantiationError("%s: during resolving '%s' object" %
+                                     (e.message, self.type_name),
+                                     self.type_root_wloc)
         else:
             linker.objects.append((self, ret))
             return ret
-
-        finally:
-            reent_set.remove(self)
 
     @classmethod
     def to_object(cls, obj, loc=None):
@@ -138,14 +147,14 @@ class Stub(object):
     def init_header(self, type_name_wlocs, kwarg_pair_wlocs, name_wloc):
         self.type_name_wlocs = type_name_wlocs
 
-        pair_it = iter(kwarg_pair_wlocs)
+        pair_it = send_next_iter(kwarg_pair_wlocs)
 
         # positional arguments
         for (kw, arg), loc in pair_it:
-            arg_wloc = (arg, loc)
             if kw:
+                pair_it.send(((kw, arg), loc))
                 break
-            self.arg_wlocs.append(arg_wloc)
+            self.arg_wlocs.append((arg, loc))
 
         # keyword arguments
         for (kw, arg), loc in pair_it:
@@ -177,7 +186,7 @@ class Stub(object):
 
         if self.type_name:
             args_str =   ', '.join(arg for arg, loc in self.arg_wlocs)
-            kwargs_str = ', '.join('%s=%r' % kwarg
+            kwargs_str = ', '.join('%s=%r' % (kw, arg)
                     for kw, (arg, loc) in iteritems(self.kwarg_wlocs))
 
             return '{type_name}{name}({type_args})'.format(
@@ -262,31 +271,20 @@ class BuiltinScope(DelegatingScope):
 
 class ReferenceLoopChain(Exception):
 
-    class ChainElement(object):
-        def __init__(self, obj, loc=None):
-            super(ChainElement, self).__init__()
-            self.obj = obj
-            self.loc = loc
-
-        def __iter__(self):
-            return iter((self.obj, self.loc))
-
-        def __str__(self):
-            return str(self.obj)
-
     @property
     def chain_init(self):
-        return self.chain_wlocs[0].obj
+        return self.chain_wlocs[0][0]
 
     def __init__(self, chain_init):
-        self.chain_wlocs = [self.ChainElement(chain_init)]
+        self.chain_wlocs = []
+        self(chain_init)
 
     def __call__(self, chain_obj):
-        self.chain_wlocs.append(chain_obj)
+        self.chain_wlocs.append([chain_obj, None])
         return self
 
-    def attr_loc(self, loc):
-        self.chain_wlocs[-1].loc = loc
+    def attach_loc(self, loc):
+        self.chain_wlocs[-1][1] = loc
 
     def __str__(self):
         return ' -> '.join(map(str, reversed(self.chain_wlocs)))

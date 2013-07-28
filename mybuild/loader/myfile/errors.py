@@ -22,7 +22,7 @@ class LinkageError(MyfileError):
 class SyntaxErrorWloc(SyntaxError):
 
     def __init__(self, message, loc):
-        super(SyntaxErrorWloc, self).__init__(message, tuple(loc))
+        super(SyntaxErrorWloc, self).__init__(message, loc.syntax_error_tuple)
         self.loc = loc
 
 class Occurrence(SyntaxErrorWloc):
@@ -92,4 +92,8 @@ class ReferenceLoopError(CompoundError, LinkageError, TypeError):
                 (Occurrence("referenced from '%s'" % stub_wloc[0], stub_wloc)
                  for stub_wloc in chain_wlocs),
                 "%s object references itself (eventually)" % chain_init)
+
+
+class InstantiationError(LinkageError, Occurrence, TypeError):
+    pass
 
