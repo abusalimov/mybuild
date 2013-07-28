@@ -6,6 +6,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
 
 
+from .errors import MyfileError
 from .linkage import GlobalLinker
 from .linkage import LocalLinker
 try:
@@ -36,7 +37,11 @@ class MybuildFileLoader(SourceFileLoader):
     @classmethod
     def exit_ctx(cls, ctx):
         linker, _ = ctx
-        linker.link_global()
+        try:
+            linker.link_global()
+        except MyfileError as e:
+            e.print_error()  # TODO bad idea
+            raise ImportError("Error(s) while linking all my-files")
 
     def __init__(self, ctx, fullname, path):
         super(MybuildFileLoader, self).__init__(fullname, path)
@@ -49,23 +54,26 @@ class MybuildFileLoader(SourceFileLoader):
         return None
 
     def _exec_module(self, module):
+        fullname = module.__name__
+
         if parse is None:
             raise ImportError('PLY is not installed')
 
-        local_linker = LocalLinker(self.linker)
-
         try:
-            result = parse(self.get_source(module.__name__),
-                           linker=local_linker, builtins=self.builtins)
+            local_linker = LocalLinker(self.linker)
+            result = parse(self.get_source(fullname),
+                           linker=local_linker, builtins=self.builtins,
+                           filename=self.get_filename(fullname))
+
+            local_linker.link_local()
 
         except IOError:
             raise ImportError("IO error while reading a stream")
-        except SyntaxError:
-            raise
-
-        local_linker.link_local()
-
-        ast_root, global_scope = result
-        module.__dict__.update(global_scope)
+        except MyfileError as e:
+            e.print_error()  # TODO bad idea
+            raise ImportError("Error(s) while parsing/linking a my-file")
+        else:
+            ast_root, global_scope = result
+            module.__dict__.update(global_scope)
 
 
