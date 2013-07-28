@@ -17,6 +17,7 @@ __all__ = [
 
 
 from collections import namedtuple
+from functools import partial
 from inspect import getargspec
 from operator import attrgetter
 import sys
