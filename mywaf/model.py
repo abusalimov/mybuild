@@ -35,8 +35,19 @@ def create_model(bld):
         from mybuild import module, option
         return locals()
 
+    def get_mybuild_defaults():
+        class fake(object):
+            def __init__(self, *args, **kwargs):
+                super(fake, self).__init__()
+                print args, kwargs
+
+        class module(fake):
+            pass
+        from mybuild import option
+        return locals()
+
     loaders_init = {
-        myfile .LOADER_NAME: {},
+        myfile .LOADER_NAME: get_mybuild_defaults(),
         my_yaml.LOADER_NAME: {'!module': create_module},
         pybuild.LOADER_NAME: get_pybuild_defaults(),
     }
