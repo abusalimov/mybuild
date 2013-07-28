@@ -9,7 +9,6 @@ __date__ = "2013-07-26"
 from .errors import *
 
 from ...util import cached_property
-
 from ...util.compat import *
 
 
@@ -32,103 +31,136 @@ class Stub(object):
 
     @property
     def type_name(self):
-        return '.'.join(self.type_name_frags)
+        return '.'.join(frag for frag, loc in self.type_name_wlocs)
 
     @cached_property
-    def type_root(self):
+    def type_root_wloc(self):
         """Resolved during linking a single my-file. May be a stub."""
         try:
-            return self.scope[self.type_name_frags and self.type_name_frags[0]]
+            name_frags = self.type_name_wlocs
+            name, loc = name_frags[0] if name_frags else (None, None)
+            return self.scope[name]
         except KeyError:
-            raise UnresolvedNameError("name '%s' is not resolved" %
-                                      self.type_name)
+            raise UnresolvedNameError(self, name, loc)
 
     @cached_property
     def type_object(self):
         """Resolved type object."""
-        ret = self.type_root
+        ret, loc = self.type_root_wloc
 
-        for attr in self.type_name_frags[1:]:
-            if isinstance(ret, Stub):
-                try:
-                    ret = ret.named_children[attr]
-                except KeyError:
-                    ret = Stub.to_object(ret)
-                else:
-                    continue
+        for attr, attr_loc in self.type_name_wlocs[1:]:
+            try:
+                if isinstance(ret, Stub):
+                    try:
+                        ret = ret.named_children[attr]
+                    except KeyError:
+                        ret = Stub.to_object(ret, loc)
+                    else:
+                        continue
+                ret = MyfileDeclarative.my_getattr_of(ret, attr)
+            except AttributeError:
+                raise UnresolvedAttributeError(self, attr, attr_loc)
+            finally:
+                loc = attr_loc
 
-            ret = MyfileDeclarative.my_getattr_of(ret, attr)
-
-        return Stub.to_object(ret)
+        return Stub.to_object(ret, loc)
 
     @cached_property
     def type_args(self):
-        return list(map(Stub.to_object, self.args))
+        return list(Stub.to_object(*arg_wloc) for arg_wloc in self.arg_wlocs)
 
     @cached_property
     def type_kwargs(self):
-        return dict((kw, Stub.to_object(arg))
-                    for kw, arg in iteritems(self.kwargs))
+        return dict((kw, Stub.to_object(*arg_wloc))
+                    for kw, arg_wloc in iteritems(self.kwarg_wlocs))
 
     @cached_property
-    def as_object(self):
+    def resolved_object(self):
         """Called during global stubs linking.
 
         Safely resolves objects necessary to instantiate itself, and returns
         the resulting object.
         """
-        try:
-            self.__reent_guard
-        except AttributeError:
-            self.__reent_guard = None
-        else:
+        linker = self.linker.global_linker
+        reent_set = linker.reent_set
+
+        if self in reent_set:
             raise ReferenceLoopChain(chain_init=self)
 
+        reent_set.add(self)
         try:
-            return self.type_object(*self.type_args, **self.type_kwargs)
+            ret = self.type_object(*self.type_args, **self.type_kwargs)
 
-        except ReferenceLoopChain as chain_ex:
-            if chain_ex.chain_init is self:
-                raise ReferenceLoopError(chain_ex)
+        except ReferenceLoopChain as chain_exc:
+            if chain_exc.chain_init is self:
+                raise ReferenceLoopError(self, reversed(chain_exc.chain_wlocs))
             else:
-                raise chain_ex(self)
+                raise chain_exc(self)
+
+        else:
+            linker.objects.append((self, ret))
+            return ret
 
         finally:
-            del self.__reent_guard
+            reent_set.remove(self)
 
     @classmethod
-    def to_object(cls, obj):
+    def to_object(cls, obj, loc=None):
         if isinstance(obj, Stub):
-            obj = obj.as_object
+            try:
+                obj = obj.resolved_object
+            except ReferenceLoopChain as chain_exc:
+                chain_exc.attach_loc(loc)
+                raise chain_exc
         return obj
 
-    def __init__(self, scope=None, parent=None):
+    def __init__(self, linker, scope=None, parent=None):
         super(Stub, self).__init__()
+        self.linker = linker
         self.scope = scope
 
         if parent is not None:
             if not parent.name:
                 parent = parent.named_parent
-            assert parent.name
+            assert parent is None or parent.name
         self.named_parent = parent
 
         self.name = None
 
-        self.type_name_frags = []  # parts of qualified name of a type
+        self.type_name_wlocs = []  # parts of qualified name of a type
 
-        self.args   = []  # positional type arguments TODO unused
-        self.kwargs = {}  # keyword type arguments
+        self.arg_wlocs   = []  # positional type arguments: [(arg, loc)]
+        self.kwarg_wlocs = {}  # keyword type arguments: {kw: (arg, loc)}
 
         self.attrs     = []
         self.docstring = None
 
-    def init_header(self, type_name, kwargs, name=None):
-        if type_name:
-            self.type_name_frags = type_name.split('.')
+    def init_header(self, type_name_wlocs, kwarg_pair_wlocs, name_wloc):
+        self.type_name_wlocs = type_name_wlocs
 
-        self.kwargs = kwargs
-        self.name   = name
+        pair_it = iter(kwarg_pair_wlocs)
 
+        # positional arguments
+        for (kw, arg), loc in pair_it:
+            arg_wloc = (arg, loc)
+            if kw:
+                break
+            self.arg_wlocs.append(arg_wloc)
+
+        # keyword arguments
+        for (kw, arg), loc in pair_it:
+            arg_wloc = (arg, loc)
+            if not kw:
+                raise ArgAfterKwargError(last_kwarg_wloc, arg_wloc)
+            try:
+                old_arg_wloc = self.kwarg_wlocs[kw]
+            except KeyError:
+                self.kwarg_wlocs[kw] = arg_wloc
+            else:
+                raise RepeatedKwargError(kw, old_arg_wloc, arg_wloc)
+            last_kwarg_wloc = kw, arg_wloc
+
+        name, _ = self.name_wloc = name_wloc
         if name:
             self.named_children = {}
             self.scope[name] = self
@@ -144,9 +176,9 @@ class Stub(object):
         name_str = self.name.join('  ') if self.name else ''
 
         if self.type_name:
-            args_str =   ', '.join(self.args)
+            args_str =   ', '.join(arg for arg, loc in self.arg_wlocs)
             kwargs_str = ', '.join('%s=%r' % kwarg
-                                   for kwarg in iteritems(self.kwargs))
+                    for kw, (arg, loc) in iteritems(self.kwarg_wlocs))
 
             return '{type_name}{name}({type_args})'.format(
                 type_name=self.type_name,
@@ -157,7 +189,11 @@ class Stub(object):
             return '<object>'
 
 
+# Scoping
+
 class Scope(object):
+    def raise_errors(self):
+        pass
     def __getitem__(self, name):
         raise KeyError
     def __repr__(self):
@@ -199,6 +235,7 @@ class ConflictsAwareDictScope(DictScope):
     def __setitem__(self, name, value):
         if name not in self.conflicts:
             if name in self:
+                old_value = self[name]
                 del self[name]
             else:
                 super(ConflictsAwareDictScope, self).__setitem__(name, value)
@@ -206,6 +243,11 @@ class ConflictsAwareDictScope(DictScope):
 
             self.conflicts[name] = [old_value]
         self.conflicts[name].append(value)
+
+    def raise_errors(self):
+        CompoundError.raise_if_any(
+                MultipleDefinitionsError(name, values)
+                   for name, values in iteritems(self.conflicts))
 
 
 class ObjectScope(DelegatingScope, ConflictsAwareDictScope):
@@ -219,45 +261,67 @@ class BuiltinScope(DelegatingScope):
 
 
 class ReferenceLoopChain(Exception):
+
+    class ChainElement(object):
+        def __init__(self, obj, loc=None):
+            super(ChainElement, self).__init__()
+            self.obj = obj
+            self.loc = loc
+
+        def __iter__(self):
+            return iter((self.obj, self.loc))
+
+        def __str__(self):
+            return str(self.obj)
+
     @property
     def chain_init(self):
-        return self.chain[0]
+        return self.chain_wlocs[0].obj
 
     def __init__(self, chain_init):
-        self.chain = [chain_init]
+        self.chain_wlocs = [self.ChainElement(chain_init)]
 
     def __call__(self, chain_obj):
-        self.chain.append(chain_obj)
+        self.chain_wlocs.append(chain_obj)
         return self
 
-    def __str__(self):
-        return ' -> '.join(map(str, reversed(self.chain)))
+    def attr_loc(self, loc):
+        self.chain_wlocs[-1].loc = loc
 
+    def __str__(self):
+        return ' -> '.join(map(str, reversed(self.chain_wlocs)))
+
+
+# Linkage
 
 class Linker(object):
     """docstring for Linker"""
 
     def __init__(self):
         super(Linker, self).__init__()
-        self.all_objects = list()
-
-    def _raise_compound_if_any(self, errors):
-        if errors:
-            raise CompoundError(*errors)
+        self.stubs = list()
 
 
 class GlobalLinker(Linker):
 
+    def __init__(self):
+        super(GlobalLinker, self).__init__()
+
+        self.objects = list()  # topologically sorted
+        self.reent_set = set()
+
     def link_global(self):
 
-        def iter_any_errors():
-            for obj in self.all_objects:
+        def iter_errors():
+            for stub in self.stubs:
                 try:
-                    obj.as_object
+                    stub.resolved_object  # populates self.objects
                 except LinkageError as e:
                     yield e
 
-        self._raise_compound_if_any(tuple(iter_any_errors()))
+        CompoundError.raise_if_any(iter_errors())
+
+        assert len(self.objects) == len(self.stubs)
 
 
 
@@ -266,18 +330,25 @@ class LocalLinker(Linker):
     def __init__(self, global_linker):
         super(LocalLinker, self).__init__()
         self.global_linker = global_linker
-        self.all_scopes = list()
+        self.scopes = list()
 
     def link_local(self):
 
-        def iter_type_root_errors():
-            for obj in self.all_objects:
+        def iter_errors():
+            for stub in self.stubs:
                 try:
-                    obj.type_root
-                except UnresolvedNameError as e:
+                    stub.type_root_wloc
+                except LinkageError as e:
                     yield e
 
-        self._raise_compound_if_any(tuple(iter_type_root_errors()))
+            for scope in self.scopes:
+                try:
+                    scope.raise_errors()
+                except LinkageError as e:
+                    yield e
 
-        self.global_linker.all_objects += self.all_objects
+
+        CompoundError.raise_if_any(iter_errors())
+
+        self.global_linker.stubs += self.stubs
 

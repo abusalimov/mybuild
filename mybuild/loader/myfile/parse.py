@@ -7,7 +7,8 @@ __date__ = "2013-07-05"
 
 
 import ply.yacc
-from operator import attrgetter
+import functools
+from operator import itemgetter
 
 from . import lex
 from .linkage import BuiltinScope
@@ -21,6 +22,28 @@ from ...util.compat import *
 
 tokens = lex.tokens
 start = 'translation_unit'
+
+def track_loc(func):
+    @functools.wraps(func)
+    def decorated(p):
+        # XXX accessing PLY internals
+        s = p.slice
+        s[0].lineno = s[1].lineno
+        s[0].lexpos = s[1].lexpos
+
+        func(p)
+
+    return decorated
+
+def loc(p, i):
+    # (filename, lineno, offset, badline)
+    return "", p.lineno(i), p.lexpos(i), ""  # XXX
+
+def wloc(p, i):
+    return p[i], loc(p, i)
+
+def nolocs(iterable_wlocs):
+    return map(itemgetter(0), iterable_wlocs)
 
 
 def p_translation_unit(p):
@@ -47,49 +70,55 @@ def p_value(p):
 
 def p_new_object(p):
     """new_object :"""
-    p[0] = push_object(p, Stub(this_scope(p), this_scope_object(p)))
+    p[0] = push_stub(p, Stub(p.parser.linker,
+                             this_scope(p), this_scope_stub(p)))
 
 def p_init_object(p):
     """init_object : object_header
        init_object : object_header object_body
        init_object : object_body"""
-    p.parser.linker.all_objects.append(pop_object(p))
+    p.parser.linker.stubs.append(pop_stub(p))
 
 
 def p_object_header(p):
     """object_header : qualname object_name object_args"""
-    this_object(p).init_header(type_name=p[1], name=p[2],
-                               kwargs=to_rdict(p[3]))
+    this_stub(p).init_header(type_name_wlocs=to_rlist(p[1]),
+                             name_wloc=p[2],
+                             kwarg_pair_wlocs=p[3])
 
 def p_object_name(p):
     """object_name : empty
        object_name : ID"""
-    p[0] = p[1]
+    p[0] = wloc(p, 1)
 
 def p_object_args(p):
     """object_args :
-       object_args : LPAREN parameters RPAREN"""
+       object_args : LPAREN arglist RPAREN"""
     p[0] = to_rlist(p[2]) if len(p) > 1 else []
 
 
-def p_parameters_0(p):
-    """parameters :
-       parameters : parameter"""
+def p_arglist_0(p):
+    """arglist :
+       arglist : arg"""
     p[0] = [p[1]] if len(p) > 1 else []
-def p_parameters_1(p):
-    """parameters : parameter COMMA parameters"""
+def p_arglist_1(p):
+    """arglist : arg COMMA arglist"""
     l = p[0] = p[3]
     l.append(p[1])
 
-def p_parameter(p):
-    """parameter : ID EQUALS value"""
-    p[0] = (p[1], p[3])
+def p_arg_0(p):
+    """arg : ID EQUALS value"""
+    p[0] = (p[1], p[3]), loc(p, 1)
+
+def p_arg_1(p):
+    """arg : value"""
+    p[0] = (None, p[1]), loc(p, 1)
 
 
 def p_object_body(p):
     """object_body : LBRACE new_scope docstring object_members RBRACE"""
-    this_object(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
-    p.parser.linker.all_scopes.append(pop_scope(p))
+    this_stub(p).init_body(attrs=to_rdict(p[4]), docstring=p[3])
+    p.parser.linker.scopes.append(pop_scope(p))
 
 def p_new_scope(p):
     """new_scope :"""
@@ -121,18 +150,27 @@ def p_array(p):
     p[0] = to_rlist(p[2])
 
 
+@track_loc
 def p_qualname_0(p):
     """qualname : ID"""
-    p[0] = p[1]
+    p[0] = [wloc(p, 1)]
+
+@track_loc
 def p_qualname_1(p):
     """qualname : ID PERIOD qualname"""
-    p[0] = p[1] + """.""" + p[3]
+    l = p[0] = p[3]
+    l.append(wloc(p, 1))
 
 
+@track_loc
 def p_string_or_qualname_0(p):
-    """string_or_qualname : STRING
-       string_or_qualname : qualname"""
+    """string_or_qualname : STRING"""
     p[0] = p[1]
+
+@track_loc
+def p_string_or_qualname_1(p):
+    """string_or_qualname : qualname"""
+    p[0] = '.'.join(nolocs(reversed(p[1])))
 
 
 def p_empty(p):
@@ -148,7 +186,6 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # Here go scoping-related stuff + some utils.
 
-
 def to_rlist(reversed_list):
     return reversed_list[::-1]
 
@@ -156,17 +193,17 @@ def to_rdict(reversed_pairs):
     return OrderedDict(reversed(reversed_pairs))
 
 
-def this_scope(p):  return p.parser.scope_stack[-1]
-def this_object(p): return p.parser.object_stack[-1]
+def this_scope(p): return p.parser.scope_stack[-1]
+def this_stub(p):  return p.parser.stub_stack[-1]
 
-def this_scope_object(p):
-    return p.parser.object_stack[len(p.parser.scope_stack)-1]
+def this_scope_stub(p):
+    return p.parser.stub_stack[len(p.parser.scope_stack)-1]
 
 def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
 def pop_scope(p):  return p.parser.scope_stack.pop()
 
-def push_object(p, obj):  p.parser.object_stack.append(obj); return obj
-def pop_object(p): return p.parser.object_stack.pop()
+def push_stub(p, stub):  p.parser.stub_stack.append(stub); return stub
+def pop_stub(p):  return p.parser.stub_stack.pop()
 
 
 # The main entry point.
@@ -186,25 +223,34 @@ def parse(text, linker, builtins={}, **kwargs):
     Note:
         This function is NOT reentrant.
     """
+    global parser
 
-    global_scope = ObjectScope(parent=BuiltinScope(builtins))
+    p = parser
+    parser = None  # paranoia mode on
+    try:
+        global_scope = ObjectScope(parent=BuiltinScope(builtins))
 
-    parser.scope_stack   = [global_scope]
-    parser.object_stack  = [None]
+        p.scope_stack   = [global_scope]
+        p.stub_stack  = [None]
 
-    parser.linker = linker
+        p.linker = linker
 
-    ast_root = parser.parse(text, lexer=lex.lexer, **kwargs)
+        ast_root = p.parse(text, lexer=lex.lexer, **kwargs)
 
-    parser.linker.all_scopes.append(global_scope)
+        p.linker.scopes.append(global_scope)
 
-    return (ast_root, dict(global_scope))
+        return (ast_root, dict(global_scope))
+
+    finally:
+        parser = p
 
 
 text = '''
-obj obj,
+/*obj obj,
 foo bar,
-module foo(xxx=bar),
+module foo(xxx=bar),*/
+
+module Kernel,
 module Kernel(debug = False) {
     "Docstring!"
 
@@ -226,8 +272,16 @@ module Kernel(debug = False) {
 
 if __name__ == "__main__":
     from .linkage import GlobalLinker, LocalLinker
+    from .errors import MyfileError, CompoundError
     import traceback, sys, code
     from pprint import pprint
+
+    def print_error(exc):
+        traceback.print_exception(type(exc), exc, None)
+        if isinstance(exc, CompoundError):
+            for cause in exc.causes:
+                print_error(cause)
+
 
     def get_builtins():
         @singleton
@@ -255,8 +309,12 @@ if __name__ == "__main__":
         pprint(parse(text, linker=ll, builtins=get_builtins()))
         ll.link_local()
         gl.link_global()
+
+    except MyfileError as e:
+        print_error(e)
+
     except:
-        type, value, tb = sys.exc_info()
+        tb = sys.exc_info()[2]
         traceback.print_exc()
         last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
         frame = last_frame().tb_frame
