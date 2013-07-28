@@ -50,7 +50,7 @@ class Fileinfo(object):
     @cached_property
     def line_table(self):
         """Just a list of lines."""
-        return self.text.splitlines(True)
+        return self.source.splitlines(True)
 
     @cached_property
     def offset_table(self):
@@ -65,9 +65,9 @@ class Fileinfo(object):
             table.append(offset)
         return table
 
-    def __init__(self, text, name=None):
+    def __init__(self, source, name=None):
         super(Fileinfo, self).__init__()
-        self.text = text
+        self.source = source
         self.name = name
 
     def get_line(self, lineno):
@@ -283,12 +283,12 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # The main entry point.
 
-def parse(text, linker, builtins={}, filename=None, **kwargs):
+def parse(source, linker, builtins={}, filename=None, **kwargs):
     """
-    Parses the given text and returns the result.
+    Parses the given source and returns the result.
 
     Args:
-        text (str) - data to parse
+        source (str) - data to parse
         builtins (dict) - builtin variables
         filename (str) - file name to report in case of errors
         **kwargs are passed directly to the underlying PLY parser
@@ -304,7 +304,7 @@ def parse(text, linker, builtins={}, filename=None, **kwargs):
     p = parser
     parser = None  # paranoia mode on
     try:
-        p.fileinfo = Fileinfo(text, filename)
+        p.fileinfo = Fileinfo(source, filename)
 
         global_scope = ObjectScope(parent=BuiltinScope(builtins))
 
@@ -313,7 +313,7 @@ def parse(text, linker, builtins={}, filename=None, **kwargs):
 
         p.linker = linker
 
-        ast_root = p.parse(text, lexer=lex.lexer, **kwargs)
+        ast_root = p.parse(source, lexer=lex.lexer, **kwargs)
 
         p.linker.scopes.append(global_scope)
 
@@ -323,7 +323,7 @@ def parse(text, linker, builtins={}, filename=None, **kwargs):
         parser = p
 
 
-text = '''//module Kernel,
+source = '''//module Kernel,
 
 //obj obj,
 foo bar,
@@ -356,14 +356,6 @@ if __name__ == "__main__":
     import traceback, sys, code
     from pprint import pprint
 
-    def print_error(exc):
-        traceback.print_exception(type(exc), exc, None)
-        print >>sys.stderr
-        if isinstance(exc, CompoundError):
-            for cause in exc.causes:
-                print_error(cause)
-
-
     def get_builtins():
         @singleton
         class embox(object):
@@ -390,12 +382,12 @@ if __name__ == "__main__":
     gl = GlobalLinker()
     ll = LocalLinker(gl)
     try:
-        pprint(parse(text, linker=ll, builtins=get_builtins()))
+        pprint(parse(source, linker=ll, builtins=get_builtins()))
         ll.link_local()
         gl.link_global()
 
     except MyfileError as e:
-        print_error(e)
+        e.print_error()
 
     except:
         tb = sys.exc_info()[2]
