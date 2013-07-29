@@ -257,7 +257,7 @@ source = '''//module Kernel,
 
 //obj obj,
 foo bar,
-foo :: module(xxx=bar),
+module foo(xxx=bar),
 
 module Kernel(debug = False) {
     "Docstring!"
