@@ -94,6 +94,7 @@ class UnresolvedAttributeError(LinkageError, SyntaxErrorWloc, AttributeError):
                 "'{obj_type}' object ({obj}) has no attribute '{attr}': "
                 "during resolving '{stub}' object".format(**locals()), loc)
 
+
 class MultipleDefinitionsError(CompoundError, LinkageError, NameError):
 
     def __init__(self, name, stubs):
@@ -104,6 +105,7 @@ class MultipleDefinitionsError(CompoundError, LinkageError, NameError):
 
         self.name = name
         self.stubs = stubs
+
 
 class ReferenceLoopError(CompoundError, LinkageError, TypeError):
 
