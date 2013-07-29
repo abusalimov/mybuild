@@ -11,7 +11,7 @@ from itertools import chain
 from operator import attrgetter
 
 # do not import context due to bootstrapping issues
-from .core import Error
+from .core import MybuildError
 from .pgraph import *
 from .util import bools
 
@@ -271,7 +271,7 @@ try:
 except ImportError:
     pass  # XXX move Waf-related stuff from here
 
-class InstanceError(Error):
+class InstanceError(MybuildError):
     """
     Throwing this kind of errors from inside a module function indicates that
     instance is not viable anymore and thus shouldn't be considered.

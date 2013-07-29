@@ -11,8 +11,7 @@ __all__ = [
     "Module",
     "Option",
     "Optuple",
-    "Error",
-    "InternalError",
+    "MybuildError",
 ]
 
 
@@ -30,19 +29,40 @@ from .util.compat import *
 class Module(object):
     """A basic building block of Mybuild."""
 
-    def __init__(self, func):
-        self._init_func = func
+    @property
+    def _init_func(self):
+        return self.instance_type.__init__.im_func  # XXX for now
 
-        pymodule = sys.modules[func.__module__]
-        self._name = pymodule.__package__ + '.' + func.__name__
-        self._file = pymodule.__file__
+    def __init__(self, instance_type, options, name=None, pymodule_name=None):
+        super(Module, self).__init__()
+        self.instance_type = instance_type
+
+        if name is None:
+            name = instance_type.__name__
+        if pymodule_name is None:
+            pymodule_name = instance_type.__module__
+
+        self._init_names(name, pymodule_name)
 
         class ModuleType(object):
             __slots__ = ()
             _module = self
-            _module_name = self._name
 
-        self._options = Optuple._new_type_options(ModuleType, func)
+        self._options = Optuple._new_type_options(ModuleType, options)
+
+    def _init_names(self, name, pymodule_name=None):
+        self.__name__ = self._name = name
+        self.__module__ = pymodule_name
+
+        if pymodule_name:
+            pymodule = sys.modules[pymodule_name]
+            package_name = pymodule.__package__
+            if package_name:
+                self._name = package_name + '.' + name
+
+            self._file = pymodule.__file__
+        else:
+            self._file = None
 
     def __call__(self, **kwargs):
         return self._options._ellipsis._replace(**kwargs)
@@ -88,46 +108,7 @@ class Optuple(InstanceBoundTypeMixin):
         return self._type_hash() ^ tuple.__hash__(self)
 
     @classmethod
-    def _options_from_func(cls, func):
-        """Converts a function argspec into a list of Option objects."""
-
-        args, va, kw, defaults = getargspec(func)
-        defaults = defaults or ()
-
-        if va is not None:
-            raise TypeError(
-                'Arbitrary arguments are not supported: *%s' % va)
-        if kw is not None:
-            raise TypeError(
-                'Arbitrary keyword arguments are not supported: **%s' % kw)
-
-        if not args:
-            raise TypeError(
-                'Module function must accept at least one argument')
-        if len(args) == len(defaults):
-            raise TypeError(
-                'The first argument cannot have a default value: %s' % args[0])
-
-        option_args = args[1:]
-        for arg in option_args:
-            if not isinstance(arg, basestring):
-                raise TypeError(
-                    'Tuple parameter unpacking is not supported: %s' % arg)
-            if arg.startswith('_'):
-                raise TypeError(
-                    'Option name cannot start with an underscore: %s' % arg)
-
-        head = [Option() for _ in xrange(len(option_args) - len(defaults))]
-        tail = [option if isinstance(option, Option) else Option(option)
-                for option in defaults]
-
-        return [option.set(_name=name)
-                for option, name in zip(head + tail, option_args)]
-
-    @classmethod
-    def _new_type_options(cls, module_type, func):
-        options = cls._options_from_func(func)
-
+    def _new_type_options(cls, module_type, options):
         optuple_base = namedtuple('OptupleBase',
                                   (option._name for option in options))
 
@@ -137,7 +118,7 @@ class Optuple(InstanceBoundTypeMixin):
         for attr in bogus_attrs:
             setattr(optuple_base, attr, property())
 
-        new_type = type('Optuple_M%s' % module_type._module_name,
+        new_type = type('Optuple_M%s' % module_type._module._name,
                         (cls, optuple_base, module_type),
                         dict(__slots__=()))
 
@@ -173,9 +154,16 @@ class Option(object):
             elif default is not Ellipsis:
                 self._values.add(default)
 
-        for attr in 'default', 'extendable', '_check_func', '_name', '_module':
+        for attr in 'default', 'extendable', '_check_func', '_module':
             if attr in flags:
                 setattr(self, attr, flags.pop(attr))
+
+        if 'name' in flags:
+            name = flags.pop('name')
+            if name.startswith('_'):
+                raise ValueError(
+                    'Option name cannot start with an underscore: %s' % name)
+            self._name = name
 
         if flags:
             raise TypeError('Unrecognized flag(s): %s' % ', '.join(flags))
@@ -219,7 +207,7 @@ class Option(object):
         return ret
 
 
-class Error(Exception):
+class MybuildError(Exception):
     """Base class for errors providing a logging-like constructor."""
 
     def __init__(self, msg, *args, **kwargs):
@@ -229,7 +217,7 @@ class Error(Exception):
             raise TypeError('At most one of args or kwargs can be specified '
                             'at once, not both of them')
 
-        super(Error, self).__init__(msg, args or kwargs or None)
+        super(MybuildError, self).__init__(msg, args or kwargs or None)
 
     def __str__(self):
         msg, fmt_args = self.args
@@ -246,9 +234,4 @@ class Error(Exception):
                                  '**' if isinstance(fmt_args, dict) else '*',
                                  fmt_args)
 
-class InternalError(Exception):
-    """
-    Unrecoverable application errors indicating that something goes really
-    wrong.
-    """
 

@@ -29,10 +29,10 @@ def create_model(bld):
                 setattr(self, key, value)
         module_func.__module__ = pymodule_name
         module_func.__name__ = dictionary.pop('id')
-        return mybuild.module(module_func)
+        return mybuild.pybinding.module(module_func)
 
     def get_pybuild_defaults():
-        from mybuild import module, option
+        from mybuild.pybinding import module, option
         return locals()
 
     def get_mybuild_defaults():
@@ -43,7 +43,7 @@ def create_model(bld):
 
         class module(fake):
             pass
-        from mybuild import option
+        from mybuild.pybinding import option
         return locals()
 
     loaders_init = {
