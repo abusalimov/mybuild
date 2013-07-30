@@ -23,6 +23,60 @@ from util.importlib.abc import MetaPathFinder
 from util.compat import *
 
 
+class Loader(object):
+    """NamespaceImportHook-compatible loader extension protocol.
+
+    This class is mainly serves documentation purposes, there is no need to
+    extend it.
+
+    Two optional class attribute are recognized:
+        MODULE:
+            Used to identify the loader by a module name within a package.
+            Defaults to __name__ of the loader class
+        FILENAME:
+            Used to locate a file within directories in a path.
+            Defaults to MODULE
+
+    Every method defined below is also optional.
+    """
+
+    @classmethod
+    def init_ctx(cls, ctx, initials):
+        """Accepts an importer context object and user-provided initials.
+        Return value then replaces the first argument to __init__ (ctx).
+        """
+        return ctx
+
+    @classmethod
+    def exit_ctx(cls, ctx):
+        """Called upon exiting a context with a single argument which is
+        the value returned by init_ctx (if any) or the importer context object.
+        """
+        pass
+
+    def __init__(self, ctx, fullname, path):
+        """
+        Args:
+            ctx: associated context (see notes to init_ctx)
+            fullname (str): fully.qualified.name of a module to load
+            path (str): a file path
+        """
+        super(Loader, self).__init__()
+
+
+def loader_module(loader):
+    try:
+        return loader.MODULE
+    except AttributeError:
+        return loader.__name__
+
+def loader_filename(loader):
+    try:
+        return loader.FILENAME
+    except AttributeError:
+        return loader_module(loader)
+
+
 class NamespaceImportHook(MetaPathFinder):
     """
     PEP 302 meta path import hook.
@@ -57,7 +111,6 @@ class NamespaceImportHook(MetaPathFinder):
     def __init__(self):
         super(NamespaceImportHook, self).__init__()
         self._namespaces = OrderedDict()
-        self.registered_loaders = dict()
 
     @contextlib.contextmanager
     def using_namespace(self, namespace, path=None, loaders_init=None):
@@ -77,13 +130,20 @@ class NamespaceImportHook(MetaPathFinder):
         ctx.path = list(path) if path is not None else []
         ctx.loaders = loaders = dict()  # populated below
 
-        for name, initials in iteritems(self.normalize_loaders(loaders_init)):
-            loader_type = self.registered_loaders[name]
+        for loader_type, initials in iteritems(loaders_init):
             if hasattr(loader_type, 'init_ctx'):
                 loader_ctx = loader_type.init_ctx(ctx, initials)
             else:
                 loader_ctx = ctx
-            loaders[name] = (loader_type, loader_ctx)
+            name = loader_module(loader_type)
+            try:
+                old_loader_type, _ = loaders[name]
+            except KeyError:
+                loaders[name] = loader_type, loader_ctx
+            else:
+                raise ValueError(
+                        "Conflicting name '%s' for loader types "
+                        "'%s' and '%s'" % (name, old_loader_type, loader_type))
 
         nsmap = self._namespaces
         if not nsmap and self not in sys.meta_path:
@@ -104,62 +164,9 @@ class NamespaceImportHook(MetaPathFinder):
             if not nsmap and self in sys.meta_path:
                 sys.meta_path.remove(self)
 
-            for name, (loader_type, loader_ctx) in iteritems(ctx.loaders):
+            for loader_type, loader_ctx in iteritems(ctx.loaders):
                 if hasattr(loader_type, 'exit_ctx'):
                     loader_type.exit_ctx(loader_ctx)
-
-    def loader_for(self, name):
-        """
-        Deco-maker for registering loaders.
-        """
-
-        def decorator(loader_type):
-            """
-            loader_type must be a loader factory which accepts three args:
-                ctx: associated context
-                fullname (str): fully.qualified.name of a module to load
-                path (str): a file path
-
-            loader_type may also provide two optional class methods:
-                init_ctx:
-                    Accepts an importer context object and user-provided
-                    initials. Return value then replaces the first argument to
-                    the factory (ctx).
-                exit_ctx:
-                    Called upon exiting a context with a single argument which
-                    is the value returned by init_ctx (if any) or the importer
-                    context object.
-
-            If loader_type defines an optional FILENAME class attribute, it is
-            used instead of the 'name' when searching a file.
-            """
-            if name in self.registered_loaders:
-                prev = self.registered_loaders[name]
-                raise ValueError("Loader for '{name}' is already registered "
-                                 "{prev}".format(**locals()))
-
-            self.registered_loaders[name] = loader_type
-
-            return loader_type
-
-        return decorator
-
-    def normalize_loaders(self, loaders=None):
-        return_all = (loaders is None or '*' in loaders)
-
-        ismap = isinstance(loaders, Mapping)
-        if ismap:
-            default = loaders.get('*', {})
-
-        ret_type = (dict if ismap else set)
-        return ret_type(((name, loaders.get(name, default)) if ismap else name)
-                        for name in self.registered_loaders
-                        if return_all or name in loaders)
-
-    def loader_filenames(self, loaders=None):
-        return dict((name, getattr(self.registered_loaders[name],
-                                   'FILENAME', name))
-                    for name in self.normalize_loaders(loaders))
 
     def find_module(self, fullname, path=None):
         """
@@ -204,7 +211,7 @@ class NamespaceImportHook(MetaPathFinder):
                 if os.path.isdir(basepath):
                     return SubPackageLoader(ctx, [basepath])
         else:
-            filename = getattr(loader_type, 'FILENAME', tailname)
+            filename = loader_filename(loader_type)
             def find_loader_in(entry):
                 filepath = os.path.join(entry, filename)
                 if os.path.isfile(filepath):

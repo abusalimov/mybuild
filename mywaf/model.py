@@ -6,10 +6,10 @@ from waflib.TaskGen import feature, extension, after_method
 from waflib.Tools import ccroot
 
 import mybuild
-import myfile
+from myfile import MybuildFileLoader
 
-from nsimporter import my_yaml
-from nsimporter import pybuild
+from nsimporter.my_yaml import MyYamlFileLoader
+from nsimporter.pybuild import PybuildFileLoader
 
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
@@ -47,9 +47,9 @@ def create_model(bld):
         return locals()
 
     loaders_init = {
-        myfile .LOADER_NAME: get_mybuild_defaults(),
-        my_yaml.LOADER_NAME: {'!module': create_module},
-        pybuild.LOADER_NAME: get_pybuild_defaults(),
+        MybuildFileLoader: get_mybuild_defaults(),
+        MyYamlFileLoader: {'!module': create_module},
+        PybuildFileLoader: get_pybuild_defaults(),
     }
 
     prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)

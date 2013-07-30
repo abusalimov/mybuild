@@ -14,20 +14,16 @@ try:
 except ImportError:
     parse = None
 
-from nsimporter import loader_for
-
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
 
 from util.compat import *
 
 
-LOADER_NAME = 'MYBUILD'
-
-@loader_for(LOADER_NAME)
 class MybuildFileLoader(SourceFileLoader):
     """Loads Mybuild files."""
 
+    MODULE   = 'MYBUILD'
     FILENAME = 'Mybuild'
 
     @classmethod

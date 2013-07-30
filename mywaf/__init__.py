@@ -9,7 +9,7 @@ from waflib import Utils   as wafutils
 from waflib import Errors  as waferrors
 
 from nsimporter import import_all
-from nsimporter import loader_filenames
+from nsimporter import loader_filename
 
 from util.compat import *
 
@@ -22,8 +22,9 @@ def configure(ctx):
 
 
 def my_load(ctx, namespace, path=None, loaders_init=None):
-    myfile_names = list(itervalues(loader_filenames(loaders_init)))
-    myfiles_glob = ['**/' + f for f in myfile_names]
+    loaders_init = dict(loaders_init)
+
+    myfiles_glob = ['**/' + loader_filename(l) for l in loaders_init]
 
     if path is not None:
         path_nodes = [ctx.path.find_node(entry) for entry in path]

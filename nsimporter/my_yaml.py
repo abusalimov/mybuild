@@ -4,8 +4,6 @@ Loader for YAML files. Uses PyYaml library.
 
 import functools
 
-from nsimporter import loader_for
-
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
 
@@ -22,14 +20,13 @@ else:
     except ImportError:
         from yaml import Loader as YamlLoader
 
-LOADER_NAME = 'MY_YAML'
 
-@loader_for(LOADER_NAME)
 class MyYamlFileLoader(SourceFileLoader):
     """Loads YAML files.
 
     TODO Does not fully comply InspectLoader protocol."""
 
+    MODULE   = 'MY_YAML'
     FILENAME = 'MyYaml'
 
     @classmethod
