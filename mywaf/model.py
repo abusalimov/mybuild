@@ -6,10 +6,8 @@ from waflib.TaskGen import feature, extension, after_method
 from waflib.Tools import ccroot
 
 import mybuild
-from nsloader.myfile import MybuildFileLoader
 from nsloader.yamlfile import YamlFileLoader
-# from mybuild.dsl.myloader import MybuildFileLoader
-# from mybuild.dsl.my_yaml import YamlFileLoader
+from mybuild.dsl.myfile import MybuildMyFileLoader
 from mybuild.dsl.pyfile import MybuildPyFileLoader
 
 from mybuild.context import Context, InstanceAtom
@@ -32,26 +30,27 @@ def create_model(bld):
         module_func.__name__ = dictionary.pop('id')
         return mybuild.dsl.pyfile.module(module_func)
 
-    def get_pybuild_defaults():
-        return {}
-
-    def get_mybuild_defaults():
-        class fake(object):
-            def __init__(self, *args, **kwargs):
-                super(fake, self).__init__()
-                print args, kwargs
-
-        class module(fake):
-            pass
-        return locals()
-
     loaders_init = {
-        MybuildFileLoader: get_mybuild_defaults(),
+        MybuildMyFileLoader: None,
+        MybuildPyFileLoader: None,
         YamlFileLoader: {'!module': create_module},
-        MybuildPyFileLoader: get_pybuild_defaults(),
     }
 
-    prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)
+    try:
+        prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)
+
+    except:
+        raise
+
+        import sys, traceback, code
+        tb = sys.exc_info()[2]
+        traceback.print_exc()
+        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
+        frame = last_frame().tb_frame
+        ns = dict(frame.f_globals)
+        ns.update(frame.f_locals)
+        code.interact(local=ns)
+
 
     print '>>>>>>>>', prj.hello.yaml_module
 

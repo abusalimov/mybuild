@@ -13,22 +13,40 @@ from util import send_next_iter
 from util.compat import *
 
 
-class MyfileDeclarative(object):
-    """docstring for MyfileDeclarative"""
+class MyfileObject(object):
+    """
+    Myfile binding protocol.
+    """
+    __slots__ = ()
 
-    def my_getattr(self, attr):
-        return getattr(self, attr)
+    def my_proxy(self, stub):
+        return self
 
-    @classmethod
-    def my_getattr_of(cls, obj, attr):
-        if isinstance(obj, cls):
-            return obj.my_getattr(attr)
-        else:
-            return getattr(obj, attr)
+
+class MyfileObjectProxy(object):
+    __slots__ = 'stub'
+
+    def __init__(self, stub):
+        super(MyfileObjectProxy, self).__init__()
+        self.stub = stub
+
+
+def proxify(obj, stub):
+    try:
+        obj_proxy = obj.my_proxy
+    except AttributeError:
+        return obj
+    else:
+        return obj_proxy(stub)
 
 
 class Stub(object):
     """docstring for Stub"""
+
+    @property
+    def name(self):
+        name, loc = self.name_wloc
+        return name
 
     @property
     def type_name(self):
@@ -58,7 +76,7 @@ class Stub(object):
                         ret = Stub.to_object(ret, loc)
                     else:
                         continue
-                ret = MyfileDeclarative.my_getattr_of(ret, attr)
+                ret = getattr(proxify(ret, self), attr)
             except AttributeError:
                 raise UnresolvedAttributeError(self, ret, attr, attr_loc)
             finally:
@@ -103,7 +121,8 @@ class Stub(object):
             reent_set.remove(self)
 
         try:
-            ret = type_object(*type_args, **type_kwargs)
+            proxy = proxify(type_object, self)
+            ret = proxy(*type_args, **type_kwargs)
 
         except TypeError as e:
             raise InstantiationError(e, self)
@@ -131,8 +150,6 @@ class Stub(object):
                 parent = parent.named_parent
             assert parent is None or parent.name
         self.named_parent = parent
-
-        self.name = None
 
         self.type_name_wlocs = []  # parts of qualified name of a type
 

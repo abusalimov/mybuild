@@ -11,6 +11,7 @@ __all__ = ['module', 'option']
 import functools
 import inspect
 
+from . import with_defaults
 from ..core import Module
 from ..core import Option
 
@@ -19,10 +20,7 @@ from nsloader import pyfile
 from util.compat import *
 
 
-PYFILE_DEFAULTS = [
-    "module",
-    "option",
-]
+PYFILE_DEFAULTS = ['module', 'option']
 
 
 class MybuildPyFileLoader(pyfile.PyFileLoader):
@@ -32,26 +30,18 @@ class MybuildPyFileLoader(pyfile.PyFileLoader):
 
     @classmethod
     def init_ctx(cls, ctx, initials=None):
-        if initials is None:
-            initials = {}
-
-        builtins = dict(initials)
-        globals_ = globals()
-
-        for var in PYFILE_DEFAULTS:
-            builtins.setdefault(var, globals_[var])  # initials take precedence
-
-        return super(MybuildPyFileLoader, cls).init_ctx(ctx, builtins)
+        return super(MybuildPyFileLoader, cls).init_ctx(ctx,
+                with_defaults(initials, PYFILE_DEFAULTS, globals()))
 
 
-class PybuildModule(Module):
+class PyFileModule(Module):
 
     def __init__(self, instance_type):
         if not inspect.isclass(instance_type):
             raise TypeError("Expected a class, got '%s' object instead" %
                             type(instance_type).__name__)
 
-        super(PybuildModule, self).__init__(instance_type,
+        super(PyFileModule, self).__init__(instance_type,
                 self._ctor_to_options(instance_type))
 
     @classmethod
@@ -64,10 +54,9 @@ class PybuildModule(Module):
         # So instead we create a new type manually.
 
         type_dict = dict(func.__dict__,
+                         __init__   = func,
                          __module__ = func.__module__,
-                         __doc__ = func.__doc__,
-                         __init__ = func)
-
+                         __doc__    = func.__doc__)
         return cls(type(func.__name__, (object,), type_dict))
 
     @classmethod
@@ -130,9 +119,9 @@ def module(func_or_class):
 
     """
     if inspect.isfunction(func_or_class):
-        ret = PybuildModule._from_func(func_or_class)
+        ret = PyFileModule._from_func(func_or_class)
     else:
-        ret = PybuildModule(func_or_class)
+        ret = PyFileModule(func_or_class)
     return functools.update_wrapper(ret, func_or_class)
 
 

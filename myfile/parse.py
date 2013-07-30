@@ -215,12 +215,12 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # The main entry point.
 
-def parse(linker, source, filename=None, builtins={}, **kwargs):
+def parse(file_linker, source, filename=None, builtins={}, **kwargs):
     """
     Parses the given source and returns the result.
 
     Args:
-        linker (Linker) - global linker object
+        file_linker (FileLinker) - local file linker object
         source (str) - data to parse
         filename (str) - file name to report in case of errors
         builtins (dict) - builtin variables
@@ -241,15 +241,15 @@ def parse(linker, source, filename=None, builtins={}, **kwargs):
 
         global_scope = ObjectScope(parent=BuiltinScope(builtins))
 
-        p.scope_stack   = [global_scope]
+        p.scope_stack = [global_scope]
         p.stub_stack  = [None]
 
-        p.linker = linker.create_file_linker()
+        p.linker = file_linker
 
-        ast_root = p.parse(source, lexer=lex.lexer, **kwargs)
+        p.parse(source, lexer=lex.lexer, **kwargs)
 
-        p.linker.scopes.append(global_scope)
-        p.linker.link_local()
+        file_linker.scopes.append(global_scope)
+        file_linker.link_local()
 
         return dict(global_scope)
 

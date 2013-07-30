@@ -48,7 +48,6 @@ if __name__ == "__main__":
     '''
     from util import singleton
 
-    import traceback, sys, code
     from pprint import pprint
 
     def get_builtins():
@@ -83,6 +82,7 @@ if __name__ == "__main__":
         e.print_error()
 
     except:
+        import sys, traceback, code
         tb = sys.exc_info()[2]
         traceback.print_exc()
         last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
