@@ -21,7 +21,7 @@ else:
         from yaml import Loader as YamlLoader
 
 
-class MyYamlFileLoader(SourceFileLoader):
+class YamlFileLoader(SourceFileLoader):
     """Loads YAML files.
 
     TODO Does not fully comply InspectLoader protocol."""
@@ -34,7 +34,7 @@ class MyYamlFileLoader(SourceFileLoader):
         return initials  # defaults
 
     def __init__(self, defaults, fullname, path):
-        super(MyYamlFileLoader, self).__init__(fullname, path)
+        super(YamlFileLoader, self).__init__(fullname, path)
         self._defaults = dict((key, value)
                               for key, value in iteritems(defaults))
 

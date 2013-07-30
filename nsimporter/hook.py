@@ -189,7 +189,7 @@ class NamespaceImportHook(MetaPathFinder):
             ----------------   ------------   ----------------------
             'ns'               None           NamespacePackageLoader
             'ns.pkg'           ctx.path       SubPackageLoader
-            'ns.pkg.PYBUILD'   pkg.__path__   PybuildFileLoader
+            'ns.pkg.PYBUILD'   pkg.__path__   PyFileLoader
         """
 
         namespace, _, restname = fullname.partition('.')

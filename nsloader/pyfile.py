@@ -8,7 +8,7 @@ from util.importlib.machinery import SourceFileLoader
 from util.compat import *
 
 
-class PybuildFileLoader(SourceFileLoader):
+class PyFileLoader(SourceFileLoader):
     """Loads Pybuild files and executes them as regular Python scripts.
 
     Upon creation of a new module initializes its namespace with defaults taken
@@ -24,9 +24,8 @@ class PybuildFileLoader(SourceFileLoader):
         return initials  # defaults
 
     def __init__(self, defaults, fullname, path):
-        super(PybuildFileLoader, self).__init__(fullname, path)
-        self._defaults = dict((key, value)
-                              for key, value in iteritems(defaults))
+        super(PyFileLoader, self).__init__(fullname, path)
+        self.defaults = dict(defaults)
 
     def is_package(self, fullname):
         return False
@@ -34,11 +33,11 @@ class PybuildFileLoader(SourceFileLoader):
     def _init_module(self, module):
         fullname = module.__name__
 
-        module.__dict__.update(self._defaults)
+        module.__dict__.update(self.defaults)
 
         namespace_root, dot, _ = fullname.partition('.')
         if dot:
             setattr(module, namespace_root, sys.modules[namespace_root])
 
-        super(PybuildFileLoader, self)._init_module(module)
+        super(PyFileLoader, self)._init_module(module)
 
