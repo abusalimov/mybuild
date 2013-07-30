@@ -95,9 +95,12 @@ class NamespaceImportHook(MetaPathFinder):
 
             self.path = self.loaders = None  # initialized manually
 
+        def import_namespace(self):
+            return __import__(self.namespace)
+
         def import_all(self, rel_names=[], silent=False):
             ns = self.namespace
-            ns_module = __import__(ns)
+            ns_module = self.import_namespace()  # do it first
 
             for rel_name in rel_names:
                 try:

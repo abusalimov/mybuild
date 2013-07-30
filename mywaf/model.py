@@ -8,10 +8,9 @@ from waflib.Tools import ccroot
 import mybuild
 from mybuild.dsl.myloader import MybuildFileLoader
 from nsloader.yamlfile import YamlFileLoader
-from nsloader.pyfile import PyFileLoader
 # from mybuild.dsl.myloader import MybuildFileLoader
 # from mybuild.dsl.my_yaml import YamlFileLoader
-# from mybuild.dsl.pybuild import PyFileLoader
+from mybuild.dsl.pyfile import MybuildPyFileLoader
 
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
@@ -51,7 +50,7 @@ def create_model(bld):
     loaders_init = {
         MybuildFileLoader: get_mybuild_defaults(),
         YamlFileLoader: {'!module': create_module},
-        PyFileLoader: get_pybuild_defaults(),
+        MybuildPyFileLoader: get_pybuild_defaults(),
     }
 
     prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)

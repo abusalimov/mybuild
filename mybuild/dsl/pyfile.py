@@ -11,12 +11,40 @@ __all__ = ['module', 'option']
 import functools
 import inspect
 
-from . import core
+from ..core import Module
+from ..core import Option
+
+from nsloader import pyfile
 
 from util.compat import *
 
 
-class PybuildModule(core.Module):
+PYFILE_DEFAULTS = [
+    "module",
+    "option",
+]
+
+
+class MybuildPyFileLoader(pyfile.PyFileLoader):
+
+    MODULE   = 'PYBUILD'
+    FILENAME = 'Pybuild'
+
+    @classmethod
+    def init_ctx(cls, ctx, initials=None):
+        if initials is None:
+            initials = {}
+
+        builtins = dict(initials)
+        globals_ = globals()
+
+        for var in PYFILE_DEFAULTS:
+            builtins.setdefault(var, globals_[var])  # initials take precedence
+
+        return super(MybuildPyFileLoader, cls).init_ctx(ctx, builtins)
+
+
+class PybuildModule(Module):
 
     def __init__(self, instance_type):
         if not inspect.isclass(instance_type):
@@ -78,7 +106,7 @@ class PybuildModule(core.Module):
         tail = [option if isinstance(option, Option) else Option(option)
                 for option in defaults]
 
-        return [option.set(_name=name)
+        return [option.set(name=name)
                 for option, name in zip(head + tail, option_args)]
 
 
@@ -108,7 +136,7 @@ def module(func_or_class):
     return functools.update_wrapper(ret, func_or_class)
 
 
-option = core.Option
+option = Option
 
 
 if __name__ == '__main__':
