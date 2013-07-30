@@ -13,7 +13,7 @@ import inspect
 
 from . import core
 
-from .util.compat import *
+from util.compat import *
 
 
 class PybuildModule(core.Module):

@@ -8,7 +8,7 @@ __date__ = "2013-07-28"
 
 import traceback as _traceback
 
-from ...util.compat import *
+from util.compat import *
 
 
 class MyfileError(Exception):

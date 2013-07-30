@@ -2,9 +2,9 @@
 Namespace-related loaders that don't run any code directly.
 """
 
-from ..util.importlib.machinery import GenericLoader
+from util.importlib.machinery import GenericLoader
 
-from ..util.compat import *
+from util.compat import *
 
 
 class PackageLoaderBase(GenericLoader):

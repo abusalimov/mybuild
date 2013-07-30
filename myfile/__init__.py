@@ -14,12 +14,12 @@ try:
 except ImportError:
     parse = None
 
-from .. import mybuild_importer
+from mybuild.loader import mybuild_importer
 
-from ...util.importlib.abc import Loader
-from ...util.importlib.machinery import SourceFileLoader
+from util.importlib.abc import Loader
+from util.importlib.machinery import SourceFileLoader
 
-from ...util.compat import *
+from util.compat import *
 
 
 LOADER_NAME = 'MYBUILD'

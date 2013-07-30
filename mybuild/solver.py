@@ -18,9 +18,9 @@ from itertools import product
 import operator
 
 from .pgraph import *
-from .util import pop_iter
+from util import pop_iter
 
-from .util.compat import *
+from util.compat import *
 
 from .rgraph import *
 
@@ -113,10 +113,10 @@ class TrunkSolution(Solution):
 
     def copy(self):
         new = super(TrunkSolution, self).copy()
-        
+
         new.branchmap   = self.branchmap.copy()
         new.neglefts    = self.neglefts.copy()
-        
+
         return new
 
     def __ior__(self, branch):
@@ -347,7 +347,7 @@ def create_trunk(pgraph, initial_literals=[]):
     # because of keeping more reason chains for all literals.
     todo = to_lset(initial_literals)
     todo.update(pgraph.const_literals)
-    
+
     for literal in todo:
         reasons.add(Reason(None, literal))
 
@@ -531,36 +531,36 @@ def stepwise_resolve(trunk):
         resolve_branches(trunk, branchset & trunk.branchset())
 
 
-def get_trunk_solution(pgraph, initial_values):   
+def get_trunk_solution(pgraph, initial_values):
     nodes = pgraph.nodes
 
     trunk = create_trunk(pgraph, initial_values)
     # for literal in trunk.literals:
     #     print 'trunk', literal
-    
+
     violation_branches = set()
     initial_trunk = trunk.copy()
     prepare_branches(trunk, nodes-trunk.nodes)
     resolve_branches(trunk, (~branch for branch in trunk.branchset()
                              if not branch.valid), violation_branches)
     stepwise_resolve(trunk)
-    
+
     for branch in violation_branches:
         branch.trunk = initial_trunk
     return (trunk, violation_branches)
 
-def solve(pgraph, initial_values):  
+def solve(pgraph, initial_values):
     nodes = pgraph.nodes
     trunk, violation_branches = get_trunk_solution(pgraph, initial_values)
-    
+
     rgraph = Rgraph(trunk.literals, trunk.reasons, violation_branches)
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
-        
+
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
     return ret
-    
+
 
 
 class SolveError(Exception):

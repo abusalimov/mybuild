@@ -6,9 +6,9 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
 
 
-import ply.yacc
 import functools
-from operator import itemgetter
+import operator
+import ply.yacc
 
 from . import lex
 from .linkage import BuiltinScope
@@ -17,8 +17,8 @@ from .linkage import Stub
 from .location import Fileinfo
 from .location import Location
 
-from ...util import cached_property
-from ...util.compat import *
+from util import cached_property
+from util.compat import *
 
 
 # Here go scoping-related stuff + some utils.
@@ -48,8 +48,10 @@ def loc(p, i):
 def wloc(p, i):
     return p[i], loc(p, i)
 
+noloc = operator.itemgetter(0)  # obj_wloc -> obj
+
 def nolocs(iterable_wlocs):
-    return map(itemgetter(0), iterable_wlocs)
+    return map(noloc, iterable_wlocs)
 
 
 def track_loc(func):
@@ -281,7 +283,7 @@ module Kernel(debug = False) {
 if __name__ == "__main__":
     from .linkage import GlobalLinker, LocalLinker
     from .errors import MyfileError, CompoundError
-    from ...util import singleton
+    from util import singleton
 
     import traceback, sys, code
     from pprint import pprint

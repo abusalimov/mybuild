@@ -10,9 +10,9 @@ from waflib import Errors  as waferrors
 
 from mybuild.loader import import_all
 from mybuild.loader import loader_filenames
-from mybuild.util.collections import OrderedDict
 
-from mybuild.util.compat import *
+from util.collections import OrderedDict
+from util.compat import *
 
 def options(ctx):
     print('mywaf: %r' % ctx)

@@ -1,20 +1,20 @@
 import os
 
+
+from waflib.Task import Task
+from waflib.TaskGen import feature, extension, after_method
+from waflib.Tools import ccroot
+
 import mybuild
+import myfile
 
 from mybuild.loader import my_yaml
-from mybuild.loader import myfile
 from mybuild.loader import pybuild
 
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve
 
-from mybuild.util.compat import *
-
-
-from waflib.Task import Task
-from waflib.TaskGen import feature, extension, after_method
-from waflib.Tools import ccroot
+from util.compat import *
 
 
 def build_true_graph(bld, solution):

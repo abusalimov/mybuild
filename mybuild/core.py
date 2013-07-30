@@ -21,9 +21,9 @@ from inspect import getargspec
 from operator import attrgetter
 import sys
 
-from .util import InstanceBoundTypeMixin
+from util import InstanceBoundTypeMixin
 
-from .util.compat import *
+from util.compat import *
 
 
 class Module(object):

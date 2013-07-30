@@ -6,10 +6,10 @@ import functools
 
 from . import mybuild_importer
 
-from ..util.importlib.abc import Loader
-from ..util.importlib.machinery import SourceFileLoader
+from util.importlib.abc import Loader
+from util.importlib.machinery import SourceFileLoader
 
-from ..util.compat import *
+from util.compat import *
 
 try:
     import yaml

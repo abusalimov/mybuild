@@ -6,8 +6,8 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-29"
 
 
-from ...util import cached_property
-from ...util.compat import *
+from util import cached_property
+from util.compat import *
 
 
 class Fileinfo(object):

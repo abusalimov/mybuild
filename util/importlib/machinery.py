@@ -1,7 +1,6 @@
 """
-Backport of Py3k importlib module.
+Machinery: implementations of some finders and loaders.
 """
-
 from __future__ import absolute_import
 
 import abc

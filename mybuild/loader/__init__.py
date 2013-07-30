@@ -23,11 +23,11 @@ import os.path
 from .package import NamespacePackageLoader
 from .package import SubPackageLoader
 
-from ..util import identity
-from ..util.collections import OrderedDict, Mapping
-from ..util.importlib.abc import MetaPathFinder
+from util import identity
+from util.collections import OrderedDict, Mapping
+from util.importlib.abc import MetaPathFinder
 
-from ..util.compat import *
+from util.compat import *
 
 
 def import_all(relative_dirnames, namespace, path=None, loaders_init=None):

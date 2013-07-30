@@ -13,9 +13,9 @@ from operator import attrgetter
 # do not import context due to bootstrapping issues
 from .core import MybuildError
 from .pgraph import *
-from .util import bools
+from util import bools
 
-from .util.compat import *
+from util.compat import *
 
 
 class InstanceNodeBase(object):

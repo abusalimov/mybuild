@@ -21,10 +21,10 @@ from .instance import Instance
 from .instance import InstanceError
 from .instance import InstanceNode
 from .pgraph import *
-from .util import NotifyingMixin
-from .util import pop_iter
+from util import NotifyingMixin
+from util import pop_iter
 
-from .util.compat import *
+from util.compat import *
 
 import logs as log
 

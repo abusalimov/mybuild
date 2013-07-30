@@ -6,8 +6,8 @@ import sys
 
 from . import mybuild_importer
 
-from ..util.importlib.machinery import SourceFileLoader
-from ..util.compat import *
+from util.importlib.machinery import SourceFileLoader
+from util.compat import *
 
 
 LOADER_NAME = 'PYBUILD'
