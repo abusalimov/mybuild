@@ -6,7 +6,7 @@ from waflib.TaskGen import feature, extension, after_method
 from waflib.Tools import ccroot
 
 import mybuild
-from mybuild.dsl.myloader import MybuildFileLoader
+from nsloader.myfile import MybuildFileLoader
 from nsloader.yamlfile import YamlFileLoader
 # from mybuild.dsl.myloader import MybuildFileLoader
 # from mybuild.dsl.my_yaml import YamlFileLoader
@@ -30,11 +30,10 @@ def create_model(bld):
                 setattr(self, key, value)
         module_func.__module__ = pymodule_name
         module_func.__name__ = dictionary.pop('id')
-        return mybuild.pybinding.module(module_func)
+        return mybuild.dsl.pyfile.module(module_func)
 
     def get_pybuild_defaults():
-        from mybuild.pybinding import module, option
-        return locals()
+        return {}
 
     def get_mybuild_defaults():
         class fake(object):
@@ -44,7 +43,6 @@ def create_model(bld):
 
         class module(fake):
             pass
-        from mybuild.pybinding import option
         return locals()
 
     loaders_init = {

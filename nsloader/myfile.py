@@ -1,6 +1,8 @@
 """
 Loader for plain old Mybuild files.
 """
+from __future__ import absolute_import
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
