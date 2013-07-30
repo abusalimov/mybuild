@@ -8,11 +8,11 @@ from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
 from waflib import Errors  as waferrors
 
-from mybuild.loader import import_all
-from mybuild.loader import loader_filenames
+from nsimporter import import_all
+from nsimporter import loader_filenames
 
-from util.collections import OrderedDict
 from util.compat import *
+
 
 def options(ctx):
     print('mywaf: %r' % ctx)

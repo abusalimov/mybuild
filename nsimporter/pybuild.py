@@ -4,7 +4,7 @@ Python-like loader which is able to customize default global namespace.
 
 import sys
 
-from . import mybuild_importer
+from nsimporter import loader_for
 
 from util.importlib.machinery import SourceFileLoader
 from util.compat import *
@@ -12,7 +12,7 @@ from util.compat import *
 
 LOADER_NAME = 'PYBUILD'
 
-@mybuild_importer.loader_for(LOADER_NAME)
+@loader_for(LOADER_NAME)
 class PybuildFileLoader(SourceFileLoader):
     """Loads Pybuild files and executes them as regular Python scripts.
 

@@ -14,7 +14,7 @@ try:
 except ImportError:
     parse = None
 
-from mybuild.loader import mybuild_importer
+from nsimporter import loader_for
 
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
@@ -24,7 +24,7 @@ from util.compat import *
 
 LOADER_NAME = 'MYBUILD'
 
-@mybuild_importer.loader_for(LOADER_NAME)
+@loader_for(LOADER_NAME)
 class MybuildFileLoader(SourceFileLoader):
     """Loads Mybuild files."""
 

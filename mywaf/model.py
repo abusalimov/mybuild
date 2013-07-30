@@ -8,8 +8,8 @@ from waflib.Tools import ccroot
 import mybuild
 import myfile
 
-from mybuild.loader import my_yaml
-from mybuild.loader import pybuild
+from nsimporter import my_yaml
+from nsimporter import pybuild
 
 from mybuild.context import Context, InstanceAtom
 from mybuild.solver import solve

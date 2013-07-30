@@ -1,81 +1,42 @@
 """
-Integrates Mybuild-files into Python modules infrastructure by using custom
-meta path importer.
+Defines meta hook for importing namespaces.
 """
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-06-26"
 
 __all__ = [
-    "mybuild_importer",
-
-    "import_all",
-    "normalize_loaders",
-    "loader_filenames",
+    "NamespaceImportHook",
 ]
 
 
 import contextlib
-import functools
 import sys
 import os.path
 
 from .package import NamespacePackageLoader
 from .package import SubPackageLoader
 
-from util import identity
 from util.collections import OrderedDict, Mapping
 from util.importlib.abc import MetaPathFinder
 
 from util.compat import *
 
 
-def import_all(relative_dirnames, namespace, path=None, loaders_init=None):
+class NamespaceImportHook(MetaPathFinder):
     """
-    Goes through relative_dirnames converting them into module names within
-    the specified namespace and importing by using mybuild_importer.
-    """
-
-    with mybuild_importer.using_namespace(namespace, path,
-                                          loaders_init) as ctx:
-        return ctx.import_all(dirname.replace(os.path.sep, '.')
-                              for dirname in relative_dirnames
-                              if '.' not in dirname)
-
-
-def normalize_loaders(loaders=None):
-    return_all = (loaders is None or '*' in loaders)
-
-    is_map = isinstance(loaders, Mapping)
-    if is_map:
-        default = loaders.get('*', {})
-
-    ret_type = (dict if is_map else set)
-    return ret_type(((name, loaders.get(name, default)) if is_map else name)
-                    for name in mybuild_importer.registered_loaders
-                    if return_all or name in loaders)
-
-
-def loader_filenames(loaders=None):
-    return dict((name, getattr(mybuild_importer.registered_loaders[name],
-                               'FILENAME', name))
-               for name in normalize_loaders(loaders))
-
-
-class MybuildImporter(MetaPathFinder):
-    """
-    PEP 302 meta path import hook. Use a singleton instance defined below.
+    PEP 302 meta path import hook.
     """
 
     class Context(object):
         """Context is an object associated with a namespace.
 
-        Do not instantiate directly, use MybuildImporter.using_namespace()
+        Do not instantiate directly, use NamespaceImportHook.using_namespace()
         context manager instead.
         """
 
         def __init__(self, namespace):
-            super(MybuildImporter.Context, self).__init__()
+            super(NamespaceImportHook.Context, self).__init__()
             self.namespace = namespace
 
             self.path = self.loaders = None  # initialized manually
@@ -94,7 +55,7 @@ class MybuildImporter(MetaPathFinder):
             return ns_module
 
     def __init__(self):
-        super(MybuildImporter, self).__init__()
+        super(NamespaceImportHook, self).__init__()
         self._namespaces = OrderedDict()
         self.registered_loaders = dict()
 
@@ -116,7 +77,7 @@ class MybuildImporter(MetaPathFinder):
         ctx.path = list(path) if path is not None else []
         ctx.loaders = loaders = dict()  # populated below
 
-        for name, initials in iteritems(normalize_loaders(loaders_init)):
+        for name, initials in iteritems(self.normalize_loaders(loaders_init)):
             loader_type = self.registered_loaders[name]
             if hasattr(loader_type, 'init_ctx'):
                 loader_ctx = loader_type.init_ctx(ctx, initials)
@@ -183,6 +144,23 @@ class MybuildImporter(MetaPathFinder):
 
         return decorator
 
+    def normalize_loaders(self, loaders=None):
+        return_all = (loaders is None or '*' in loaders)
+
+        ismap = isinstance(loaders, Mapping)
+        if ismap:
+            default = loaders.get('*', {})
+
+        ret_type = (dict if ismap else set)
+        return ret_type(((name, loaders.get(name, default)) if ismap else name)
+                        for name in self.registered_loaders
+                        if return_all or name in loaders)
+
+    def loader_filenames(self, loaders=None):
+        return dict((name, getattr(self.registered_loaders[name],
+                                   'FILENAME', name))
+                    for name in self.normalize_loaders(loaders))
+
     def find_module(self, fullname, path=None):
         """
         Try to find a loader for the specified module.
@@ -235,8 +213,4 @@ class MybuildImporter(MetaPathFinder):
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
                 return loader
-
-
-mybuild_importer = MybuildImporter()  # singleton instance
-
 

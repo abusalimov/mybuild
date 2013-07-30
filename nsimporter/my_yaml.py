@@ -4,7 +4,7 @@ Loader for YAML files. Uses PyYaml library.
 
 import functools
 
-from . import mybuild_importer
+from nsimporter import loader_for
 
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
@@ -24,7 +24,7 @@ else:
 
 LOADER_NAME = 'MY_YAML'
 
-@mybuild_importer.loader_for(LOADER_NAME)
+@loader_for(LOADER_NAME)
 class MyYamlFileLoader(SourceFileLoader):
     """Loads YAML files.
 
