@@ -290,21 +290,24 @@ class ReferenceLoopChain(Exception):
 
 # Linkage
 
-class Linker(object):
-    """docstring for Linker"""
+class LinkerBase(object):
+    """docstring for LinkerBase"""
 
     def __init__(self):
-        super(Linker, self).__init__()
+        super(LinkerBase, self).__init__()
         self.stubs = list()
 
 
-class GlobalLinker(Linker):
+class Linker(LinkerBase):
 
     def __init__(self):
-        super(GlobalLinker, self).__init__()
+        super(Linker, self).__init__()
 
         self.objects = list()  # topologically sorted
         self.reent_set = set()
+
+    def create_file_linker(self):
+        return FileLinker(self)
 
     def link_global(self):
 
@@ -321,10 +324,10 @@ class GlobalLinker(Linker):
 
 
 
-class LocalLinker(Linker):
+class FileLinker(LinkerBase):
 
     def __init__(self, global_linker):
-        super(LocalLinker, self).__init__()
+        super(FileLinker, self).__init__()
         self.global_linker = global_linker
         self.scopes = list()
 

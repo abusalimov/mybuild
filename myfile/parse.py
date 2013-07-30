@@ -215,18 +215,19 @@ parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
 
 # The main entry point.
 
-def parse(source, linker, builtins={}, filename=None, **kwargs):
+def parse(linker, source, filename=None, builtins={}, **kwargs):
     """
     Parses the given source and returns the result.
 
     Args:
+        linker (Linker) - global linker object
         source (str) - data to parse
-        builtins (dict) - builtin variables
         filename (str) - file name to report in case of errors
+        builtins (dict) - builtin variables
         **kwargs are passed directly to the underlying PLY parser
 
     Returns:
-        a tuple (ast_root, global_scope).
+        a global scope
 
     Note:
         This function is NOT reentrant.
@@ -243,91 +244,15 @@ def parse(source, linker, builtins={}, filename=None, **kwargs):
         p.scope_stack   = [global_scope]
         p.stub_stack  = [None]
 
-        p.linker = linker
+        p.linker = linker.create_file_linker()
 
         ast_root = p.parse(source, lexer=lex.lexer, **kwargs)
 
         p.linker.scopes.append(global_scope)
+        p.linker.link_local()
 
-        return (ast_root, dict(global_scope))
+        return dict(global_scope)
 
     finally:
         parser = p
-
-
-source = '''//module Kernel,
-
-//obj obj,
-foo bar,
-module foo(xxx=bar),
-
-module Kernel(debug = False) {
-    "Docstring!"
-
-    x: xxx xname() {},
-
-    source: "init.c",
-
-    depends: [
-        embox.arch.cpu(endian="be"){runtime: False},
-
-        embox.driver.diag.diag_api,
-    ],
-    depends: embox.kernel.stack,
-
-},
-
-
-'''
-
-if __name__ == "__main__":
-    from .linkage import GlobalLinker, LocalLinker
-    from .errors import MyfileError, CompoundError
-    from util import singleton
-
-    import traceback, sys, code
-    from pprint import pprint
-
-    def get_builtins():
-        @singleton
-        class embox(object):
-            def __call__(self, *args, **kwargs):
-                print self, args, kwargs
-                return self
-            def __getattr__(self, attr):
-                return self
-        class module(object):
-            def __init__(self, *args, **kwargs):
-                super(module, self).__init__()
-                print self, args, kwargs
-            def __call__(self, *args, **kwargs):
-                print self, args, kwargs
-                return self
-        xxx = lambda: 42
-
-        return dict(locals(), **{
-                        'None':  lambda: None,
-                        'True':  lambda: True,
-                        'False': lambda: False,
-                    })
-
-    gl = GlobalLinker()
-    ll = LocalLinker(gl)
-    try:
-        pprint(parse(source, linker=ll, builtins=get_builtins()))
-        ll.link_local()
-        gl.link_global()
-
-    except MyfileError as e:
-        e.print_error()
-
-    except:
-        tb = sys.exc_info()[2]
-        traceback.print_exc()
-        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
-        frame = last_frame().tb_frame
-        ns = dict(frame.f_globals)
-        ns.update(frame.f_locals)
-        code.interact(local=ns)
-
 

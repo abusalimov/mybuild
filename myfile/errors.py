@@ -13,8 +13,8 @@ from util.compat import *
 
 class MyfileError(Exception):
 
-    def print_error(self, tb=None):
-        _traceback.print_exception(type(self), self, tb)
+    def print_error(self, tb=None, limit=None, file=None):
+        _traceback.print_exception(type(self), self, tb, limit, file)
 
 
 class ParseError(MyfileError):

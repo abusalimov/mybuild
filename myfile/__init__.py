@@ -1,75 +1,94 @@
 """
-Loader for plain old Mybuild files.
+Parser/linker for My-files.
 """
 
 __author__ = "Eldar Abusalimov"
-__date__ = "2013-07-05"
+__date__ = "2013-07-30"
 
 
+from .linkage import Linker
 from .errors import MyfileError
-from .linkage import GlobalLinker
-from .linkage import LocalLinker
 try:
     from .parse import parse
 except ImportError:
     parse = None
 
-from util.importlib.abc import Loader
-from util.importlib.machinery import SourceFileLoader
 
-from util.compat import *
+def load(linker, source, filename=None, builtins={}):
+    if parse is None:
+        raise ImportError('PLY is not installed')
+
+    return parse(linker, source, filename, builtins)
 
 
-class MybuildFileLoader(SourceFileLoader):
-    """Loads Mybuild files."""
+if __name__ == "__main__":
+    source = '''//module Kernel,
 
-    MODULE   = 'MYBUILD'
-    FILENAME = 'Mybuild'
+    //obj obj,
+    foo bar,
+    module foo(xxx=bar),
 
-    @classmethod
-    def init_ctx(cls, ctx, builtins):
-        return GlobalLinker(), builtins
+    module Kernel(debug = False) {
+        "Docstring!"
 
-    @classmethod
-    def exit_ctx(cls, ctx):
-        linker, _ = ctx
-        try:
-            linker.link_global()
-        except MyfileError as e:
-            e.print_error()  # TODO bad idea
-            raise ImportError("Error(s) while linking all my-files")
+        x: xxx xname() {},
 
-    def __init__(self, ctx, fullname, path):
-        super(MybuildFileLoader, self).__init__(fullname, path)
-        self.linker, self.builtins = ctx
+        source: "init.c",
 
-    def is_package(self, fullname):
-        return False
+        depends: [
+            embox.arch.cpu(endian="be"){runtime: False},
 
-    def get_code(self, fullname):
-        return None
+            embox.driver.diag.diag_api,
+        ],
+        depends: embox.kernel.stack,
 
-    def _exec_module(self, module):
-        fullname = module.__name__
+    },
 
-        if parse is None:
-            raise ImportError('PLY is not installed')
 
-        try:
-            local_linker = LocalLinker(self.linker)
-            result = parse(self.get_source(fullname),
-                           linker=local_linker, builtins=self.builtins,
-                           filename=self.get_filename(fullname))
+    '''
+    from util import singleton
 
-            local_linker.link_local()
+    import traceback, sys, code
+    from pprint import pprint
 
-        except IOError:
-            raise ImportError("IO error while reading a stream")
-        except MyfileError as e:
-            e.print_error()  # TODO bad idea
-            raise ImportError("Error(s) while parsing/linking a my-file")
-        else:
-            ast_root, global_scope = result
-            module.__dict__.update(global_scope)
+    def get_builtins():
+        @singleton
+        class embox(object):
+            def __call__(self, *args, **kwargs):
+                print self, args, kwargs
+                return self
+            def __getattr__(self, attr):
+                return self
+        class module(object):
+            def __init__(self, *args, **kwargs):
+                super(module, self).__init__()
+                print self, args, kwargs
+            def __call__(self, *args, **kwargs):
+                print self, args, kwargs
+                return self
+        xxx = lambda: 42
+
+        return dict(locals(), **{
+                        'None':  lambda: None,
+                        'True':  lambda: True,
+                        'False': lambda: False,
+                    })
+
+    linker = Linker()
+    try:
+        pprint(load(linker, source, builtins=get_builtins()))
+        linker.link_global()
+
+    except MyfileError as e:
+        e.print_error()
+
+    except:
+        tb = sys.exc_info()[2]
+        traceback.print_exc()
+        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
+        frame = last_frame().tb_frame
+        ns = dict(frame.f_globals)
+        ns.update(frame.f_locals)
+        code.interact(local=ns)
 
 
