@@ -72,7 +72,7 @@ class ModuleType(type):
         return cls._factory_call(domain, instance_node)
 
     def _factory_call(cls, *args, **kwargs):
-        return super(ModuleType, _cls).__call__(*args, **kwargs)
+        return super(ModuleType, cls).__call__(*args, **kwargs)
 
     def __repr__(cls):
         try:
