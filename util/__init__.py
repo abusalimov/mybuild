@@ -2,7 +2,10 @@
 Misc stuff. --Eldar
 """
 
-import functools as _functools
+from functools import partial
+from operator import attrgetter
+from operator import itemgetter
+from operator import methodcaller
 
 from .collections import Mapping as _Mapping
 from .collections import namedtuple as _namedtuple
@@ -72,6 +75,33 @@ class intercepting_property(property):
             del obj.__dict__[self.name]
         except KeyError:
             raise AttributeError
+
+
+class GetterType(object):
+    """
+    getter.attr  -> attrgetter('attr')
+    getter[item] -> itemgetter(item)
+    """
+
+    def __getattr__(self, attr):
+        return attrgetter(attr)
+
+    def __getitem__(self, item):
+        return itemgetter(item)
+
+getter = GetterType()
+
+
+class InvokerType(object):
+    """
+    invoker.meth(*args, **kwargs) -> methodcaller('meth', *args, **kwargs)
+    """
+
+    def __getattr__(self, meth):
+        return partial(methodcaller, meth)
+
+invoker = InvokerType()
+
 
 class Pair(_namedtuple('_Pair', 'false true')):
     __slots__ = ()
