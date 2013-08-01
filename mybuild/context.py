@@ -17,7 +17,6 @@ from itertools import product
 from operator import attrgetter
 
 from .core import *
-from .instance import Instance
 from .instance import InstanceError
 from .instance import InstanceNode
 from .pgraph import *
@@ -32,9 +31,13 @@ import logs as log
 class Context(object):
     """docstring for Context"""
 
-    def __init__(self):
+    def __init__(self, instance_type=None):
         super(Context, self).__init__()
+        self.instance_type = instance_type
         self.modules = {}
+
+        self.ctxmodules = {}
+
         self._job_queue = deque()
         self._reent_locked = False
 
@@ -76,6 +79,23 @@ class Context(object):
 
         return domain
 
+    def ctxmodule_for(self, module):
+        try:
+            ctxmodule = self.ctxmodules[module]
+
+        except KeyError:
+            # Mix context specific instance_type into a module class.
+            type_dict = dict(__module__ = module.__module__,
+                             __doc__    = module.__doc__,
+                             _context   = self)
+            base_type = self.instance_type
+            bases = (base_type, module) if base_type is not None else (module,)
+
+            ctxmodule = self.ctxmodules[module] = type(module.__name__,
+                                                       bases, type_dict)
+
+        return ctxmodule
+
     def create_pgraph(self):
         g = ContextPgraph()
 
@@ -102,7 +122,7 @@ class ContextPgraph(Pgraph):
         return self.new_node(And, *self._mslice_to_conjunction(mslice))
 
     def _mslice_to_conjunction(self, mslice):
-        mslice = mslice._to_optuple()
+        mslice = mslice()
         module = mslice._module
 
         option_atoms = [self.atom_for(module, option, value)
@@ -152,12 +172,18 @@ class DomainBase(object):
         self.context = context
 
 
-class ModuleDomain(DomainBase):
+class DomainWithModule(DomainBase):
+
+    @property
+    def ctxmodule(self):
+        return self.context.ctxmodule_for(self.module)
+
+
+class ModuleDomain(DomainWithModule):
     """docstring for ModuleDomain"""
 
     def __init__(self, context, module):
         super(ModuleDomain, self).__init__(context)
-
         self.module = module
 
         self._instances = []
@@ -244,10 +270,9 @@ class OptionDomain(NotifyingSet):
                               for value in self))
 
 
-class InstanceDomain(DomainBase):
+class InstanceDomain(DomainWithModule):
 
-    module     = property(attrgetter('optuple._module'))
-    _init_func = property(attrgetter('module._init_func'))
+    module = property(attrgetter('optuple._module'))
 
     def __init__(self, context, optuple):
         super(InstanceDomain, self).__init__(context)
@@ -260,19 +285,23 @@ class InstanceDomain(DomainBase):
         self.post_new(root_node)
 
     def post_new(self, node):
-        instance = Instance(self, node)
 
-        def init_instance():
-            with log.debug("mybuild: new %s", instance):
+        def create_instance():
+            inst_str = str(self.optuple)
+            node_str = str(node)
+            if node_str:
+                inst_str = '%s <%s>' % (inst_str, node_str)
+
+            with log.debug("mybuild: new %s", inst_str):
                 try:
-                    self._init_func(instance, *self.optuple)
+                    instance = self.ctxmodule._instantiate(self, node)
                 except InstanceError as e:
-                    log.debug("mybuild: unviable %s: %s", instance, e)
+                    log.debug("mybuild: unviable %s: %s", inst_str, e)
                 else:
-                    log.debug("mybuild: succeeded %s", instance)
+                    log.debug("mybuild: succeeded %s", inst_str)
                     self._instances.append(instance)
 
-        self.context.post(init_instance)
+        self.context.post(create_instance)
 
     def init_pgraph(self, g):
         atoms = [InstanceAtom(g, instance) for instance in self._instances]
@@ -297,7 +326,7 @@ class InstanceAtom(Atom):
 
 
 if __name__ == '__main__':
-    from mybuild import module, option
+    from mybuild.dsl.pyfile import module, option
     from solver import solve
 
     log.zones = ['mybuild', 'dtree']

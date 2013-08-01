@@ -91,7 +91,6 @@ class GetterType(object):
 
 getter = GetterType()
 
-
 class InvokerType(object):
     """
     invoker.meth(*args, **kwargs) -> methodcaller('meth', *args, **kwargs)
@@ -101,6 +100,54 @@ class InvokerType(object):
         return partial(methodcaller, meth)
 
 invoker = InvokerType()
+
+
+def constructor_decorator(cls, **kwargs):
+    """
+    Lets using a decorated class as a function decorator, which converts the
+    function into a constructor.
+
+    Note: this function returns a fake class which is replaced by the original
+    one upon subclassing, thus it doesn't appear in MRO of subclasses. This
+    means that the class returned must not be used in super().
+
+    Keyword arguments are used to alter attributes of the returned class.
+    """
+
+    # For 'cls' itself we define a fake metaclass, which overrides a default
+    # __call__ method to accept function objects. On the other hand, it is only
+    # used to instantiate the returned class; when subclassing it the metaclass
+    # replaces itself with the original one and replaces the returned class
+    # with 'cls' with the original __call__ method.
+    #
+    # This magic is similar to the one used in util.compat.with_metaclass
+    # function.
+    mcls = type(cls)
+
+    class metaclass(mcls):
+        __init__ = type.__init__
+        def __new__(xmcls, name, this_bases, attrs):
+            if this_bases is None:
+                return type.__new__(xmcls, name, (cls,), attrs)
+            bases = tuple(base if base is not ret_cls else cls
+                          for base in this_bases)
+            return mcls(name, bases, attrs)
+
+        def __call__(xcls, func):
+            # For unknown reasons __doc__ attribute of type objects is
+            # read-only, and update_wrapper is unable to set it. The same is
+            # about __dict__  attribute which becomes a dictproxy upon class
+            # definition, not a dict.
+            #
+            # So instead we create a new type manually.
+            type_dict = dict(func.__dict__,
+                             __init__   = func,
+                             __module__ = func.__module__,
+                             __doc__    = func.__doc__)
+            return mcls(func.__name__, (cls,), type_dict)
+
+    ret_cls = metaclass(cls.__name__, None, dict(cls.__dict__, **kwargs))
+    return ret_cls
 
 
 class Pair(_namedtuple('_Pair', 'false true')):

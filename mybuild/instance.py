@@ -10,7 +10,6 @@ from collections import defaultdict
 from itertools import chain
 from operator import attrgetter
 
-# do not import context due to bootstrapping issues
 from .core import MybuildError
 from .pgraph import *
 from util import bools
@@ -137,116 +136,6 @@ class InstanceNode(InstanceNodeBase):
                     (module, '.' + option if option else '', value)
                 for (module, option), value in iteritems(self._decisions))
 
-class Instance(object):
-
-    class _InstanceProxy(object):
-        __slots__ = '_owner', '_optuple'
-
-        def __init__(self, owner, optuple):
-            super(Instance._InstanceProxy, self).__init__()
-            self._owner = owner
-            self._optuple = optuple
-
-        def __nonzero__(self):
-            return self._owner._decide(self._optuple)
-
-        def __getattr__(self, attr):
-            return self._owner._decide_option(self._optuple, attr)
-
-    _context = property(attrgetter('_domain.context'))
-    _optuple = property(attrgetter('_domain.optuple'))
-    _spawn   = property(attrgetter('_domain.post_new'))
-    module   = property(attrgetter('_domain.module'))
-
-    def __init__(self, domain, node):
-        super(Instance, self).__init__()
-        self._domain = domain
-        self._node = node
-
-    def consider(self, mslice):
-        optuple = mslice._to_optuple()
-        module = optuple._module
-
-        consider = self._context.consider
-
-        consider(module)
-        for option, value in optuple._iterpairs():
-            consider(module, option, value)
-
-    def constrain(self, expr):
-        self.consider(expr)
-        self._node.add_constraint(expr)
-
-    def provides(self, expr):
-        self.consider(expr)
-        self._node.add_provided(expr)
-
-    def _decide(self, expr):
-        self.consider(expr)
-        return self._make_decision(expr)
-
-    def _decide_option(self, mslice, option):
-        module = mslice._module
-
-        def domain_gen(node):
-            # This is made through a generator so that in case of replaying
-            # everything below (check, subscribing, etc.) is skipped.
-
-            if not hasattr(mslice, option):
-                raise AttributeError("'%s' module has no attribute '%s'" %
-                                     (module._name, option))
-
-            # Option without the module itself is meaningless.
-            self.constrain(mslice)
-
-            def on_domain_extend(new_value):
-                # NB: using 'node', not 'self._node'
-                _, child_node = node.extend_decisions(module, option,
-                                                      new_value)
-                self._spawn(child_node)
-
-            option_domain = self._context.domain_for(module, option)
-            option_domain.subscribe(on_domain_extend)
-
-            for value in option_domain:
-                yield value
-
-        # The 'node' is bound here (the argument of 'domain_gen') because
-        # '_make_decision' overwrites 'self._node' with its child.
-        return self._make_decision(module, option, domain_gen(self._node))
-
-    def _make_decision(self, module_expr, option=None, domain=(True, False)):
-        """
-        Returns: a value taken.
-        """
-        decisions = iter(self._node.make_decisions(module_expr,
-                                                   option, domain))
-
-        try:
-            # Retrieve the first one (if any) to return it.
-            ret_value, self._node = next(decisions)
-
-        except StopIteration:
-            raise InstanceError('No viable choice to take')
-
-        # Spawn for the rest ones.
-        for _, node in decisions:
-            self._spawn(node)
-
-        return ret_value
-
-    def __repr__(self):
-        optuple = self._optuple
-        node_str = str(self._node)
-        return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
-
-    def build(self, bld):
-        src = getattr(self, 'sources', [])
-        bld(features='mylink', source=src, target='test')
-        print('+++++++++ add task ++++')
-        print('module = ' + str(self))
-        print('sources = ' + str(src))
-        print('+++++++++++++++++++++++')
 
 try:
     from waflib.Task import Task

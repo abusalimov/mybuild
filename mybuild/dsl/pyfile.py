@@ -10,13 +10,17 @@ __all__ = ['module', 'option']
 
 import functools
 import inspect
+import threading
+from operator import attrgetter
 
 from . import with_defaults
+from ..core import ModuleType
 from ..core import Module
 from ..core import Option
 
 from nsloader import pyfile
 
+from util import constructor_decorator
 from util.compat import *
 
 
@@ -34,36 +38,25 @@ class MybuildPyFileLoader(pyfile.PyFileLoader):
                 with_defaults(initials, PYFILE_DEFAULTS, globals()))
 
 
-class PyFileModule(Module):
+class PyFileModuleType(ModuleType):
+    """
+    Infers options from class constructor and replaces it with empty stub.
+    To cancel such behavior in intermediate classes, provide a keyword argument
+    intermediate=True.
+    """
 
-    def __init__(self, instance_type):
-        if not inspect.isclass(instance_type):
-            raise TypeError("Expected a class, got '%s' object instead" %
-                            type(instance_type).__name__)
+    def __init__(cls, name, bases, attrs, intermediate=False):
+        super(PyFileModuleType, cls).__init__(name, bases, attrs,
+                options=cls._init_to_options() if not intermediate else None)
 
-        super(PyFileModule, self).__init__(instance_type,
-                self._ctor_to_options(instance_type))
-
-    @classmethod
-    def _from_func(cls, func):
-        # For unknown reasons __doc__ attribute of type objects is read-only,
-        # and update_wrapper is unable to set it. The same is about __dict__
-        # attribute which becomes a dictproxy upon class definition,
-        # not a dict.
-        #
-        # So instead we create a new type manually.
-
-        type_dict = dict(func.__dict__,
-                         __init__   = func,
-                         __module__ = func.__module__,
-                         __doc__    = func.__doc__)
-        return cls(type(func.__name__, (object,), type_dict))
-
-    @classmethod
-    def _ctor_to_options(cls, instance_type):
+    def _init_to_options(cls):
         """Converts a constructor argspec into a list of Option objects."""
 
-        func = instance_type.__init__
+        try:
+            func = cls.__dict__['__init__']  # to avoid MRO lookup
+        except KeyError:
+            return []
+
         if isinstance(func, type(object.__init__)):
             # wrapper descriptor, give up
             return []
@@ -98,8 +91,135 @@ class PyFileModule(Module):
         return [option.set(name=name)
                 for option, name in zip(head + tail, option_args)]
 
+    _tls = threading.local()
+    _tls.instance = None
 
-def module(func_or_class):
+    def _factory_call(cls, domain, instance_node):
+        tls = cls._tls
+        if tls.instance is not None:
+            raise TypeError('Module instantiation is not reentrant')
+
+        tls.instance = self = cls.__new__(cls)
+        try:
+            self._instance_init(domain, instance_node)
+        finally:
+            tls.instance = None
+        return self
+
+
+class PyFileModule(with_metaclass(PyFileModuleType, intermediate=True), Module):
+
+    _context = property(attrgetter('_domain.context'))
+    _optuple = property(attrgetter('_domain.optuple'))
+    _spawn   = property(attrgetter('_domain.post_new'))
+
+    def _instance_init(self, domain, node):
+        self._domain = domain
+        self._node = node
+
+        self.__init__(**self._optuple._asdict())
+
+    def consider(self, mslice):
+        optuple = mslice()
+        module = optuple._module
+
+        consider = self._context.consider
+
+        consider(module)
+        for option, value in optuple._iterpairs():
+            consider(module, option, value)
+
+    def constrain(self, expr):
+        self.consider(expr)
+        self._node.add_constraint(expr)
+
+    def provides(self, expr):
+        self.consider(expr)
+        self._node.add_provided(expr)
+
+    def _decide(self, expr):
+        self.consider(expr)
+        return self._make_decision(expr)
+
+    def _decide_option(self, mslice, option):
+        module = mslice._module
+
+        def domain_gen(node):
+            # This is made through a generator so that in case of replaying
+            # everything below (check, subscribing, etc.) is skipped.
+
+            if not hasattr(mslice, option):
+                raise AttributeError("'%s' module has no attribute '%s'" %
+                                     (module._name, option))
+
+            # Option without the module itself is meaningless.
+            self.constrain(mslice)
+
+            def on_domain_extend(new_value):
+                # NB: using 'node', not 'self._node'
+                _, child_node = node.extend_decisions(module, option,
+                                                      new_value)
+                self._spawn(child_node)
+
+            option_domain = self._context.domain_for(module, option)
+            option_domain.subscribe(on_domain_extend)
+
+            for value in option_domain:
+                yield value
+
+        # The 'node' is bound here (the argument of 'domain_gen') because
+        # '_make_decision' overwrites 'self._node' with its child.
+        return self._make_decision(module, option, domain_gen(self._node))
+
+    def _make_decision(self, module_expr, option=None, domain=(True, False)):
+        """
+        Returns: a value taken.
+        """
+        decisions = iter(self._node.make_decisions(module_expr,
+                                                   option, domain))
+
+        try:
+            # Retrieve the first one (if any) to return it.
+            ret_value, self._node = next(decisions)
+
+        except StopIteration:
+            raise InstanceError('No viable choice to take')
+
+        # Spawn for the rest ones.
+        for _, node in decisions:
+            self._spawn(node)
+
+        return ret_value
+
+    def __repr__(self):
+        optuple = self._optuple
+        node_str = str(self._node)
+        return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
+
+    def build(self, bld):
+        src = getattr(self, 'sources', [])
+        bld(features='mylink', source=src, target='test')
+        print('+++++++++ add task ++++')
+        print('module = ' + str(self))
+        print('sources = ' + str(src))
+        print('+++++++++++++++++++++++')
+
+
+class ModuleInspector(object):
+
+    def __init__(self, owner, optuple):
+        super(PyFileModule._InstanceProxy, self).__init__()
+        self._owner = owner
+        self._optuple = optuple
+
+    def __nonzero__(self):
+        return self._owner._decide(self._optuple)
+
+    def __getattr__(self, attr):
+        return self._owner._decide_option(self._optuple, attr)
+
+
+module = constructor_decorator(PyFileModule, __doc__=
     """
     Example of a simple module without any options:
 
@@ -117,16 +237,13 @@ def module(func_or_class):
     ...         ):
     ...     pass
 
-    """
-    if inspect.isfunction(func_or_class):
-        ret = PyFileModule._from_func(func_or_class)
-    else:
-        ret = PyFileModule(func_or_class)
-    return functools.update_wrapper(ret, func_or_class)
+    >>> class modclass(module):
+    ...     def __init__(self, opt = option.bool()):
+    ...         pass
 
+    """)
 
 option = Option
-
 
 if __name__ == '__main__':
     import doctest
