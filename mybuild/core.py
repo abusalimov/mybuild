@@ -8,6 +8,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-09-15"
 
 __all__ = [
+    "ModuleType",
     "Module",
     "Option",
     "Optuple",
@@ -29,16 +30,17 @@ from util.compat import *
 
 
 class ModuleType(type):
-    """Metaclass of Mybuild modules.
-
-    Subclasses must provide an options argument with, otherwise a class is
-    considered intermediate and behaves as a regular Python metaclass.
-    """
+    """Metaclass of Mybuild modules."""
 
     def __new__(mcls, name, bases, attrs, **kwargs):
+        """Suppresses any keyword arguments."""
         return super(ModuleType, mcls).__new__(mcls, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs, options=None):
+        """
+        Subclasses must provide an 'options' argument, otherwise a class is
+        considered intermediate and behaves as a regular Python metaclass.
+        """
         super(ModuleType, cls).__init__(name, bases, attrs)
 
         cls._fullname = cls._name = cls.__name__
