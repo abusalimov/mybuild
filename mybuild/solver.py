@@ -111,11 +111,15 @@ class TrunkSolution(Solution):
         self.branchmap = dict()  # maps gen literals to branches
         self.neglefts = dict()   # neglasts to sets of left literals
 
+        self.violation_branches = set()
+
     def copy(self):
         new = super(TrunkSolution, self).copy()
 
         new.branchmap   = self.branchmap.copy()
         new.neglefts    = self.neglefts.copy()
+
+        new.violation_branches = self.violation_branches.copy()
 
         return new
 
@@ -486,7 +490,7 @@ def prepare_branches(trunk, unresolved_nodes):
             stack_push(implied)
 
 
-def resolve_branches(trunk, branches, violation_branches):
+def resolve_branches(trunk, branches):
     resolved = BranchSolutionBase(trunk)
 
     for branch in branches:
@@ -499,7 +503,7 @@ def resolve_branches(trunk, branches, violation_branches):
             #TODO: it is just first version, we need remember violation way
             trunk.reasons.add(Reason(_why_violation, literal, ~literal))
             trunk.reasons.add(Reason(None, ~literal)) #violation
-            violation_branches.add(trunk.branchmap[~literal])
+            trunk.violation_branches.add(trunk.branchmap[~literal])
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
@@ -538,22 +542,21 @@ def get_trunk_solution(pgraph, initial_values):
     # for literal in trunk.literals:
     #     print 'trunk', literal
 
-    violation_branches = set()
     initial_trunk = trunk.copy()
     prepare_branches(trunk, nodes-trunk.nodes)
     resolve_branches(trunk, (~branch for branch in trunk.branchset()
-                             if not branch.valid), violation_branches)
+                             if not branch.valid))
     stepwise_resolve(trunk)
 
-    for branch in violation_branches:
+    for branch in trunk.violation_branches:
         branch.trunk = initial_trunk
-    return (trunk, violation_branches)
+    return trunk
 
 def solve(pgraph, initial_values):
     nodes = pgraph.nodes
-    trunk, violation_branches = get_trunk_solution(pgraph, initial_values)
+    trunk = get_trunk_solution(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk.literals, trunk.reasons, violation_branches)
+    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches)
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
 
