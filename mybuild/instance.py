@@ -32,14 +32,16 @@ class InstanceNodeBase(object):
         return self._childmap[key][value]
 
     def _create_children(self, key, *values):
-        vmap = self._childmap[key]
+        value_map = self._childmap[key]
 
+        children = []
         for value in values:
-            if value in vmap:
+            if value in value_map:
                 raise ValueError
-            vmap[value] = self._new_child(key, value)
+            value_map[value] = child = self._new_child(key, value)
+            children.append((value, child))
 
-        return (vmap[value] for value in values)
+        return children
 
     def _new_child(self, parent_key=None, parent_value=None):
         cls = type(self)
@@ -59,14 +61,14 @@ class InstanceNode(InstanceNodeBase):
         self._decisions = {}
 
     def _new_child(self, parent_key=None, parent_value=None):
-        new = super(InstanceNode, self)._new_child(parent_key, parent_value)
+        child = super(InstanceNode, self)._new_child(parent_key, parent_value)
 
-        new._decisions.update(self._decisions)
+        child._decisions.update(self._decisions)
 
-        assert parent_key not in new._decisions
-        new._decisions[parent_key] = parent_value
+        assert parent_key not in child._decisions
+        child._decisions[parent_key] = parent_value
 
-        return new
+        return child
 
     def add_constraint(self, expr):
         self._constraints.append(expr)
@@ -76,34 +78,27 @@ class InstanceNode(InstanceNodeBase):
 
     def make_decisions(self, module_expr, option=None, values=bools):
         """
-        Either retrieves an already taken decision (in case of replaying),
-        or creates a new child for each value from 'values' iterable returning
-        list of the resulting pairs.
-
-        Returns: (value, node) pairs iterable.
+        Either retrieve an already taken decision (if any), or create a new
+        child for each value from 'values' iterable returning a list of the
+        resulting (value, node) pairs.
         """
         key = module_expr, option
-
         try:
             value = self._decisions[key]
-
         except KeyError:
-            values = tuple(values)
-            return zip(values, self._create_children(key, *values))
-
+            return self._create_children(key, *values)
         else:
             return [(value, self)]
 
     def extend_decisions(self, module, option, value):
         key = module, option
         child, = self._create_children(key, value)
-        return value, child
+        return child
 
     def _cond_pnode(self, g, module_expr, option, value):
         if option is not None:
             # module_expr is definitely a plain module here
             pnode = g.atom_for(module_expr, option, value)
-
         else:
             # here value is bool
             pnode = g.pnode_for(module_expr)
@@ -114,8 +109,8 @@ class InstanceNode(InstanceNodeBase):
 
     def create_pnode(self, g):
         def iter_conjuncts():
-            for (module_expr, option), vmap in iteritems(self._childmap):
-                for value, child in iteritems(vmap):
+            for (module_expr, option), value_map in iteritems(self._childmap):
+                for value, child in iteritems(value_map):
 
                     yield Implies(g,
                         self._cond_pnode(g, module_expr, option, value),
@@ -136,29 +131,6 @@ class InstanceNode(InstanceNodeBase):
                     (module, '.' + option if option else '', value)
                 for (module, option), value in iteritems(self._decisions))
 
-
-try:
-    from waflib.Task import Task
-    from waflib.TaskGen import feature, extension, after_method
-    from waflib.Tools import ccroot
-
-    @after_method('process_source')
-    @feature('mylink')
-    def call_apply_link(self):
-        print('linking' + str(self))
-
-    class mylink(ccroot.link_task):
-        run_str = 'cat ${SRC} > ${TGT}'
-
-    class ext2o(Task):
-        run_str = 'cp ${SRC} ${TGT}'
-
-    @extension('.c')
-    def process_ext(self, node):
-        self.create_compiled_task('ext2o', node)
-
-except ImportError:
-    pass  # XXX move Waf-related stuff from here
 
 class InstanceError(MybuildError):
     """

@@ -40,9 +40,8 @@ class MybuildPyFileLoader(pyfile.PyFileLoader):
 
 class PyFileModuleType(ModuleType):
     """
-    Infers options from class constructor and replaces it with empty stub.
-    To cancel such behavior in intermediate classes, provide a keyword argument
-    intermediate=True.
+    Infers options from class constructor. To cancel such behavior, provide a
+    keyword argument intermediate=True.
     """
 
     def __init__(cls, name, bases, attrs, intermediate=False):
@@ -142,18 +141,19 @@ class PyFileModule(with_metaclass(PyFileModuleType, intermediate=True), Module):
         return self._make_decision(expr)
 
     def _decide_option(self, mslice, option):
-        module = mslice._module
+        optuple = mslice()
+        module = optuple._module
 
         def domain_gen(node):
             # This is made through a generator so that in case of replaying
             # everything below (check, subscribing, etc.) is skipped.
 
-            if not hasattr(mslice, option):
+            if not hasattr(optuple, option):
                 raise AttributeError("'%s' module has no attribute '%s'" %
                                      (module._name, option))
 
             # Option without the module itself is meaningless.
-            self.constrain(mslice)
+            self.constrain(optuple)
 
             def on_domain_extend(new_value):
                 # NB: using 'node', not 'self._node'
@@ -204,6 +204,29 @@ class PyFileModule(with_metaclass(PyFileModuleType, intermediate=True), Module):
         print('sources = ' + str(src))
         print('+++++++++++++++++++++++')
 
+
+try:
+    from waflib.Task import Task
+    from waflib.TaskGen import feature, extension, after_method
+    from waflib.Tools import ccroot
+
+    @after_method('process_source')
+    @feature('mylink')
+    def call_apply_link(self):
+        print('linking' + str(self))
+
+    class mylink(ccroot.link_task):
+        run_str = 'cat ${SRC} > ${TGT}'
+
+    class ext2o(Task):
+        run_str = 'cp ${SRC} ${TGT}'
+
+    @extension('.c')
+    def process_ext(self, node):
+        self.create_compiled_task('ext2o', node)
+
+except ImportError:
+    pass  # XXX move Waf-related stuff from here
 
 class ModuleInspector(object):
 
