@@ -35,6 +35,13 @@ class MybuildMyFileLoader(myfile.MyFileLoader):
                 with_defaults(initials, MYFILE_DEFAULTS, globals()))
 
 
+class MyFileInstance(object):
+    """docstring for MyFileInstance"""
+
+    def __init__(self, **options):
+        super(MyFileInstance, self).__init__()
+
+
 class MyFileModule(Module):
 
     class Proxy(MyfileObjectProxy):
@@ -48,7 +55,7 @@ class MyFileModule(Module):
             type_dict = dict(__module__ = self.stub.linker.module,
                              __doc__    = self.stub.docstring)
             type_name = self.stub.name or '<noname>'
-            return self.cls(type(type_name, (object,), type_dict),
+            return self.cls(type(type_name, (MyFileInstance,), type_dict),
                             self.cls._args_kwargs_to_options(args, kwargs))
 
     @classmethod

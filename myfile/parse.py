@@ -251,7 +251,8 @@ def parse(file_linker, source, filename=None, builtins={}, **kwargs):
         file_linker.scopes.append(global_scope)
         file_linker.link_local()
 
-        return dict(global_scope)
+        return dict((name, stub.resolved_object)
+                    for name, stub in iteritems(global_scope))
 
     finally:
         parser = p
