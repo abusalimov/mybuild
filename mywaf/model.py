@@ -39,8 +39,21 @@ def create_model(bld):
     try:
         prj = bld.my_load('prj', ['src', bld.env.TEMPLATE], loaders_init)
 
+        ################################
+        conf = prj.conf.conf
+
+        context = Context()
+        context.consider(conf)
+
+        g = context.create_pgraph()
+
+        solution = solve(g, {g.atom_for(conf):True})
+
+        true_g = build_true_graph(bld, solution)
+
+
     except:
-        raise
+#        raise
 
         import sys, traceback, code
         tb = sys.exc_info()[2]
@@ -53,18 +66,5 @@ def create_model(bld):
 
 
     print '>>>>>>>>', prj.hello.yaml_module
-
-    ################################
-    conf = prj.conf.conf
-
-    context = Context()
-    context.consider(conf)
-
-    g = context.create_pgraph()
-
-    solution = solve(g, {g.atom_for(conf):True})
-
-    true_g = build_true_graph(bld, solution)
-
 
 
