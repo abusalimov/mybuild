@@ -246,6 +246,7 @@ def parse(file_linker, source, filename=None, builtins={}, **kwargs):
 
         p.linker = file_linker
 
+        lex.lexer.lineno = 1
         p.parse(source, lexer=lex.lexer, **kwargs)
 
         file_linker.scopes.append(global_scope)
