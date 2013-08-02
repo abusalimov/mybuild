@@ -8,6 +8,19 @@ __date__ = "2013-07-05"
 
 import ply.lex
 
+from .errors import IllegalCharacter
+from .location import Location
+
+
+def loc(t):
+    try:
+        fileinfo = t.lexer.fileinfo
+    except AttributeError:
+        pass
+    else:
+        return Location(fileinfo, t.lineno, t.lexpos)
+
+
 # Derived from ANSI C example.
 
 tokens = (
@@ -62,8 +75,8 @@ def t_comment(t):
     t.lexer.lineno += t.value.count('\n')
 
 def t_error(t):
-    print("Illegal character %s" % repr(t.value[0]))
-    t.lexer.skip(1)
+    raise IllegalCharacter(t.value[0], loc(t))
+
 
 lexer = ply.lex.lex(optimize=1, lextab=None)
 

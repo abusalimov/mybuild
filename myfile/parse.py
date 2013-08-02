@@ -11,6 +11,8 @@ import operator
 import ply.yacc
 
 from . import lex
+from .errors import UnexpectedToken
+from .errors import UnexpectedEOF
 from .linkage import BuiltinScope
 from .linkage import ObjectScope
 from .linkage import Stub
@@ -43,7 +45,7 @@ def pop_stub(p):  return p.parser.stub_stack.pop()
 # Location tracking.
 
 def loc(p, i):
-    return Location(p.parser.fileinfo, p.lineno(i), p.lexpos(i))
+    return Location(p.lexer.fileinfo, p.lineno(i), p.lexpos(i))
 
 def wloc(p, i):
     return p[i], loc(p, i)
@@ -208,7 +210,10 @@ def p_empty(p):
     pass
 
 def p_error(t):
-    print("FUUUUUUUUUUUUUUUUUUUUUUUUUUUUU", t)
+    if t is not None:
+        raise UnexpectedToken(t.value, lex.loc(t))
+    else:
+        raise UnexpectedEOF()
 
 
 parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
@@ -236,18 +241,18 @@ def parse(file_linker, source, filename=None, builtins={}, **kwargs):
 
     p = parser
     parser = None  # paranoia mode on
+
+    l = lex.lexer.clone()
+    l.fileinfo = Fileinfo(source, filename)
+
+    global_scope = ObjectScope(parent=BuiltinScope(builtins))
+
+    p.scope_stack = [global_scope]
+    p.stub_stack  = [None]
+
+    p.linker = file_linker
     try:
-        p.fileinfo = Fileinfo(source, filename)
-
-        global_scope = ObjectScope(parent=BuiltinScope(builtins))
-
-        p.scope_stack = [global_scope]
-        p.stub_stack  = [None]
-
-        p.linker = file_linker
-
-        lex.lexer.lineno = 1
-        p.parse(source, lexer=lex.lexer, **kwargs)
+        p.parse(source, lexer=l, **kwargs)
 
         file_linker.scopes.append(global_scope)
         file_linker.link_local()

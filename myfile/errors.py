@@ -26,8 +26,9 @@ class LinkageError(MyfileError):
 
 class SyntaxErrorWloc(MyfileError, SyntaxError):
 
-    def __init__(self, message, loc):
-        super(SyntaxErrorWloc, self).__init__(message, loc.syntax_error_tuple)
+    def __init__(self, message, loc=None):
+        args = (loc.syntax_error_tuple,) if loc is not None else ()
+        super(SyntaxErrorWloc, self).__init__(message, *args)
         self.loc = loc
 
 class Occurrence(SyntaxErrorWloc):
@@ -56,6 +57,26 @@ class CompoundError(MyfileError):
             raise errors[0]
         if len(errors) > 1:
             raise cls(errors)
+
+
+class IllegalCharacter(ParseError, SyntaxErrorWloc):
+
+    def __init__(self, char, loc):
+        super(IllegalCharacter, self).__init__(
+                "Illegal character %r" % char, loc)
+
+
+class UnexpectedToken(ParseError, SyntaxErrorWloc):
+
+    def __init__(self, token, loc):
+        super(UnexpectedToken, self).__init__(
+                "Unexpected %r token" % token, loc)
+
+
+class UnexpectedEOF(ParseError, SyntaxError):
+
+    def __init__(self):
+        super(UnexpectedEOF, self).__init__("Premature end of file")
 
 
 class ArgAfterKwargError(CompoundError, ParseError):
