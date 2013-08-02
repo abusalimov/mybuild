@@ -42,7 +42,7 @@ class MyFileLoader(SourceFileLoader):
             linker.link_global()
         except MyfileError as e:
             e.print_error()  # TODO bad idea
-            raise ImportError("Error(s) while linking all my-files")
+            raise e
 
     def __init__(self, loader_ctx, fullname, path):
         super(MyFileLoader, self).__init__(fullname, path)
@@ -67,7 +67,7 @@ class MyFileLoader(SourceFileLoader):
             raise ImportError("IO error while reading a stream")
         except MyfileError as e:
             e.print_error()  # TODO bad idea
-            raise ImportError("Error(s) while parsing/linking a my-file")
+            raise e
         else:
             module.__dict__.update(result)
 
