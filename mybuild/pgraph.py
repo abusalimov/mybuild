@@ -91,7 +91,7 @@ class Pgraph(with_metaclass(PgraphMeta)):
         node_types = self._node_types = {}
         for node_type in type(self)._iter_all_node_types():
             node_types[node_type] = type(node_type.__name__, (node_type,),
-                                         dict(_pgraph=self))
+                                         dict(pgraph=self))
 
         self._node_map = {}
 
@@ -157,7 +157,7 @@ class NodeBase(with_metaclass(NodeMeta)):
     @classmethod
     def _new(cls, *args, **kwargs):
         try:
-            cls._pgraph
+            cls.pgraph
         except AttributeError:
             raise TypeError("Don't instantiate this class directly, "
                             "use pgraph.new_node(%s, ...) instead" %
@@ -247,7 +247,7 @@ class Literal(object):
         if self is ~other:
             raise ValueError('Implication of self negation')
 
-        if self.node._pgraph is not other.node._pgraph:
+        if self.node.pgraph is not other.node.pgraph:
             raise ValueError('Must belong to the same Pgraph')
 
         self.__imply( self,   other,  why)
@@ -277,7 +277,7 @@ class Literal(object):
             raise ValueError('Implication of self negation')
 
         if not node_values:
-            self.node._pgraph.new_const(self.value, self.node, why)
+            self.node.pgraph.new_const(self.value, self.node, why)
 
         elif len(node_values) == 1:
             node, value = node_values.popitem()
@@ -287,7 +287,7 @@ class Literal(object):
             neglast = Neglast(~self, node_values, why)
 
             for literal in neglast.literals:
-                if self.node._pgraph is not literal.node._pgraph:
+                if self.node.pgraph is not literal.node.pgraph:
                     raise ValueError('Must belong to the same Pgraph')
                 literal.neglasts.add(neglast)
 
@@ -434,7 +434,7 @@ class ConstNode(AtomicNode):
         return repr(self.const_value).upper()
 
     def __invert__(self):
-        return self._pgraph.new_node(self.types[not self.const_value])
+        return self.pgraph.new_node(self.types[not self.const_value])
 
 
 @Pgraph.node_type
@@ -540,7 +540,7 @@ class LatticeOpNode(OperandSetNode):
 
     @classmethod
     def _new_no_operands(cls):
-        return cls._pgraph.new_const(cls.identity)
+        return cls.pgraph.new_const(cls.identity)
 
     @classmethod
     def _new_one_operand(cls, operand):
@@ -590,7 +590,7 @@ class Not(SingleOperandNode):
         if isinstance(operand, Not):
             return operand._operand
         elif isinstance(operand, ConstNode):
-            return cls._pgraph.new_const(not operand.const_value)
+            return cls.pgraph.new_const(not operand.const_value)
         else:
             return super(Not, cls)._new(operand)
 
@@ -626,13 +626,13 @@ class Implies(Node):
     def _new(cls, if_, then):
         # if (isinstance(if_, FalseConstNode) or
         #       isinstance(then, TrueConstNode)):
-        #     return cls._pgraph.new_const(True)
+        #     return cls.pgraph.new_const(True)
 
         # elif isinstance(if_, TrueConstNode):
         #     return then
 
         # elif isinstance(then, FalseConstNode):
-        #     return cls._pgraph.new_node(Not, if_)
+        #     return cls.pgraph.new_node(Not, if_)
 
         return super(Implies, cls)._new(if_, then)
 
@@ -695,18 +695,18 @@ class AllEqual(OperandSetNode):
 
         why_func = self.why_self_equals_all_operands
         for operand in operands:
-            self[False].equivalent(operand[False],
-                                   why_becauseof=why_func,
-                                   why_therefore=why_func)
+            self.equivalent(operand,
+                            why_becauseof=why_func,
+                            why_therefore=why_func)
 
     @classmethod
     def _new(cls, *operands):
         if 1 <= len(operands) <= 3:
             why_func = cls.why_self_equals_all_operands
             for one, two in combinations(operands, 2):
-                one[False].equivalent(two[False],
-                                      why_becauseof=why_func,
-                                      why_therefore=why_func)
+                one.equivalent(two,
+                               why_becauseof=why_func,
+                               why_therefore=why_func)
             return operands[0]
         else:
             return super(AllEqual, self)._new(*operands)
