@@ -45,7 +45,7 @@ class PdagDtreeTestCase(TestCase):
         atom, atom_with_cost = pgraph.NamedAtom, pgraph.NamedAtomWithCost
         return [atom_with_cost(name or '', cost) if cost is not None else
                 atom(name) for name, cost in izip_longest(names, costs)]
-
+         
     def test_00(self):
         g = self.pgraph
         A, = self.atoms(g, 'A')
@@ -277,6 +277,24 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
+    
+    @unittest.skip("Need make it work")    
+    def test_16(self):
+        g = self.pgraph
+        A,B,C = self.atoms(g, 'ABC')
+        nA,nB,nC = map(g.Not, (A,B,C))
+
+        #(A | X) & (~A | X) & (A | ~X), where X = (B | C) & (~B | C) & (B | ~C)
+        pnode = g.And(
+            g.Or( A, g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC))),
+            g.Or(nA, g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC))),
+            g.Or( A, g.Not(g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC)))),
+        )
+        solution = solve(g, {pnode:True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
 
 
 if __name__ == '__main__':
@@ -285,10 +303,12 @@ if __name__ == '__main__':
     log.zones = set([
                     'pgraph',
                     'dtree',
+                    'solver'
                     ])
     log.verbose = True
     log.init_log()
 
+    log.make_logger('solver.log', 'solver')
 
     unittest.main()
 
