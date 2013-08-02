@@ -144,12 +144,14 @@ class TrunkSolution(Solution):
 
 class BranchSolutionBase(Solution):
     """docstring for BranchSolutionBase"""
+    
+    def is_implied_by(self, other):
+        raise NotImplementedError('Not implemented in base class')
 
     def __init__(self, trunk):
         super(BranchSolutionBase, self).__init__()
 
         self.trunk        = trunk
-        self.gen_literals = set()  # literals
 
         self.todo         = set()  # literals
         self.negexcls     = defaultdict(set)  # {neglast: literals...}
@@ -158,7 +160,6 @@ class BranchSolutionBase(Solution):
         new = super(BranchSolutionBase, self).copy()
 
         new.trunk         = self.trunk
-        new.gen_literals = set()  # this is not copied
 
         new.todo = self.todo.copy()
         negexcls = new.negexcls = defaultdict(set)
@@ -167,26 +168,13 @@ class BranchSolutionBase(Solution):
 
         return new
 
-    def __invert__(self):
-        try:
-            any_gen = next(iter(self.gen_literals))
-            inv_branch = self.trunk.branchmap[~any_gen]
-        except (StopIteration, KeyError):
-            assert False, 'should not happen'
-        else:
-            assert (not self.valid or not inv_branch.valid or
-                    self.gen_literals == set(map(operator.__invert__,
-                                                 inv_branch.gen_literals)))
-
-        return inv_branch
-
     def __ior__(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both branches must belong to the same trunk')
         if other.todo:
             raise NotImplementedError('Other is not ready')
 
-        if self.literals >= other.gen_literals:
+        if self.is_implied_by(other):
             assert self.nodes    >= other.nodes
             assert self.literals >= other.literals
             assert self.reasons  >= other.reasons
@@ -222,16 +210,7 @@ class BranchSolutionBase(Solution):
             self.handle_todos()
 
     def substitute_with(self, other):
-        """
-        Upon replacement, this branch is disposed and must not be used anymore.
-        """
-        other.gen_literals |= self.gen_literals
-
-        # Fixup any references to this one.
-        for gen_literal in self.gen_literals:
-            self.trunk.branchmap[gen_literal] = other
-
-        self.dispose()  # make gc happy
+        raise NotImplementedError('Not implemented in base class')
 
     def clear(self):
         self.todo     .clear()
@@ -288,17 +267,11 @@ class BranchSolutionBase(Solution):
         completely initialized.
         """
         for literal, implied in self.iter_todo_away():
-            if self.gen_literals <= implied.literals:
+            if self.is_implied_by(implied):
                 self.substitute_with(implied)
                 break
 
             self.update(implied)
-
-    def __repr__(self):
-        return '<%s %s>' % (type(self).__name__,
-                            ' & '.join(repr(literal).join('()')
-                                       for literal in self.gen_literals))
-
 
 class BranchSolution(BranchSolutionBase):
     """docstring for BranchSolution"""
@@ -310,9 +283,13 @@ class BranchSolution(BranchSolutionBase):
     @property
     def initialized(self):
         return not self.todo
+    
+    def is_implied_by(self, other):
+        return self.gen_literals <= other.literals
 
     def __init__(self, trunk, gen_literal):
         super(BranchSolution, self).__init__(trunk)
+        self.gen_literals = set()
 
         self.error = None
         self.gen_literals.add(gen_literal)
@@ -322,11 +299,46 @@ class BranchSolution(BranchSolutionBase):
         self.reasons |= gen_literal.imply_reasons
         self.todo    |= gen_literal.implies
 
+    def __invert__(self):
+        try:
+            any_gen = next(iter(self.gen_literals))
+            inv_branch = self.trunk.branchmap[~any_gen]
+        except (StopIteration, KeyError):
+            assert False, 'should not happen'
+        else:
+            assert (not self.valid or not inv_branch.valid or
+                    self.gen_literals == set(map(operator.__invert__,
+                                                 inv_branch.gen_literals)))
+
+        return inv_branch
+    
     def copy(self):
         new = super(BranchSolution, self).copy()
+        
+        new.gen_literals = set()  # this is not copied
         new.error = None
         return new
+    
+    def substitute_with(self, other):
+        """
+        Upon replacement, this branch is disposed and must not be used anymore.
+        """
+        other.gen_literals |= self.gen_literals
 
+        # Fixup any references to this one.
+        for gen_literal in self.gen_literals:
+            self.trunk.branchmap[gen_literal] = other
+
+        self.dispose()  # make gc happy
+        
+    def __repr__(self):
+        return '<%s %s>' % (type(self).__name__,
+                            ' & '.join(repr(literal).join('()')
+                                       for literal in self.gen_literals))
+    
+class ResolvedBranchSolution(BranchSolutionBase):
+    def is_implied_by(self, other):
+        return False
 
 def create_trunk(pgraph, initial_literals=[]):
     logger.debug('Start trunk creating')
@@ -511,7 +523,7 @@ def prepare_branches(trunk, unresolved_nodes):
 
 def resolve_branches(trunk, branches):
     logger.debug('Branch resolving started')
-    resolved = BranchSolutionBase(trunk)
+    resolved = ResolvedBranchSolution(trunk)
 
     for branch in branches:
         resolved.update(branch, handle_todos=True)
@@ -528,7 +540,7 @@ def resolve_branches(trunk, branches):
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
-        next_resolved = BranchSolutionBase(trunk)
+        next_resolved = ResolvedBranchSolution(trunk)
 
         logger.debug('Unresolved branches updating')
         for branch in trunk.branchset():
