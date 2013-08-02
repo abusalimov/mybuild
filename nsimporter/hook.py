@@ -167,9 +167,9 @@ class NamespaceImportHook(MetaPathFinder):
             if not nsmap and self in sys.meta_path:
                 sys.meta_path.remove(self)
 
-            for loader_type, loader_ctx in itervalues(ctx.loaders):
-                if hasattr(loader_type, 'exit_ctx'):
-                    loader_type.exit_ctx(loader_ctx)
+        for loader_type, loader_ctx in itervalues(ctx.loaders):
+            if hasattr(loader_type, 'exit_ctx'):
+                loader_type.exit_ctx(loader_ctx)
 
     def find_module(self, fullname, path=None):
         """
