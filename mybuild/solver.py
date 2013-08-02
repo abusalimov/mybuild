@@ -24,6 +24,9 @@ from util.compat import *
 
 from .rgraph import *
 
+import logging
+
+logger = logging.getLogger('solver')
 
 class Solution(object):
     """
@@ -326,6 +329,7 @@ class BranchSolution(BranchSolutionBase):
 
 
 def create_trunk(pgraph, initial_literals=[]):
+    logger.debug('Start trunk creating')
     trunk = TrunkSolution()
 
     nodes    = trunk.nodes
@@ -341,6 +345,7 @@ def create_trunk(pgraph, initial_literals=[]):
                 negleft = neglefts[neglast] = set(neglast.literals)
 
                 if len(negleft) <= 1:  # will not happen, generally speaking
+                    logger.warning('len(negleft) <= 1')
                     neglasts_todo.append(neglast)
 
     # During the loop below we admit possible violation of the main context
@@ -394,19 +399,29 @@ def create_trunk(pgraph, initial_literals=[]):
         todo     |= newly_seen
 
     if not trunk.valid:
+        logger.info('Trunk creation failed, there is violation. Violation nodes:')
+        violations = trunk.nodes
+        for literal in literals:
+            try:
+                violations.remove(literal.node)
+            except KeyError:               
+                logger.info('\t%s, %s', literal, ~literal)
         raise SolutionError(trunk)
 
+    logger.debug('Trunk created, no violation found') 
     return trunk
 
 
 def prepare_branches(trunk, unresolved_nodes):
     """
     Non-recursive DFS.
-    """
+    """    
+    logger.debug('Preparing brunches for unresolved nodes: %s', unresolved_nodes)
     for node in unresolved_nodes:
         for literal in node:
             branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
             branch.todo_it = None
+    logger.debug('Branches for each literal in node are created')
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
 
@@ -429,6 +444,7 @@ def prepare_branches(trunk, unresolved_nodes):
             stack_push(todo_branches.pop())
 
         branch = stack[-1]
+        logger.debug(' .' * len(stack) + 'branch %r for: %s', (id(stack[-1]) % 37), sorted(branch.gen_literals))
         # print ' .' * len(stack), 'branch %r for:' % \
         #   (id(stack[-1]) % 37), sorted(branch.gen_literals)
 
@@ -437,6 +453,7 @@ def prepare_branches(trunk, unresolved_nodes):
             # intermediate state. Manual iteration also makes it possible to
             # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
+            logger.debug(' ' * 60 + '%s -> %s \t %s', id(branch) % 37 , id(implied) % 37, literal)
             # print ' ' * 60, id(branch) % 37, '->', id(implied) % 37, \
             #  '\t', literal
 
@@ -458,6 +475,7 @@ def prepare_branches(trunk, unresolved_nodes):
                 raise StopIteration  # forget about this branch
 
         except SolutionError as error:
+            logger.debug(' .' * len(stack) + 'branch %r dies', (id(branch) % 37))
             # print ' .' * len(stack), 'branch %r dies' % (id(branch) % 37)
             # unwind implication stack
             for implicant in pop_iter(stack, pop=stack_pop):
@@ -465,6 +483,7 @@ def prepare_branches(trunk, unresolved_nodes):
                 error = SolutionError(implicant, error)
 
         except StopIteration:
+            logger.debug(' .' * len(stack) + 'branch %r done', (id(branch) % 37))
             # print ' .' * len(stack), 'branch %r done' % (id(branch) % 37)
             # no more implications, or the branch was merged into an equivalent
             stack_pop()
@@ -491,11 +510,13 @@ def prepare_branches(trunk, unresolved_nodes):
 
 
 def resolve_branches(trunk, branches):
+    logger.debug('Branch resolving started')
     resolved = BranchSolutionBase(trunk)
 
     for branch in branches:
-        resolved.update(branch)
-
+        resolved.update(branch, handle_todos=True)
+    logger.debug('Resolved created')
+    
     while resolved:
         trunk.update(resolved)
 
@@ -509,6 +530,7 @@ def resolve_branches(trunk, branches):
 
         next_resolved = BranchSolutionBase(trunk)
 
+        logger.debug('Unresolved branches updating')
         for branch in trunk.branchset():
             assert branch.valid, 'only valid branches must have left'
 
@@ -516,9 +538,11 @@ def resolve_branches(trunk, branches):
                 branch.difference_update(resolved, handle_todos=True)
 
             except SolutionError:
-                next_resolved.update(~branch)  # may raise as well
+                next_resolved.update(~branch, handle_todos=True)  # may raise as well
+        logger.debug('Unresolved branches updated')
 
         resolved = next_resolved
+    logger.debug('Branch resolving completed')
 
 # TODO remove to other place after all types why function realization
 def _why_violation(cls, literal, *cause_literals):
@@ -538,7 +562,7 @@ def stepwise_resolve(trunk):
 def get_trunk_solution(pgraph, initial_values):
     nodes = pgraph.nodes
 
-    trunk = create_trunk(pgraph, initial_values)
+    trunk = create_trunk(pgraph, initial_values) 
     # for literal in trunk.literals:
     #     print 'trunk', literal
 
@@ -553,7 +577,10 @@ def get_trunk_solution(pgraph, initial_values):
     return trunk
 
 def solve(pgraph, initial_values):
+    logger.debug('Start solving')
     nodes = pgraph.nodes
+
+    logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)    
     trunk = get_trunk_solution(pgraph, initial_values)
 
     rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches)
@@ -562,6 +589,9 @@ def solve(pgraph, initial_values):
 
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)
+    logger.debug('Solution:')
+    for literal in ret:
+        logger.debug('\t%s - %s', literal, ret[literal])
     return ret
 
 
