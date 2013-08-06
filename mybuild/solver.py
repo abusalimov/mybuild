@@ -553,7 +553,7 @@ def resolve_branches(trunk, branches):
     logger.debug('Branch resolving completed')
 
 # TODO remove to other place after all types why function realization
-def _why_violation(cls, literal, *cause_literals):
+def _why_violation(literal, *cause_literals):
     return '%s because of violation %s' % (literal, cause_literals)
 
 def stepwise_resolve(trunk):

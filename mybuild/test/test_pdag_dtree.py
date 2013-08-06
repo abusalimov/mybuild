@@ -4,8 +4,9 @@ from unittest import TestCase
 from functools import partial
 from itertools import izip_longest
 
-from mybuild.solver import *
-from mybuild.pgraph import *
+from .. import pgraph
+from ..pgraph import *
+from ..solver import *
 
 
 class TestPgraph(Pgraph):
@@ -14,8 +15,9 @@ class TestPgraph(Pgraph):
         super(TestPgraph, self).__init__()
 
         for node_type in type(self)._iter_all_node_types():
-            setattr(self, node_type.__name__,
-                    partial(self.new_node, node_type))
+            if not hasattr(self, node_type.__name__):
+                setattr(self, node_type.__name__,
+                        partial(self.new_node, node_type))
 
 
 @TestPgraph.node_type
@@ -35,6 +37,28 @@ class NamedAtomWithCost(NamedAtom):
         return '%s(%s)' % (self.name, self.cost)
 
 
+class StarArgsToArg(object):
+    """For compatibility with tests, to let them to pass operands in *args."""
+    @classmethod
+    def _new(cls, *operands):
+        return super(StarArgsToArg, cls)._new(operands)
+
+
+@TestPgraph.node_type
+class Or(StarArgsToArg, pgraph.Or):
+    pass
+@TestPgraph.node_type
+class And(StarArgsToArg, pgraph.And):
+    pass
+
+@TestPgraph.node_type
+class AtMostOne(StarArgsToArg, pgraph.AtMostOne):
+    pass
+@TestPgraph.node_type
+class AllEqual(StarArgsToArg, pgraph.AllEqual):
+    pass
+
+
 class PdagDtreeTestCase(TestCase):
 
     def setUp(self):
@@ -45,7 +69,7 @@ class PdagDtreeTestCase(TestCase):
         atom, atom_with_cost = pgraph.NamedAtom, pgraph.NamedAtomWithCost
         return [atom_with_cost(name or '', cost) if cost is not None else
                 atom(name) for name, cost in izip_longest(names, costs)]
-         
+
     def test_00(self):
         g = self.pgraph
         A, = self.atoms(g, 'A')
@@ -277,8 +301,8 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
-    
-    @unittest.skip("Need make it work")    
+
+    @unittest.skip("Need make it work")
     def test_16(self):
         g = self.pgraph
         A,B,C = self.atoms(g, 'ABC')

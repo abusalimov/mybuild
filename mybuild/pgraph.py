@@ -39,6 +39,7 @@ from itertools import combinations
 
 from util import bools
 from util import Pair
+from util import instanceof
 
 from util.compat import *
 
@@ -90,7 +91,8 @@ class Pgraph(with_metaclass(PgraphMeta)):
 
         node_types = self._node_types = {}
         for node_type in type(self)._iter_all_node_types():
-            node_types[node_type] = type(node_type.__name__, (node_type,),
+            bases = self._node_type_bases(node_type)
+            node_types[node_type] = type(node_type.__name__, bases,
                                          dict(pgraph=self))
 
         self._node_map = {}
@@ -98,6 +100,9 @@ class Pgraph(with_metaclass(PgraphMeta)):
         self.const_literals = Pair._make(
                 self.new_node(ConstNode.types[const_value])[const_value]
                 for const_value in bools)
+
+    def _node_type_bases(self, node_type):
+        return (node_type,)
 
     def new_node(self, node_type, *args, **kwargs):
         """
@@ -113,14 +118,8 @@ class Pgraph(with_metaclass(PgraphMeta)):
             raise TypeError('Must register %s class using @%s.node_type' %
                             (node_type.__name__, type(self).__name__))
 
-        cache_key = cls, cls._canonical_args(*args, **kwargs)
-
-        try:
-            ret = self._node_map[cache_key]
-        except KeyError:
-            ret = self._node_map[cache_key] = cls._new(*args, **kwargs)
-
-        return ret
+        else:
+            return cls._new(*args, **kwargs)
 
     def new_const(self, const_value, node=None, why=None):
         """
@@ -146,6 +145,9 @@ class NodeMeta(type):
     def __call__(cls, pgraph, *args, **kwargs):
         return pgraph.new_node(cls, *args, **kwargs)
 
+    def _factory_call(cls, *args, **kwargs):
+        return super(NodeMeta, cls).__call__(*args, **kwargs)
+
 
 class NodeBase(with_metaclass(NodeMeta)):
     """
@@ -157,25 +159,26 @@ class NodeBase(with_metaclass(NodeMeta)):
     @classmethod
     def _new(cls, *args, **kwargs):
         try:
-            cls.pgraph
+            pgraph = cls.pgraph
         except AttributeError:
             raise TypeError("Don't instantiate this class directly, "
                             "use pgraph.new_node(%s, ...) instead" %
                             cls.__name__)
         else:
-            return super(NodeMeta, cls).__call__(*args, **kwargs)
+            cache = pgraph._node_map
 
-    @classmethod
-    def _canonical_args(cls, *args, **kwargs):
-        """
-        Implementation must return a canonical representation of given
-        arguments.
-        """
-        return cls._starargs(*args, **kwargs)
+        if kwargs.pop('cache_kwargs', False):
+            cache_kwargs = frozenset(iteritems(kwargs))
+        else:
+            cache_kwargs = None
 
-    @classmethod
-    def _starargs(cls, *args, **kwargs):
-        return (args, frozenset(iteritems(kwargs)))
+        cache_key = cls, args, cache_kwargs
+        try:
+            ret = cache[cache_key]
+        except KeyError:
+            ret = cache[cache_key] = cls._factory_call(*args, **kwargs)
+
+        return ret
 
 
 class Node(NodeBase, Pair):
@@ -192,8 +195,8 @@ class Node(NodeBase, Pair):
         for literal in new_node:
             literal.node = new_node
 
-        for bool_value in bools:
-            assert new_node[bool_value].value == bool_value
+        assert all(new_node[bool_value].value == bool_value
+                   for bool_value in bools)
 
         return new_node
 
@@ -353,12 +356,17 @@ class Reason(namedtuple('_Reason', 'why, literal, cause_literals')):
 
     def __new__(cls, why, literal, *cause_literals):
         if why is None:
-            why = cls._fallback_why_func
+            why = cls.default_why_func
 
         return super(Reason, cls).__new__(cls, why, literal, cause_literals)
 
-    def _fallback_why_func(cls, literal, *cause_literals):
-        return '%s <= %s' % (literal, cause_literals)
+    @classmethod
+    def default_why_func(cls, outcome, *causes):
+        cause_str = ', '.join(map(str, causes)) or 'no cause'
+        return '%s <= %s' % (outcome, cause_str)
+
+    def __repr__(self):
+        return self.why(self.literal, *self.cause_literals)
 
 
 #
@@ -453,50 +461,41 @@ ConstNode.types = Pair(FalseConst, TrueConst)
 class SingleOperandNode(Node):
     """A node with a single operand."""
 
-    def __init__(self, operand):
-        super(SingleOperandNode, self).__init__()
+    def __init__(self, operand, **kwargs):
+        super(SingleOperandNode, self).__init__(**kwargs)
         self._operand = operand
-
-    @classmethod
-    def _canonical_args(cls, operand):
-        return operand
 
 
 class OperandSetNode(Node):
     """A node which may have an arbitrary set of unordered unique operands."""
 
-    def __init__(self, *operands):
-        super(OperandSetNode, self).__init__()
-        self._operands = set(operands)
+    def __init__(self, operands, **kwargs):
+        super(OperandSetNode, self).__init__(**kwargs)
+        self._operands = operands
 
     @classmethod
-    def _new(cls, *operands):
-        operands = set(operands)
-
-        new = None
+    def _new(cls, operands, **kwargs):
+        operands = frozenset(operands)
 
         if not operands:
-            new = cls._new_no_operands()
-
+            new = cls._new_no_operands(**kwargs)
         elif len(operands) == 1:
-            new = cls._new_one_operand(*operands)
+            new = cls._new_one_operand(*operands, **kwargs)
+        else:
+            new = None
 
         if new is None:
-            new = super(OperandSetNode, cls)._new(*operands)
+            new = super(OperandSetNode, cls)._new(operands, **kwargs)
 
         return new
 
     @classmethod
-    def _new_no_operands(cls):
-        return None
+    def _new_no_operands(cls, **kwargs):
+        pass
 
     @classmethod
-    def _new_one_operand(cls, operand):
-        return None
-
-    @classmethod
-    def _canonical_args(cls, *operands):
-        return frozenset(operands)
+    def _new_one_operand(cls, operand, **kwargs):
+        pass
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__,
@@ -516,35 +515,37 @@ class LatticeOpNode(OperandSetNode):
 
     """
 
-    # Reason of '(self is Identity) => (each operand is Identity)' implication.
-    why_self_identity_implies_all_operands_identity = None
+    _optimize_new = False
 
-    # Reason of 'op(Identity, A) == op(A) == A' for single operand case.
-    why_self_zero_implies_at_least_one_operand_zero = None
+    def __init__(self, operands, **why_kwargs):
+        why_therefore = why_kwargs.pop(
+                'why_identity_implies_all_operands_identity', None)
+        why_becauseof = why_kwargs.pop(
+                'why_all_operands_identity_implies_identity', None)
 
-    def __init__(self, *operands):
-        super(LatticeOpNode, self).__init__(*operands)
+        super(LatticeOpNode, self).__init__(operands, **why_kwargs)
 
         identity = self.identity
         self[identity].equivalent_all(dict.fromkeys(operands, identity),
-            why_therefore=self.why_self_identity_implies_all_operands_identity,
-            why_becauseof=self.why_self_zero_implies_at_least_one_operand_zero)
+                                      why_therefore, why_becauseof)
 
     @classmethod
-    def _new(cls, *operands):
-        identity_const_type = ConstNode.types[cls.identity]
+    def _new(cls, operands, **kwargs):
+        if cls._optimize_new:
+            identity_const_type = ConstNode.types[cls.identity]
+            operands = filternot(instanceof(identity_const_type), operands)
 
-        return super(LatticeOpNode, cls)._new(
-            *(operand for operand in operands
-              if not isinstance(operand, identity_const_type)))
+        return super(LatticeOpNode, cls)._new(operands, **kwargs)
 
     @classmethod
     def _new_no_operands(cls):
-        return cls.pgraph.new_const(cls.identity)
+        if cls._optimize_new:
+            return cls.pgraph.new_const(cls.identity)
 
     @classmethod
     def _new_one_operand(cls, operand):
-        return operand
+        if cls._optimize_new:
+            return operand
 
     def __repr__(self):
         return self._repr_sign.join(map(repr, self._operands)).join('()')
@@ -579,20 +580,23 @@ class Not(SingleOperandNode):
 
     why_self_equals_negated_operand = None
 
-    def __init__(self, operand):
-        super(Not, self).__init__(operand)
+    def __init__(self, operand, **why_kwargs):
+        why = why_kwargs.pop('why_self_equals_negated_operand', None)
+
+        super(Not, self).__init__(operand, **why_kwargs)
 
         self[False].equivalent(operand[True],
-                why_becauseof=self.why_self_equals_negated_operand)
+                               why_becauseof=why,
+                               why_therefore=why)
 
     @classmethod
-    def _new(cls, operand):
+    def _new(cls, operand, **kwargs):
         if isinstance(operand, Not):
             return operand._operand
         elif isinstance(operand, ConstNode):
             return cls.pgraph.new_const(not operand.const_value)
         else:
-            return super(Not, cls)._new(operand)
+            return super(Not, cls)._new(operand, **kwargs)
 
     def __repr__(self):
         return '(~%r)' % (self._operand,)
@@ -611,19 +615,16 @@ class Implies(Node):
     False   False    True
     """
 
-    why_self_false_implies_if_true = None
-    why_self_false_implies_then_false = None
-
-    def __init__(self, if_, then):
-        super(Implies, self).__init__()
+    def __init__(self, if_, then, **why_kwargs):
+        super(Implies, self).__init__(**why_kwargs)
 
         self._if = if_
         self._then = then
 
-        self[False].equivalent_all({if_:True, then:False}) # XXX reasons
+        self[False].equivalent_all({if_: True, then: False})  # XXX reasons
 
     @classmethod
-    def _new(cls, if_, then):
+    def _new(cls, if_, then, **kwargs):
         # if (isinstance(if_, FalseConstNode) or
         #       isinstance(then, TrueConstNode)):
         #     return cls.pgraph.new_const(True)
@@ -634,11 +635,7 @@ class Implies(Node):
         # elif isinstance(then, FalseConstNode):
         #     return cls.pgraph.new_node(Not, if_)
 
-        return super(Implies, cls)._new(if_, then)
-
-    @classmethod
-    def _canonical_args(cls, if_, then):
-        return if_, then
+        return super(Implies, cls)._new(if_, then, **kwargs)
 
     def __repr__(self):
         return '(%r => %r)' % (self._if, self._then)
@@ -649,17 +646,17 @@ class SingleZeroLatticeOpNode(LatticeOpNode):
     Allows at most a single operand to be Zero, the rest must be Identity.
     """
 
-    why_one_operand_zero_implies_others_identity = None
-
-    def __init__(self, *operands):
-        super(SingleZeroLatticeOpNode, self).__init__(*operands)
+    def __init__(self, operands, **why_kwargs):
+        why = why_kwargs.pop('why_one_operand_zero_implies_others_identity',
+                             None)
+        super(SingleZeroLatticeOpNode, self).__init__(operands, **why_kwargs)
 
         # this introduces N^2 imlications between operands, uff...
         for operand in operands:
-            operand[self.zero].therefore_all((another[self.identity]
-                                              for another in operands
-                                              if another is not operand),
-                why=self.why_one_operand_zero_implies_others_identity)
+            operand[self.zero].therefore_all(
+                    (another[self.identity]
+                     for another in operands
+                     if another is not operand), why)
 
 
 @Pgraph.node_type
@@ -688,30 +685,13 @@ class AllEqual(OperandSetNode):
     False   False   False    False
     """
 
-    why_self_equals_all_operands = None
+    def __init__(self, operands, **why_kwargs):
+        why = why_kwargs.pop('why_self_equals_all_operands', None)
 
-    def __init__(self, *operands):
-        super(AllEqual, self).__init__(*operands)
+        super(AllEqual, self).__init__(operands)
 
-        why_func = self.why_self_equals_all_operands
         for operand in operands:
             self.equivalent(operand,
-                            why_becauseof=why_func,
-                            why_therefore=why_func)
-
-    @classmethod
-    def _new(cls, *operands):
-        if 1 <= len(operands) <= 3:
-            why_func = cls.why_self_equals_all_operands
-            for one, two in combinations(operands, 2):
-                one.equivalent(two,
-                               why_becauseof=why_func,
-                               why_therefore=why_func)
-            return operands[0]
-        else:
-            return super(AllEqual, self)._new(*operands)
-
-    @classmethod
-    def _new_one_operand(cls, operand):
-        return operand
+                            why_becauseof=why,
+                            why_therefore=why)
 

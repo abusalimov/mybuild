@@ -113,7 +113,7 @@ class Rgraph(object):
                         queue.put((ccons, container.therefore[ccons]))
                             
     def print_reason(self, reason, depth):
-        print '  ' * depth, reason.why(reason, reason.literal, reason.cause_literals)
+        print '  ' * depth, reason
                
     def find_shortest_ways(self):
         """
