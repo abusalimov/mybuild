@@ -174,7 +174,7 @@ class BranchSolutionBase(Solution):
         if other.todo:
             raise NotImplementedError('Other is not ready')
 
-        if self.is_implied_by(other):
+        if other.is_implied_by(self):
             assert self.nodes    >= other.nodes
             assert self.literals >= other.literals
             assert self.reasons  >= other.reasons
@@ -428,7 +428,7 @@ def prepare_branches(trunk, unresolved_nodes):
     """
     Non-recursive DFS.
     """    
-    logger.debug('Preparing brunches for unresolved nodes: %s', unresolved_nodes)
+    logger.debug('Preparing branches for unresolved nodes: %s', unresolved_nodes)
     for node in unresolved_nodes:
         for literal in node:
             branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
@@ -456,18 +456,16 @@ def prepare_branches(trunk, unresolved_nodes):
             stack_push(todo_branches.pop())
 
         branch = stack[-1]
-        logger.debug(' .' * len(stack) + 'branch %r for: %s', (id(stack[-1]) % 37), sorted(branch.gen_literals))
-        # print ' .' * len(stack), 'branch %r for:' % \
-        #   (id(stack[-1]) % 37), sorted(branch.gen_literals)
+        logger.debug(' .' * len(stack) + 'branch %r for: %s',
+                     (id(stack[-1]) % 37), sorted(branch.gen_literals))
 
         try:
             # Can't use branch.handle_todos since some branches are in an
             # intermediate state. Manual iteration also makes it possible to
             # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
-            logger.debug(' ' * 60 + '%s -> %s \t %s', id(branch) % 37 , id(implied) % 37, literal)
-            # print ' ' * 60, id(branch) % 37, '->', id(implied) % 37, \
-            #  '\t', literal
+            logger.debug(' ' * 60 + '%s -> %s \t %s', id(branch) % 37,
+                         id(implied) % 37, literal)
 
             if not implied.valid:
                 branch.todo.add(literal)
@@ -488,7 +486,6 @@ def prepare_branches(trunk, unresolved_nodes):
 
         except SolutionError as error:
             logger.debug(' .' * len(stack) + 'branch %r dies', (id(branch) % 37))
-            # print ' .' * len(stack), 'branch %r dies' % (id(branch) % 37)
             # unwind implication stack
             for implicant in pop_iter(stack, pop=stack_pop):
                 implicant.error = error
@@ -496,7 +493,6 @@ def prepare_branches(trunk, unresolved_nodes):
 
         except StopIteration:
             logger.debug(' .' * len(stack) + 'branch %r done', (id(branch) % 37))
-            # print ' .' * len(stack), 'branch %r done' % (id(branch) % 37)
             # no more implications, or the branch was merged into an equivalent
             stack_pop()
 
