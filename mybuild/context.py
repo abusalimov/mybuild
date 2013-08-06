@@ -14,8 +14,6 @@ from itertools import product
 from operator import attrgetter
 
 from .core import *
-from .instance import InstanceError
-from .instance import InstanceNode
 from .pgraph import *
 from util import NotifyingMixin
 from util import pop_iter
