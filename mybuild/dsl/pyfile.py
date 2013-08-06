@@ -16,7 +16,7 @@ from operator import attrgetter
 from . import with_defaults
 from ..core import ModuleType
 from ..core import Module
-from ..core import Option
+from ..core import Optype
 
 from nsloader import pyfile
 
@@ -46,7 +46,7 @@ class PyFileModuleType(ModuleType):
 
     def __init__(cls, name, bases, attrs, intermediate=False):
         super(PyFileModuleType, cls).__init__(name, bases, attrs,
-                options=cls._init_to_options() if not intermediate else None)
+                optypes=cls._init_to_options() if not intermediate else None)
 
     def _init_to_options(cls):
         """Converts a constructor argspec into a list of Option objects."""
@@ -83,118 +83,24 @@ class PyFileModuleType(ModuleType):
                 raise TypeError(
                     'Tuple parameter unpacking is not supported: %s' % arg)
 
-        head = [Option() for _ in range(len(option_args) - len(defaults))]
-        tail = [option if isinstance(option, Option) else Option(option)
-                for option in defaults]
+        head = [Optype() for _ in range(len(option_args) - len(defaults))]
+        tail = [optype if isinstance(optype, Optype) else Optype(optype)
+                for optype in defaults]
 
-        return [option.set(name=name)
-                for option, name in zip(head + tail, option_args)]
-
-    _tls = threading.local()
-    _tls.instance = None
-
-    def _factory_call(cls, domain, instance_node):
-        tls = cls._tls
-        if tls.instance is not None:
-            raise TypeError('Module instantiation is not reentrant')
-
-        tls.instance = self = cls.__new__(cls)
-        try:
-            self._instance_init(domain, instance_node)
-        finally:
-            tls.instance = None
-        return self
+        return [optype.set(name=name)
+                for optype, name in zip(head + tail, option_args)]
 
 
 class PyFileModule(with_metaclass(PyFileModuleType, intermediate=True), Module):
 
-    _context = property(attrgetter('_domain.context'))
-    _optuple = property(attrgetter('_domain.optuple'))
-    _spawn   = property(attrgetter('_domain.post_new'))
+    def _consider(self, expr):
+        self._context.consider(expr, self)
 
-    def _instance_init(self, domain, node):
-        self._domain = domain
-        self._node = node
-
-        self.__init__(**self._optuple._asdict())
-
-    def consider(self, mslice):
-        optuple = mslice()
-        module = optuple._module
-
-        consider = self._context.consider
-
-        consider(module)
-        for option, value in optuple._iterpairs():
-            consider(module, option, value)
-
-    def constrain(self, expr):
-        self.consider(expr)
-        self._node.add_constraint(expr)
-
-    def provides(self, expr):
-        self.consider(expr)
-        self._node.add_provided(expr)
-
-    def _decide(self, expr):
-        self.consider(expr)
-        return self._make_decision(expr)
-
-    def _decide_option(self, mslice, option):
-        optuple = mslice()
-        module = optuple._module
-
-        def domain_gen(node):
-            # This is made through a generator so that in case of replaying
-            # everything below (check, subscribing, etc.) is skipped.
-
-            if not hasattr(optuple, option):
-                raise AttributeError("'%s' module has no attribute '%s'" %
-                                     (module._name, option))
-
-            # Option without the module itself is meaningless.
-            self.constrain(optuple)
-
-            def on_domain_extend(new_value):
-                # NB: using 'node', not 'self._node'
-                _, child_node = node.extend_decisions(module, option,
-                                                      new_value)
-                self._spawn(child_node)
-
-            option_domain = self._context.domain_for(module, option)
-            option_domain.subscribe(on_domain_extend)
-
-            for value in option_domain:
-                yield value
-
-        # The 'node' is bound here (the argument of 'domain_gen') because
-        # '_make_decision' overwrites 'self._node' with its child.
-        return self._make_decision(module, option, domain_gen(self._node))
-
-    def _make_decision(self, module_expr, option=None, domain=(True, False)):
-        """
-        Returns: a value taken.
-        """
-        decisions = iter(self._node.make_decisions(module_expr,
-                                                   option, domain))
-
-        try:
-            # Retrieve the first one (if any) to return it.
-            ret_value, self._node = next(decisions)
-
-        except StopIteration:
-            raise InstanceError('No viable choice to take')
-
-        # Spawn for the rest ones.
-        for _, node in decisions:
-            self._spawn(node)
-
-        return ret_value
+    def _constrain(self, expr):
+        self._context.constrain(expr, self)
 
     def __repr__(self):
-        optuple = self._optuple
-        node_str = str(self._node)
-        return '%s <%s>' % (optuple, node_str) if node_str else str(optuple)
+        return repr(self._optuple)
 
     def build(self, bld):
         src = getattr(self, 'sources', [])
@@ -228,19 +134,6 @@ try:
 except ImportError:
     pass  # XXX move Waf-related stuff from here
 
-class ModuleInspector(object):
-
-    def __init__(self, owner, optuple):
-        super(PyFileModule._InstanceProxy, self).__init__()
-        self._owner = owner
-        self._optuple = optuple
-
-    def __nonzero__(self):
-        return self._owner._decide(self._optuple)
-
-    def __getattr__(self, attr):
-        return self._owner._decide_option(self._optuple, attr)
-
 
 module = constructor_decorator(PyFileModule, __doc__=
     """
@@ -266,7 +159,7 @@ module = constructor_decorator(PyFileModule, __doc__=
 
     """)
 
-option = Option
+option = Optype
 
 if __name__ == '__main__':
     import doctest

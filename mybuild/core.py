@@ -10,7 +10,7 @@ __date__ = "2012-09-15"
 __all__ = [
     "ModuleType",
     "Module",
-    "Option",
+    "Optype",
     "Optuple",
     "MybuildError",
 ]
@@ -32,15 +32,28 @@ from util.compat import *
 class ModuleType(type):
     """Metaclass of Mybuild modules."""
 
-    def __new__(mcls, name, bases, attrs, **kwargs):
-        """Suppresses any keyword arguments."""
+    @property
+    def _intermediate(cls):
+        return not hasattr(cls, '_options')
+
+    @property
+    def _opmake(cls):
+        return cls._options._make
+    @property
+    def _optypes(cls):
+        return cls._options._optypes
+    @property
+    def _optype(cls):
+        return cls._optypes._get
+
+    def __new__(mcls, name, bases, attrs, *args, **kwargs):
+        """Suppresses any redundant arguments."""
         return super(ModuleType, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, options=None):
-        """
-        Subclasses must provide an 'options' argument, otherwise a class is
-        considered intermediate and behaves as a regular Python metaclass.
-        """
+    def __init__(cls, name, bases, attrs, optypes=None):
+        """Subclasses must provide an 'optypes' argument, otherwise a class
+        being constructed is considered intermediate and behaves much like a
+        regular Python class."""
         super(ModuleType, cls).__init__(name, bases, attrs)
 
         cls._fullname = cls._name = cls.__name__
@@ -53,43 +66,92 @@ class ModuleType(type):
 
             package_name = pymodule.__package__
             if package_name:
+                # note that pymodule name is omitted
                 cls._fullname = package_name + '.' + cls.__name__
 
-        if options is not None:
-            cls._options = Optuple._new_type_options(cls, options)
+        if optypes is not None:
+            cls._init_optypes(optypes)
 
-    def __call__(_cls, *args, **kwargs):
-        try:
-            options = _cls._options
-        except AttributeError:
-            return _cls._factory_call(*args, **kwargs)
-        else:
-            return options._ellipsis(*args, **kwargs)
+    def _init_optypes(cls, optypes):
+        optuple_type = Optuple if optypes else EmptyOptuple
+        cls._options = options = optuple_type._new_type(cls, optypes)._options
 
-    def _instantiate(cls, domain, instance_node):
-        if not issubclass(cls, domain.module):
-            raise TypeError("Can't instantiate a module of incompatible type")
-        return cls._factory_call(domain, instance_node)
+        for option in options:
+            # Every module has an _optuple attribute, see Module.__new__
+            getter = attrgetter('_optuple.%s' % option)
+            setattr(cls, option, property(getter))
 
-    def _factory_call(cls, *args, **kwargs):
-        return super(ModuleType, cls).__call__(*args, **kwargs)
+    def __call__(_cls, **kwargs):
+        if _cls._intermediate:
+            raise TypeError('Intermediate module class is not callable')
+        return _cls._options._ellipsis(**kwargs)
+
+    def _instantiate(cls, optuple):
+        instance = cls.__new__(cls, optuple)
+        if isinstance(instance, cls):
+            instance.__init__(**optuple._asdict())
+        return instance
 
     def __repr__(cls):
-        try:
-            options = cls._options
-        except AttributeError:
+        if cls._intermediate:
             return super(ModuleType, cls).__repr__()
         else:
-            return '%s(%r)' % (cls._fullname, ', '.join(options._fields))
+            return '%s(%r)' % (cls._fullname, ', '.join(cls._options))
 
 
 class Module(with_metaclass(ModuleType)):
-    pass
+    """Base class for Mybuild modules."""
+
+    # ModuleType overloads __call__, but the default factory call is
+    # available through ModuleType._instantiate with the only exception
+    # that __init__  is called with optuple unpacked into keyword arguments,
+    # unlike __new__ which receives the sole optuple argument.
+
+    def __new__(cls, optuple):
+        if cls._intermediate:
+            raise TypeError('Intermediate module class')
+        if not issubclass(cls, optuple._module):
+            raise TypeError('Optuple of incompatible module type')
+        if not optuple._complete:
+            raise ValueError('Incomplete optuple')
+
+        new = super(Module, cls).__new__(cls)
+        new._optuple = optuple
+        return new
+
+    def __init__(_self, **kwargs):
+        """Consumes keyword arguments."""
+        super(Module, _self).__init__()
+
+    def __repr__(_self):
+        return repr(self._optuple)
 
 
-class Optuple(InstanceBoundTypeMixin):
+class OptupleBase(InstanceBoundTypeMixin):
+
+    _tuple_attrs = frozenset(filternot(invoker.startswith('_'), dir(tuple())))
+
+    def __call__(_self, **kwargs):
+        return _self._replace(**kwargs) if kwargs else _self
+
+    def __eq__(self, other):
+        return self._type_eq(other) and tuple.__eq__(self, other)
+    def __hash__(self):
+        return self._type_hash() ^ tuple.__hash__(self)
+
+    def __repr__(self):
+        return '%s(%s)' % (self._module._name,
+                           ', '.join('%s=%r' % pair
+                                     for pair in self._iterpairs()))
+
+
+class Optuple(OptupleBase):
     """Option tuple mixin type."""
     __slots__ = ()
+
+    @property
+    def _complete(self):
+        return Ellipsis not in self
 
     def _iter(self, with_ellipsis=False):
         return (iter(self) if with_ellipsis else
@@ -104,58 +166,92 @@ class Optuple(InstanceBoundTypeMixin):
         return (it if with_ellipsis else
                 (pair for pair in it if pair[self_idx] is not Ellipsis))
 
-    def _mapwith(self, func):
-        return self._make(map(func, self))
+    def _get(self, attr):
+        return getattr(self, attr)
 
-    def __call__(_self, **kwargs):
-        return _self._replace(**kwargs) if kwargs else _self
+    def _replace(_self, **kwargs):
+        def iter_new_values(option, old_value):
+            try:
+                new_value = kwargs.pop(option)
+            except KeyError:
+                return old_value
+            else:
+                if old_value is not Ellipsis:
+                    raise ValueError("Option '%s' redefined from %r to %r" %
+                                     (option, old_value, new_value))
+                return new_value
 
-    def __repr__(self):
-        return '%s(%s)' % (self._module._name,
-                           ', '.join('%s=%r' % pair
-                                     for pair in self._iterpairs()))
+        result = _self._make(map(iter_new_values, _self._fields, _self))
+        if kwargs:
+            raise ValueError('Got unexpected option names: %r' % kwargs.keys())
 
-    def __eq__(self, other):
-        return self._type_eq(other) and tuple.__eq__(self, other)
-    def __hash__(self):
-        return self._type_hash() ^ tuple.__hash__(self)
-
-    #staticmethod, see below
-    def __create_base(options,
-                      hide_attrs=set(filternot(invoker.startswith('_'),
-                                               dir(namedtuple('Empty', []))))):
-        ret_type = namedtuple('OptupleBase', map(getter._name, options))
-
-        for bogus_attr in hide_attrs.difference(ret_type._fields):
-            setattr(ret_type, bogus_attr, property())
-
-        return ret_type
-
-    __empty_base = __create_base([])
-    __create_base = staticmethod(__create_base)
+        return result
 
     @classmethod
-    def _new_type_options(cls, module, options):
-        if not options:
-            base_type = cls.__empty_base
-        else:
-            base_type = cls.__create_base(options)
+    def _new_type(cls, module, optypes):
+        base_type = namedtuple('Optuple', map(getter._name, optypes))
+
+        for bogus_attr in cls._tuple_attrs.difference(base_type._fields):
+            setattr(base_type, bogus_attr, property())
 
         new_type = type('Optuple_M%s' % module._name, (cls, base_type),
-                        dict(__slots__=(), _module=module))
+                      dict(__slots__=(), _module=module))
 
         make = new_type._make
-        new_type._fields   = make(base_type._fields)
-        new_type._ellipsis = make(Ellipsis for _ in options)
-        new_type._options  = make(map(invoker.set(_module=module), options))
+        new_type._ellipsis = make(Ellipsis for _ in optypes)
+        new_type._optypes  = make(map(invoker.set(_module=module), optypes))
+        new_type._options  = make(new_type._fields)
 
-        return new_type._options
+        return new_type
 
 
-class Option(object):
+class EmptyOptuple(OptupleBase):
+    """Option tuple mixin type."""
+    __slots__ = ()
+
+    @property
+    def _complete(self):
+        return True
+
+    def _iter(self, with_ellipsis=False):
+        return iter(())
+
+    def _iterpairs(self, with_ellipsis=False):
+        return iter(())
+
+    def _zipwith(self, other, with_ellipsis=False, swap=False):
+        return iter(())
+
+    def _get(self, attr):
+        raise AttributeError('Empty optuple has no options')
+
+    def _replace(_self, **kwargs):
+        if kwargs:
+            raise ValueError('Got unexpected option names: %r' % kwargs.keys())
+        return _self
+
+    def __repr__(self):
+        return '%s()' % self._module._name
+
+    __empty_base = namedtuple('EmptyOptuple', [])
+    for bogus_attr in OptupleBase._tuple_attrs:
+        setattr(__empty_base, bogus_attr, property())
+
+    @classmethod
+    def _new_type(cls, module, optypes):
+        assert not optypes
+
+        new_type = type('Optuple_M%s' % module._name, (cls, cls.__empty_base),
+                        dict(__slots__=(), _module=module))
+
+        new_type._ellipsis = new_type._optypes = new_type._options = new_type()
+        return new_type
+
+
+class Optype(object):
 
     def __init__(self, *values, **setup_flags):
-        super(Option, self).__init__()
+        super(Optype, self).__init__()
 
         self.default = values[0] if values else Ellipsis
         self.extendable = True

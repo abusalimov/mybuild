@@ -12,8 +12,9 @@ __all__ = ['module', 'option']
 import functools
 
 from . import with_defaults
+from ..core import ModuleType
 from ..core import Module
-from ..core import Option
+from ..core import Optype
 
 from nsloader import myfile
 from myfile.linkage import MyfileObjectProxy
@@ -35,57 +36,57 @@ class MybuildMyFileLoader(myfile.MyFileLoader):
                 with_defaults(initials, MYFILE_DEFAULTS, globals()))
 
 
-class MyFileInstance(object):
-    """docstring for MyFileInstance"""
-
-    def __init__(self, **options):
-        super(MyFileInstance, self).__init__()
-
-
-class MyFileModule(Module):
+class MyFileModuleType(ModuleType):
 
     class Proxy(MyfileObjectProxy):
-        slots = 'cls'
+        slots = 'mcls'
 
-        def __init__(self, cls, stub):
+        def __init__(self, mcls, stub):
             super(MyFileModule.Proxy, self).__init__(stub)
-            self.cls = cls
+            self.mcls = mcls
 
         def __call__(self, *args, **kwargs):
             type_dict = dict(__module__ = self.stub.linker.module,
                              __doc__    = self.stub.docstring)
             type_name = self.stub.name or '<noname>'
-            return self.cls(type(type_name, (MyFileInstance,), type_dict),
-                            self.cls._args_kwargs_to_options(args, kwargs))
+            return self.mcls(type_name, (MyFileModule,), type_dict,
+                             self.mcls._args_kwargs_to_options(args, kwargs))
 
     @classmethod
-    def my_proxy(cls, stub):
-        return cls.Proxy(cls, stub)
+    def my_proxy(mcls, stub):
+        return mcls.Proxy(mcls, stub)
 
     @classmethod
-    def _args_kwargs_to_options(cls, arg_options, kwarg_options):
+    def _args_kwargs_to_options(mcls, arg_options, kwarg_options):
         """Converts args/kwargs into a list of options."""
 
-        for option in arg_options:
-            if not isinstance(option, Option):
+        for optype in arg_options:
+            if not isinstance(optype, Optype):
                 raise TypeError(
-                    'Positional argument must be an option: %s' % option)
-            if not hasattr(option, '_name'):
+                    'Positional argument must be an option: %s' % optype)
+            if not hasattr(optype, '_name'):
                 raise TypeError(
                     'Positional option must provide a name explicitly')
 
         options = list(arg_options)
 
-        for name, option in iteritems(kwarg_options):
-            if not isinstance(option, Option):
-                option = Option(option)
-            if not hasattr(option, '_name'):
-                option.set(name=name)
+        for name, optype in iteritems(kwarg_options):
+            if not isinstance(optype, Optype):
+                optype = Optype(optype)
+            if not hasattr(optype, '_name'):
+                optype.set(name=name)
 
-            options.append(option)
+            options.append(optype)
 
         return options
 
 
-module = MyFileModule
-option = Option
+class MyFileModule(with_metaclass(MyFileModuleType), Module):
+    """docstring for MyFileModule"""
+
+    def __init__(self, domain, instance_node):
+        super(MyFileModule, self).__init__()
+
+
+module = MyFileModuleType
+option = Optype

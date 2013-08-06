@@ -8,11 +8,8 @@ __date__ = "2012-11-09"
 __all__ = ["Context"]
 
 
+from collections import namedtuple
 from collections import defaultdict
-from collections import deque
-from collections import MutableSet
-from contextlib import contextmanager
-from itertools import chain
 from itertools import product
 from operator import attrgetter
 
@@ -22,6 +19,7 @@ from .instance import InstanceNode
 from .pgraph import *
 from util import NotifyingMixin
 from util import pop_iter
+from util import no_reent
 
 from util.compat import *
 
@@ -31,84 +29,130 @@ import logs as log
 class Context(object):
     """docstring for Context"""
 
-    def __init__(self, instance_type=None):
+    def __init__(self, instance_type=object):
         super(Context, self).__init__()
         self.instance_type = instance_type
-        self.modules = {}
 
-        self.ctxmodules = {}
+        self._instances = dict()  # {optuple: instance}
+        self._mdata     = dict()  # {module: mdata}
 
-        self._job_queue = deque()
-        self._reent_locked = False
+        self._constraints = defaultdict(set)  # {optuple: optuples...}
 
-    def post(self, job_func):
-        with self.reent_lock():  # to flush the queue on block exit
-            self._job_queue.append(job_func)
-
-    @contextmanager
-    def reent_lock(self):
-        was_locked = self._reent_locked
-        self._reent_locked = True
-
+    @no_reent
+    def _instantiate(self, mdata, optuple, origin=None):
+        log.debug("mybuild: new %s (posted by %s)", optuple, origin)
         try:
-            yield
-        finally:
-            if not was_locked:
-                self._job_queue_flush()
-            self._reent_locked = was_locked
+            instance = mdata.ctxtype._instantiate(optuple)
+        except InstanceError as e:
+            log.debug("mybuild:     %s unviable: %s", optuple, e)
+            instance = None
 
-    def _job_queue_flush(self):
-        for job_func in pop_iter(self._job_queue, pop_meth='popleft'):
-            job_func()
+        assert optuple not in self._instances
+        self._instances[optuple] = instance
 
-    def consider(self, module, option=None, value=Ellipsis):
-        print(module)
-        domain = self.domain_for(module)
-        if option is not None:
-            domain.consider_option(option, value)
+    def _instantiate_product(self, mdata, iterables_optuple, origin=None):
+        for optuple in map(iterables_optuple._make,
+                           product(*iterables_optuple)):
+            self._instantiate(mdata, optuple, origin)
 
-    def domain_for(self, module, option=None):
+    def consider(self, mslice, origin=None):
+        optuple = mslice()
+        mdata = self.mdata_for(optuple._module)
+
+        for value, domain_to_extend in optuple._zipwith(mdata.domain):
+            if value in domain_to_extend:
+                continue
+
+            domain_to_extend.add(value)
+
+            self._instantiate_product(mdata, optuple._make(option_domain
+                    if option_domain is not domain_to_extend else (value,)
+                    for option_domain in mdata.domain), origin)
+
+    def constrain(self, mslice, origin=None):
+        optuple = mslice()
+        self.consider(optuple, origin)
+
+        self._constraints[origin].add(optuple)
+
+
+    def mdata_for(self, module):
         try:
-            domain = self.modules[module]
+            mdata = self._mdata[module]
         except KeyError:
-            with self.reent_lock():
-                domain = self.modules[module] = ModuleDomain(self, module)
+            mdata = self._mdata[module] = ModuleData(self, module)
+            self._instantiate_product(mdata, mdata.domain)
 
-        if option is not None:
-            domain = domain.domain_for(option)
-
-        return domain
-
-    def ctxmodule_for(self, module):
-        try:
-            ctxmodule = self.ctxmodules[module]
-
-        except KeyError:
-            # Mix context specific instance_type into a module class.
-            type_dict = dict(__module__ = module.__module__,
-                             __doc__    = module.__doc__,
-                             _context   = self)
-            base_type = self.instance_type
-            bases = (base_type, module) if base_type is not None else (module,)
-
-            ctxmodule = self.ctxmodules[module] = type(module.__name__,
-                                                       bases, type_dict)
-
-        return ctxmodule
+        return mdata
 
     def create_pgraph(self):
-        g = ContextPgraph()
+        g = ContextPgraph(self)
 
-        for domain in itervalues(self.modules):
-            domain.init_pgraph(g)
+        for mdata in itervalues(self._mdata):
+            mdata.init_pgraph(g)
+
+        # for optuple, instance in iteritems(self._instances):
+        #     instance.init_pgraph(g)
+
+        # for optuple, constraints in iteritems(self._constraints):
+        #     instance = self._instances[optuple]
+        #     for constraint in constraints:
+        #         Implies(g, , g.pnode_for(constraint))
 
         return g
 
 
+class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
+    __slots__ = ()
+
+    context = property(attrgetter('ctxtype._context'))
+    module  = property(attrgetter('ctxtype._module'))
+
+    def __new__(cls, context, module):
+        return super(ModuleData, cls).__new__(cls,
+                ctxtype=cls._create_ctxtype(context, module),
+                domain=cls._create_domain(module))
+
+    @classmethod
+    def _create_ctxtype(cls, context, module):
+        # Mix context specific instance_type into a module class.
+        type_dict = dict(__module__ = module.__module__,
+                         __doc__    = module.__doc__,
+                         _module    = module,
+                         _context   = context)
+        bases = (module, context.instance_type)
+
+        return type(module.__name__, bases, type_dict)
+
+    @classmethod
+    def _create_domain(cls, module):
+        return module._opmake(set(optype._values)
+                              for optype in module._optypes)
+
+    def init_pgraph(self, g):
+        module = self.module
+        module_atom = ModuleAtom(g, module)
+
+        for option, values in self.domain._iterpairs():
+            option_atoms = (g.atom_for(module, option, value) for value in values)
+            option_node = AtMostOne(g, option_atoms,
+                    why_one_operand_zero_implies_others_identity=
+                        why_option_can_have_at_most_one_value,
+                    why_identity_implies_all_operands_identity=
+                        why_disabled_option_cannot_have_a_value,
+                    why_all_operands_identity_implies_identity=
+                        why_option_with_no_value_must_be_disabled)
+
+            module_atom.equivalent(option_node,
+                    why_becauseof=why_option_implies_module,
+                    why_therefore=why_module_implies_option)
+
+
 class ContextPgraph(Pgraph):
 
-    def __init__(self):
+    def __init__(self, context):
         super(ContextPgraph, self).__init__()
+        self.context = context
 
     def atom_for(self, module, option=None, value=Ellipsis):
         if option is None:
@@ -118,6 +162,9 @@ class ContextPgraph(Pgraph):
 
     def pnode_for(self, mslice):
         # TODO should accept arbitrary expr as well.
+        optuple = mslice()
+        if optuple._complete:
+            self.context
 
         return self.new_node(And, *self._mslice_to_conjunction(mslice))
 
@@ -141,7 +188,7 @@ class ModuleAtom(Atom):
         self[False].level = 0  # first of all, try not to build a module
 
     def __repr__(self):
-        return self.module._name
+        return repr(self.module())
 
 
 @ContextPgraph.node_type
@@ -149,169 +196,18 @@ class OptionValueAtom(Atom):
 
     def __init__(self, module, option, value):
         super(OptionValueAtom, self).__init__()
-
         self.module = module
         self.option = option
         self.value  = value
 
-        is_default = (value == getattr(module._options, option).default)
+        is_default = (value == module._optype(option).default)
         if is_default:
             # Whenever possible prefer default option value,
             # but do it after a stage of disabling modules.
             self[True].level = 1
 
     def __repr__(self):
-        return '(%s.%s==%r)' % (self.module._name, self.option, self.value)
-
-
-class DomainBase(object):
-    """docstring for DomainBase"""
-
-    def __init__(self, context):
-        super(DomainBase, self).__init__()
-        self.context = context
-
-
-class DomainWithModule(DomainBase):
-
-    @property
-    def ctxmodule(self):
-        return self.context.ctxmodule_for(self.module)
-
-
-class ModuleDomain(DomainWithModule):
-    """docstring for ModuleDomain"""
-
-    def __init__(self, context, module):
-        super(ModuleDomain, self).__init__(context)
-        self.module = module
-
-        self._instances = []
-        self._options = module._options._mapwith(OptionDomain)
-
-        self._instantiate_product(self._options)
-
-    def _instantiate_product(self, iterables):
-        make_optuple = self._options._make
-
-        for new_tuple in product(*iterables):
-            self._instances.append(InstanceDomain(self.context,
-                                                  make_optuple(new_tuple)))
-
-    def consider_option(self, option, value):
-        domain_to_extend = getattr(self._options, option)
-        if value in domain_to_extend:
-            return
-
-        log.debug('mybuild: extending %r with %r', domain_to_extend, value)
-        domain_to_extend.add(value)
-
-        self._instantiate_product(option_domain
-            if option_domain is not domain_to_extend else (value,)
-            for option_domain in self._options)
-
-    def domain_for(self, option):
-        return getattr(self._options, option)
-
-    def init_pgraph(self, g):
-        AllEqual(g, g.atom_for(self.module),
-              *(option.create_pnode(g) for option in self._options))
-
-        for instance in self._instances:
-            instance.init_pgraph(g)
-
-
-class NotifyingSet(MutableSet, NotifyingMixin):
-    """Set with notification support."""
-
-    def __init__(self, values=()):
-        super(NotifyingSet, self).__init__()
-        self._set = set()
-
-        for value in values:
-            self.add(value)
-
-    def add(self, value):
-        if value in self:
-            return
-
-        self._set.add(value)
-        self._notify(value)
-
-    def discard(self, value):
-        if value not in self:
-            return
-        raise NotImplementedError
-
-    def __iter__(self):
-        return iter(self._set)
-    def __len__(self):
-        return len(self._set)
-    def __contains__(self, value):
-        return value in self._set
-
-    def __repr__(self):
-        return '%s(%r)' % (type(self).__name__, list(self))
-
-
-class OptionDomain(NotifyingSet):
-    """docstring for OptionDomain"""
-
-    def __init__(self, option):
-        super(OptionDomain, self).__init__()
-        self.option = option
-        self |= option._values
-
-    def create_pnode(self, g):
-        module = self.option._module
-        option = self.option._name
-
-        return AtMostOne(g, *(g.atom_for(module, option, value)
-                              for value in self))
-
-
-class InstanceDomain(DomainWithModule):
-
-    module = property(attrgetter('optuple._module'))
-
-    def __init__(self, context, optuple):
-        super(InstanceDomain, self).__init__(context)
-
-        self.optuple = optuple
-
-        self._instances = []
-        self._node = root_node = InstanceNode()
-
-        self.post_new(root_node)
-
-    def post_new(self, node):
-
-        def create_instance():
-            inst_str = str(self.optuple)
-            node_str = str(node)
-            if node_str:
-                inst_str = '%s <%s>' % (inst_str, node_str)
-
-            with log.debug("mybuild: new %s", inst_str):
-                try:
-                    instance = self.ctxmodule._instantiate(self, node)
-                except InstanceError as e:
-                    log.debug("mybuild: unviable %s: %s", inst_str, e)
-                else:
-                    log.debug("mybuild: succeeded %s", inst_str)
-                    self._instances.append(instance)
-
-        self.context.post(create_instance)
-
-    def init_pgraph(self, g):
-        atoms = [InstanceAtom(g, instance) for instance in self._instances]
-
-        for atom in atoms:
-            atom.implies(atom.instance._node.create_decisions_pnode(g))
-
-        optuple_instance = g.pnode_for(self.optuple)
-        optuple_instance.equivalent(AtMostOne(g, *atoms))
-        optuple_instance.implies(self._node.create_pnode(g))
+        return repr(self.module(**{self.option: self.value}))
 
 
 @ContextPgraph.node_type
@@ -325,6 +221,18 @@ class InstanceAtom(Atom):
         return repr(self.instance)
 
 
+def why_option_can_have_at_most_one_value(outcome, *causes):
+    return 'option can have at most one value: %s: %s' % (outcome, causes)
+def why_disabled_option_cannot_have_a_value(outcome, *causes):
+    return 'disabled option cannot have a value: %s: %s' % (outcome, causes)
+def why_option_with_no_value_must_be_disabled(outcome, *causes):
+    return 'option with no value must be disabled: %s: %s' % (outcome, causes)
+def why_option_implies_module(outcome, *causes):
+    return 'option implies module: %s: %s' % (outcome, causes)
+def why_module_implies_option(outcome, *causes):
+    return 'module implies option: %s: %s' % (outcome, causes)
+
+
 if __name__ == '__main__':
     from mybuild.dsl.pyfile import module, option
     from solver import solve
@@ -335,21 +243,16 @@ if __name__ == '__main__':
 
     @module
     def conf(self):
-        self.constrain(m1)
-        self.constrain(iface)
+        self._constrain(m1)
+        self._constrain(m3)
         self.sources = 'test.c'
 
     @module
     def m1(self):
-        if self._decide(m3):
-            self.constrain(m2(foo=17))
+        self._constrain(m2(foo=17))
 
     @module
     def m2(self, foo=42):
-        self.provides(iface)
-
-    @module
-    def iface(self):
         pass
 
     @module
