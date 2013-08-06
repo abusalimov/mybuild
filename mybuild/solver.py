@@ -24,9 +24,10 @@ from util.compat import *
 
 from .rgraph import *
 
-import logging
 
-logger = logging.getLogger('solver')
+import logging
+logger = logging.getLogger(__name__)
+
 
 class Solution(object):
     """
@@ -144,7 +145,7 @@ class TrunkSolution(Solution):
 
 class BranchSolutionBase(Solution):
     """docstring for BranchSolutionBase"""
-    
+
     def is_implied_by(self, other):
         raise NotImplementedError('Not implemented in base class')
 
@@ -283,7 +284,7 @@ class BranchSolution(BranchSolutionBase):
     @property
     def initialized(self):
         return not self.todo
-    
+
     def is_implied_by(self, other):
         return self.gen_literals <= other.literals
 
@@ -311,14 +312,14 @@ class BranchSolution(BranchSolutionBase):
                                                  inv_branch.gen_literals)))
 
         return inv_branch
-    
+
     def copy(self):
         new = super(BranchSolution, self).copy()
-        
+
         new.gen_literals = set()  # this is not copied
         new.error = None
         return new
-    
+
     def substitute_with(self, other):
         """
         Upon replacement, this branch is disposed and must not be used anymore.
@@ -330,18 +331,24 @@ class BranchSolution(BranchSolutionBase):
             self.trunk.branchmap[gen_literal] = other
 
         self.dispose()  # make gc happy
-        
+
     def __repr__(self):
         return '<%s %s>' % (type(self).__name__,
                             ' & '.join(repr(literal).join('()')
                                        for literal in self.gen_literals))
-    
+
 class ResolvedBranchSolution(BranchSolutionBase):
     def is_implied_by(self, other):
         return False
 
 def create_trunk(pgraph, initial_literals=[]):
-    logger.debug('Start trunk creating')
+    initial_literals = to_lset(initial_literals)
+
+    logger.info('creating trunk for %d nodes', len(initial_literals))
+    if logger.isEnabledFor(logging.DEBUG):
+        for literal in initial_literals:
+            logger.debug('\tinitial literal: %r', literal)
+
     trunk = TrunkSolution()
 
     nodes    = trunk.nodes
@@ -366,7 +373,7 @@ def create_trunk(pgraph, initial_literals=[]):
     # A difference between implication closures of conflicting literals is
     # accumulated in order to be able to produce better error reporting
     # because of keeping more reason chains for all literals.
-    todo = to_lset(initial_literals)
+    todo = initial_literals
     todo.update(pgraph.const_literals)
 
     for literal in todo:
@@ -374,8 +381,8 @@ def create_trunk(pgraph, initial_literals=[]):
 
     literals |= todo
 
-    while todo:
-        literal = todo.pop()
+    for literal in pop_iter(todo):
+        logger.debug('\thandling literal: %r', literal)
 
         assert literal in literals, "must has already been added"
         nodes.add(literal.node)
@@ -411,29 +418,30 @@ def create_trunk(pgraph, initial_literals=[]):
         todo     |= newly_seen
 
     if not trunk.valid:
-        logger.info('Trunk creation failed, there is violation. Violation nodes:')
-        violations = trunk.nodes
-        for literal in literals:
-            try:
-                violations.remove(literal.node)
-            except KeyError:               
-                logger.info('\t%s, %s', literal, ~literal)
+        logger.info('trunk is not valid')
+        for node in filter(trunk.literals.issuperset, trunk.nodes):
+            logger.info('\tviolated node: %r', node)
+
         raise SolutionError(trunk)
 
-    logger.debug('Trunk created, no violation found') 
+    logger.info('created trunk with %d nodes', len(trunk.nodes))
+
     return trunk
 
 
 def prepare_branches(trunk, unresolved_nodes):
     """
     Non-recursive DFS.
-    """    
-    logger.debug('Preparing branches for unresolved nodes: %s', unresolved_nodes)
+    """
+
+    logger.debug('preparing branches for %d nodes', len(unresolved_nodes))
+
     for node in unresolved_nodes:
+        logger.debug('\tunresolved node: %r', node)
+
         for literal in node:
             branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
             branch.todo_it = None
-    logger.debug('Branches for each literal in node are created')
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
 
@@ -455,17 +463,14 @@ def prepare_branches(trunk, unresolved_nodes):
         if not stack:
             stack_push(todo_branches.pop())
 
+        log_indent = '. '*len(stack)
         branch = stack[-1]
-        logger.debug(' .' * len(stack) + 'branch %r for: %s',
-                     (id(stack[-1]) % 37), sorted(branch.gen_literals))
 
         try:
             # Can't use branch.handle_todos since some branches are in an
             # intermediate state. Manual iteration also makes it possible to
             # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
-            logger.debug(' ' * 60 + '%s -> %s \t %s', id(branch) % 37,
-                         id(implied) % 37, literal)
 
             if not implied.valid:
                 branch.todo.add(literal)
@@ -485,18 +490,21 @@ def prepare_branches(trunk, unresolved_nodes):
                 raise StopIteration  # forget about this branch
 
         except SolutionError as error:
-            logger.debug(' .' * len(stack) + 'branch %r dies', (id(branch) % 37))
+            logger.debug('\t%sinviable  %r', log_indent, branch)
+
             # unwind implication stack
             for implicant in pop_iter(stack, pop=stack_pop):
                 implicant.error = error
                 error = SolutionError(implicant, error)
 
         except StopIteration:
-            logger.debug(' .' * len(stack) + 'branch %r done', (id(branch) % 37))
+            logger.debug('\t%ssucceeded %r', log_indent, branch)
+
             # no more implications, or the branch was merged into an equivalent
             stack_pop()
 
         else:  # defer until a branch is initialized
+            logger.debug('\t%sdeferred  %r', log_indent, branch)
             #
             # During initialization of the implied branch it may have been
             # replaced by an implicant (appears upper on the stack).
@@ -524,7 +532,7 @@ def resolve_branches(trunk, branches):
     for branch in branches:
         resolved.update(branch, handle_todos=True)
     logger.debug('Resolved created')
-    
+
     while resolved:
         trunk.update(resolved)
 
@@ -570,7 +578,7 @@ def stepwise_resolve(trunk):
 def get_trunk_solution(pgraph, initial_values):
     nodes = pgraph.nodes
 
-    trunk = create_trunk(pgraph, initial_values) 
+    trunk = create_trunk(pgraph, initial_values)
     # for literal in trunk.literals:
     #     print 'trunk', literal
 
@@ -588,7 +596,7 @@ def solve(pgraph, initial_values):
     logger.debug('Start solving')
     nodes = pgraph.nodes
 
-    logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)    
+    logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)
     trunk = get_trunk_solution(pgraph, initial_values)
 
     rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches)
