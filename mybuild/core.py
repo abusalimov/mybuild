@@ -99,7 +99,7 @@ class ModuleType(type):
             return '%s(%r)' % (cls._fullname, ', '.join(cls._options))
 
 
-class Module(with_metaclass(ModuleType)):
+class Module(with_meta(ModuleType)):
     """Base class for Mybuild modules."""
 
     # ModuleType overloads __call__, but the default factory call is

@@ -36,7 +36,7 @@ else:
 iterkeys = iter
 
 
-def with_metaclass(*meta_arg, **kwargs):
+def with_meta(*meta_arg, **kwargs):
     if meta_arg:
         meta, = meta_arg
     else:
@@ -83,7 +83,7 @@ def compute_default_metaclass(bases):
                         "of the metaclasses of all its bases")
     return winner
 
-ABCBase = with_metaclass(_abc.ABCMeta)
+ABCBase = with_meta(_abc.ABCMeta)
 
 
 del _abc

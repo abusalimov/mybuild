@@ -81,7 +81,7 @@ class MyFileModuleType(ModuleType):
         return options
 
 
-class MyFileModule(with_metaclass(MyFileModuleType), Module):
+class MyFileModule(with_meta(MyFileModuleType), Module):
     """docstring for MyFileModule"""
 
     def __init__(self, domain, instance_node):

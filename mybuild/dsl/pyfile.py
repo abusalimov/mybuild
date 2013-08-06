@@ -91,7 +91,7 @@ class PyFileModuleType(ModuleType):
                 for optype, name in zip(head + tail, option_args)]
 
 
-class PyFileModule(with_metaclass(PyFileModuleType, intermediate=True), Module):
+class PyFileModule(with_meta(PyFileModuleType, intermediate=True), Module):
 
     def _consider(self, expr):
         self._context.consider(expr, self)
