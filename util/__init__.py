@@ -2,6 +2,7 @@
 Misc stuff. --Eldar
 """
 
+import functools as _functools
 from functools import partial
 from operator import attrgetter
 from operator import itemgetter
@@ -9,6 +10,8 @@ from operator import methodcaller
 
 from .collections import Mapping as _Mapping
 from .collections import namedtuple as _namedtuple
+from .collections import deque as _deque
+
 
 from .compat import *
 
@@ -91,6 +94,7 @@ class GetterType(object):
 
 getter = GetterType()
 
+
 class InvokerType(object):
     """
     invoker.meth(*args, **kwargs) -> methodcaller('meth', *args, **kwargs)
@@ -100,6 +104,12 @@ class InvokerType(object):
         return partial(methodcaller, meth)
 
 invoker = InvokerType()
+
+
+def instanceof(self, classinfo):
+    return partial(isinstance, classinfo=classinfo)
+def subclassof(self, classinfo):
+    return partial(issubclass, classinfo=classinfo)
 
 
 def constructor_decorator(cls, **kwargs):
@@ -148,6 +158,43 @@ def constructor_decorator(cls, **kwargs):
 
     ret_cls = metaclass(cls.__name__, None, dict(cls.__dict__, **kwargs))
     return ret_cls
+
+
+class ReentManager(object):
+    """Job mgmt."""
+    __slots__ = '_job_queue', '_outermost'
+
+    def __init__(self):
+        super(ReentManager, self).__init__()
+        self._job_queue = _deque()
+        self._outermost = True
+
+    def post(self, func):
+        was_outermost = self._outermost
+        self._outermost = False
+
+        self._job_queue.append(func)
+
+        if was_outermost:
+            try:
+                for job_func in pop_iter(self._job_queue, pop_meth='popleft'):
+                    job_func()
+            finally:
+                self._outermost = True
+
+
+def no_reent(func, reent_manager=None):
+    """Decorator which defers recursive calls to 'func' to the outermost
+    invocation."""
+    if reent_manager is None:
+        reent_manager = ReentManager()
+
+    @_functools.wraps(func)
+    def decorated(*args, **kwargs):
+        return reent_manager.post(partial(func, *args, **kwargs))
+    decorated.no_reent = partial(no_reent, reent_manager=reent_manager)
+
+    return decorated
 
 
 class Pair(_namedtuple('_Pair', 'false true')):
