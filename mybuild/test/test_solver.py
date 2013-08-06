@@ -100,8 +100,5 @@ class PdagDtreeTestCase(TestCase):
 
 
 if __name__ == '__main__':
-    import mybuild.logs as log
-
-    log.init_log()
     unittest.main()
 

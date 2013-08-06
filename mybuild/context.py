@@ -21,8 +21,6 @@ from util import no_reent
 
 from util.compat import *
 
-import logs as log
-
 
 class Context(object):
     """docstring for Context"""
