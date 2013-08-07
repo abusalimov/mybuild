@@ -26,6 +26,10 @@ class NodeContainer(object):
     
     def compare_literals(self, literals):
         return (set(literals) == self.literals)
+    
+# TODO remove to other place after all types why function realization
+def why_violation(cls, literal, *cause_literals):
+    return '%s because of violation %s' % (literal, cause_literals)  
 
 class Rgraph(object): 
     """
@@ -41,17 +45,22 @@ class Rgraph(object):
             self.nodes[frozenset([literal])] = NodeContainer(frozenset([literal]))
                 
         for reason in reasons:
-            self.fill_data(reason)              
-            
+            self.fill_data(reason)
+              
+        for branch in violation_branches:
+            for literal in branch.gen_literals:
+                self.fill_data(Reason(why_violation, ~literal, literal))
+                self.fill_data(Reason(None, literal))  
+         
     def fill_data(self, reason): 
         if len(reason.cause_literals) > 1:
             s = frozenset(reason.cause_literals)
             self.nodes[s] = NodeContainer(s)
             self.update_containers(self.nodes[s])
-        elif not self.nodes.has_key(frozenset(reason.cause_literals)):
+        elif frozenset(reason.cause_literals) not in self.nodes:
             self.nodes[frozenset(reason.cause_literals)] = NodeContainer(frozenset(reason.cause_literals))
             
-        if False == self.nodes.has_key(frozenset([reason.literal])):
+        if frozenset([reason.literal]) not in self.nodes:
             self.nodes[frozenset([reason.literal])] = NodeContainer(frozenset([reason.literal]))
                      
         cause_node = self.nodes[frozenset(reason.cause_literals)]
@@ -83,15 +92,32 @@ class Rgraph(object):
             node, reason = queue.get()        
             self.dfs(node, reason, used, queue, 0)
             
-        for branch in self.violation_branches:
-            print '--- violation for', branch.gen_literals, '---'
+        for branch in self.violation_branches:     
             branch.trunk |= branch 
+            violation_nodes = self.get_violation_nodes(branch.trunk)
+            
+            print '--- violation for', branch.gen_literals, '---'
             for literal in branch.gen_literals:
                 branch.trunk.reasons.add(Reason(None, literal))
             rgraph_branch = Rgraph(branch.trunk.literals, branch.trunk.reasons)
             rgraph_branch.find_shortest_ways()
-            rgraph_branch.print_graph()
+            
+#             for node in rgraph_branch.nodes.values():
+#                 print node.literals, node.length
+                
+            for node in violation_nodes:
+                print '------ because of {0} and {1} ------'.format(node[True], node[False])
+                rgraph_branch.print_shortest_way(node[True])
+                rgraph_branch.print_shortest_way(node[False])
+                print '------'
             print '---'
+            
+    def get_violation_nodes(self, trunk):
+        violation_nodes = set()
+        for node in trunk.nodes:
+            if node[False] in trunk.literals and node[True] in trunk.literals:
+                violation_nodes.add(node)
+        return violation_nodes
                 
     def dfs(self, node, reason, used, queue, depth):
         if node in used:
@@ -154,25 +180,23 @@ class Rgraph(object):
                 used.add(container)
                 queue.put_nowait(container)
 
-# Unused code, may be useful in future
-#     def print_shortest_way(self, literals):
-#         node = self.nodes[frozenset([literals])]    
-#         if node.length == float("+inf"):
-#             return    
-#         self._print_shortest_way_part(node)
-#         
-#     def _print_shortest_way_part(self, node):
-#         if node.length == 0:
-#             self.print_reason(node.becauseof[self.initial], 0)
-#             return 1;
-#               
-#         if not node.members:
-#             depth = self._print_shortest_way_part(node.parent)
-#             self.print_reason(node.becauseof[node.parent], depth)
-#             return depth + 1
-#         else:
-#             for member in node.members:
-#                 self._print_shortest_way_part(member)
-#             return 0
+    def print_shortest_way(self, literals):
+        node = self.nodes[frozenset([literals])]    
+        if node.length == float("+inf"):
+            return    
+        self._print_shortest_way_part(node)
+         
+    def _print_shortest_way_part(self, node):
+        if node.length == 0:
+            self.print_reason(node.becauseof[self.initial], 0)
+            return 1;
+               
+        if not node.members:
+            depth = self._print_shortest_way_part(node.parent)
+            self.print_reason(node.becauseof[node.parent], depth)
+            return depth + 1
+        else:
+            for member in node.members:
+                self._print_shortest_way_part(member)
+            return 0
 
-                           

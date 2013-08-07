@@ -537,9 +537,6 @@ def resolve_branches(trunk, branches):
         trunk.update(resolved)
 
         for literal in resolved.literals:
-            #TODO: it is just first version, we need remember violation way
-            trunk.reasons.add(Reason(_why_violation, literal, ~literal))
-            trunk.reasons.add(Reason(None, ~literal)) #violation
             trunk.violation_branches.add(trunk.branchmap[~literal])
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
@@ -559,10 +556,6 @@ def resolve_branches(trunk, branches):
 
         resolved = next_resolved
     logger.debug('Branch resolving completed')
-
-# TODO remove to other place after all types why function realization
-def _why_violation(literal, *cause_literals):
-    return '%s because of violation %s' % (literal, cause_literals)
 
 def stepwise_resolve(trunk):
     levelmap = defaultdict(set)
