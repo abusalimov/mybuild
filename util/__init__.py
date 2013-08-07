@@ -114,10 +114,10 @@ class InvokerType(object):
 invoker = InvokerType()
 
 
-def instanceof(self, classinfo):
-    return partial(isinstance, classinfo=classinfo)
-def subclassof(self, classinfo):
-    return partial(issubclass, classinfo=classinfo)
+def instanceof(classinfo):
+    return lambda obj: isinstance(obj, classinfo)
+def subclassof(classinfo):
+    return lambda obj: issubclass(obj, classinfo)
 
 
 def constructor_decorator(cls, **kwargs):
@@ -214,11 +214,13 @@ class Pair(_namedtuple('_Pair', 'false true')):
 bools = Pair(False, True)
 
 
+is_mapping = instanceof(_Mapping)
+
 def to_dict(iterable_or_mapping, check_exclusive=False):
     if isinstance(iterable_or_mapping, dict):
         return iterable_or_mapping
 
-    if not check_exclusive or isinstance(iterable_or_mapping, _Mapping):
+    if not check_exclusive or is_mapping(iterable_or_mapping):
         return dict(iterable_or_mapping)
 
     items = list(iterable_or_mapping)
