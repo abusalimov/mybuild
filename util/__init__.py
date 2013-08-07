@@ -3,6 +3,8 @@ Misc stuff. --Eldar
 """
 
 import functools as _functools
+import logging as _logging
+
 from functools import partial
 from operator import attrgetter
 from operator import itemgetter
@@ -14,6 +16,12 @@ from .collections import deque as _deque
 
 
 from .compat import *
+
+
+def init_logging(filename, level=_logging.DEBUG):
+    _logging.basicConfig(filename=filename, filemode='w',
+                         format='%(levelname)-8s%(name)s:\t%(message)s',
+                         level=level)
 
 
 def identity(x):
