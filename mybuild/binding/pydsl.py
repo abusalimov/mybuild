@@ -13,29 +13,12 @@ import inspect
 import threading
 from operator import attrgetter
 
-from . import with_defaults
 from ..core import ModuleType
 from ..core import Module
 from ..core import Optype
 
-from nsloader import pyfile
-
 from util import constructor_decorator
 from util.compat import *
-
-
-PYFILE_DEFAULTS = ['module', 'option']
-
-
-class MybuildPyFileLoader(pyfile.PyFileLoader):
-
-    MODULE   = 'PYBUILD'
-    FILENAME = 'Pybuild'
-
-    @classmethod
-    def init_ctx(cls, ctx, initials=None):
-        return super(MybuildPyFileLoader, cls).init_ctx(ctx,
-                with_defaults(initials, PYFILE_DEFAULTS, globals()))
 
 
 class PyFileModuleType(ModuleType):
@@ -102,37 +85,9 @@ class PyFileModule(with_meta(PyFileModuleType, intermediate=True), Module):
     def __repr__(self):
         return repr(self._optuple)
 
-    def build(self, bld):
-        src = getattr(self, 'sources', [])
-        bld(features='mylink', source=src, target='test')
-        print('+++++++++ add task ++++')
-        print('module = ' + str(self))
-        print('sources = ' + str(src))
-        print('+++++++++++++++++++++++')
-
-
-try:
-    from waflib.Task import Task
-    from waflib.TaskGen import feature, extension, after_method
-    from waflib.Tools import ccroot
-
-    @after_method('process_source')
-    @feature('mylink')
-    def call_apply_link(self):
-        print('linking' + str(self))
-
-    class mylink(ccroot.link_task):
-        run_str = 'cat ${SRC} > ${TGT}'
-
-    class ext2o(Task):
-        run_str = 'cp ${SRC} ${TGT}'
-
-    @extension('.c')
-    def process_ext(self, node):
-        self.create_compiled_task('ext2o', node)
-
-except ImportError:
-    pass  # XXX move Waf-related stuff from here
+    # XXX
+    constrain = _constrain
+    consider  = _consider
 
 
 module = constructor_decorator(PyFileModule, __doc__=

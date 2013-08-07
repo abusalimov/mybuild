@@ -1,7 +1,6 @@
 """
 Bindings for Mybuild files.
 """
-from __future__ import absolute_import
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
@@ -11,29 +10,13 @@ __all__ = ['module', 'option']
 
 import functools
 
-from . import with_defaults
 from ..core import ModuleType
 from ..core import Module
 from ..core import Optype
 
-from nsloader import myfile
 from myfile.linkage import MyfileObjectProxy
 
 from util.compat import *
-
-
-MYFILE_DEFAULTS = ['module', 'option']
-
-
-class MybuildMyFileLoader(myfile.MyFileLoader):
-
-    MODULE   = 'MYBUILD'
-    FILENAME = 'Mybuild'
-
-    @classmethod
-    def init_ctx(cls, ctx, initials=None):
-        return super(MybuildMyFileLoader, cls).init_ctx(ctx,
-                with_defaults(initials, MYFILE_DEFAULTS, globals()))
 
 
 class MyFileModuleType(ModuleType):
@@ -84,8 +67,10 @@ class MyFileModuleType(ModuleType):
 class MyFileModule(with_meta(MyFileModuleType), Module):
     """docstring for MyFileModule"""
 
-    def __init__(self, domain, instance_node):
-        super(MyFileModule, self).__init__()
+    def __init__(_self, **kwargs):
+        super(Module, _self).__init__()
+        # TODO NIY
+        print type(_self), _self
 
 
 module = MyFileModuleType
