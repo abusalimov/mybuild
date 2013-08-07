@@ -21,6 +21,9 @@ from util import no_reent
 
 from util.compat import *
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class Context(object):
     """docstring for Context"""
@@ -36,11 +39,11 @@ class Context(object):
 
     @no_reent
     def _instantiate(self, mdata, optuple, origin=None):
-        log.debug("mybuild: new %s (posted by %s)", optuple, origin)
+        logger.debug("new %s (posted by %s)", optuple, origin)
         try:
             instance = mdata.ctxtype._instantiate(optuple)
         except InstanceError as e:
-            log.debug("mybuild:     %s unviable: %s", optuple, e)
+            logger.debug("    %s inviable: %s", optuple, e)
             instance = None
 
         assert optuple not in self._instances
@@ -230,12 +233,11 @@ def why_module_implies_option(outcome, *causes):
 
 
 if __name__ == '__main__':
-    from mybuild.dsl.pyfile import module, option
-    from solver import solve
+    import util
+    util.init_logging(filename='%s.log' % __name__)
 
-    log.zones = ['mybuild', 'dtree']
-    log.verbose = True
-    log.init_log()
+    from mybuild.dsl.pyfile import *
+    from solver import solve
 
     @module
     def conf(self):

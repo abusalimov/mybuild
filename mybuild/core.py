@@ -13,6 +13,7 @@ __all__ = [
     "Optype",
     "Optuple",
     "MybuildError",
+    "InstanceError",
 ]
 
 
