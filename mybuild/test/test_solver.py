@@ -1,11 +1,12 @@
 import unittest
 from unittest import TestCase
 
-from mybuild.dsl.pyfile import module
+from mybuild.binding.pydsl import module
 from mybuild.context import Context
 from mybuild.solver import solve
 
-class PdagDtreeTestCase(TestCase):
+
+class SolverTestCase(TestCase):
 
     def test_simple_solution(self):
         context = Context()
