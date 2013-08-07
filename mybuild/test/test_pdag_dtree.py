@@ -322,14 +322,8 @@ class PdagDtreeTestCase(TestCase):
 
 
 if __name__ == '__main__':
-    import logging
-
-    logger = logging.getLogger('mybuild.solver')
-    hdlr = logging.FileHandler('%s.log' % __name__, 'w')
-    formatter = logging.Formatter('%(levelname)-8s %(message)s')
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-    logger.setLevel(logging.DEBUG)
+    import util
+    util.init_logging(filename='%s.log' % __name__)
 
     unittest.main()
 
