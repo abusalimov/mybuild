@@ -124,7 +124,7 @@ class Module(with_meta(ModuleType)):
         """Consumes keyword arguments."""
         super(Module, _self).__init__()
 
-    def __repr__(_self):
+    def __repr__(self):
         return repr(self._optuple)
 
 
