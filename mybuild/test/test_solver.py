@@ -12,12 +12,12 @@ class PdagDtreeTestCase(TestCase):
 
         @module
         def conf(self):
-            self.constrain(m1(isM2 = True))
+            self._constrain(m1(isM2 = True))
 
         @module
         def m1(self, isM2 = False):
             if isM2:
-                self.constrain(m2)
+                self._constrain(m2)
 
         @module
         def m2(self):
@@ -38,12 +38,12 @@ class PdagDtreeTestCase(TestCase):
 
         @module
         def conf(self):
-            self.constrain(m1(isM2 = True))
+            self._constrain(m1(isM2 = True))
 
         @module
         def m1(self, isM2 = False):
             if isM2:
-                self.constrain(m2)
+                self._constrain(m2)
 
         @module
         def m2(self):
@@ -51,7 +51,7 @@ class PdagDtreeTestCase(TestCase):
 
         @module
         def m3(self):
-            self.constrain(m4)
+            self._constrain(m4)
             pass
 
         @module
@@ -72,21 +72,20 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(False,  solution[g.atom_for(m3)])
         self.assertIs(False,  solution[g.atom_for(m4)])
 
-    def test_ciclic_dependence(self):
+    def test_cyclic_dependence(self):
         context = Context()
 
         @module
         def conf(self):
-            self.constrain(m1)
+            self._constrain(m1)
 
         @module
         def m1(self):
-            self.constrain(m2)
+            self._constrain(m2)
 
         @module
         def m2(self):
-            self.constrain(m1)
-            pass
+            self._constrain(m1)
 
         context.consider(conf)
 
@@ -100,5 +99,8 @@ class PdagDtreeTestCase(TestCase):
 
 
 if __name__ == '__main__':
+    import util
+    util.init_logging(filename='%s.log' % __name__)
+
     unittest.main()
 
