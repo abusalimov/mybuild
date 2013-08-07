@@ -15,6 +15,8 @@ from operator import attrgetter
 
 from .core import *
 from .pgraph import *
+from .solver import solve
+
 from util import NotifyingMixin
 from util import pop_iter
 from util import no_reent
@@ -28,9 +30,9 @@ logger = logging.getLogger(__name__)
 class Context(object):
     """docstring for Context"""
 
-    def __init__(self, instance_type=object):
+    def __init__(self, module_mixin=object):
         super(Context, self).__init__()
-        self.instance_type = instance_type
+        self.module_mixin = module_mixin
 
         self._instances = dict()  # {optuple: instance}
         self._mdata     = dict()  # {module: mdata}
@@ -114,12 +116,12 @@ class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
 
     @classmethod
     def _create_ctxtype(cls, context, module):
-        # Mix context specific instance_type into a module class.
+        # Mix context specific instance type into a module class.
         type_dict = dict(__module__ = module.__module__,
                          __doc__    = module.__doc__,
                          _module    = module,
                          _context   = context)
-        bases = (module, context.instance_type)
+        bases = (module, context.module_mixin)
 
         return type(module.__name__, bases, type_dict)
 
@@ -232,12 +234,24 @@ def why_module_implies_option(outcome, *causes):
     return 'module implies option: %s: %s' % (outcome, causes)
 
 
+def resolve(initial_module, module_mixin=object):
+    context = Context(module_mixin)
+    context.consider(initial_module)
+
+    g = context.create_pgraph()
+    solution = solve(g, {g.atom_for(initial_module): True})
+
+    return [pnode.instance for pnode, value in iteritems(solution)
+            if value and isinstance(pnode, InstanceAtom)]
+
+
 if __name__ == '__main__':
     import util
     util.init_logging(filename='%s.log' % __name__)
 
-    from mybuild.dsl.pyfile import *
-    from solver import solve
+    from pprint import pprint
+
+    from mybuild.binding.pydsl import *
 
     @module
     def conf(self):
@@ -257,16 +271,6 @@ if __name__ == '__main__':
     def m3(self):
         pass
 
-    context = Context()
-    context.consider(conf)
+    instances = resolve(conf)
 
-    g = context.create_pgraph()
-
-    solution = solve(g, {g.atom_for(conf):True})
-
-    for pnode, value in iteritems(solution):
-        if isinstance(pnode, InstanceAtom):
-            print '>>>', value, pnode
-            srcs = getattr(pnode.instance, 'sources', '')
-            # print srcs
-
+    pprint(instances)
