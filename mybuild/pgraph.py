@@ -538,12 +538,12 @@ class LatticeOpNode(OperandSetNode):
         return super(LatticeOpNode, cls)._new(operands, **kwargs)
 
     @classmethod
-    def _new_no_operands(cls):
+    def _new_no_operands(cls, **kwargs):
         if cls._optimize_new:
             return cls.pgraph.new_const(cls.identity)
 
     @classmethod
-    def _new_one_operand(cls, operand):
+    def _new_one_operand(cls, operand, **kwargs):
         if cls._optimize_new:
             return operand
 
