@@ -37,9 +37,9 @@ from collections import Mapping
 from collections import namedtuple
 from itertools import combinations
 
-from util import bools
-from util import Pair
-from util import instanceof
+from util.misc import bools
+from util.misc import Pair
+from util.operator import instanceof
 
 from util.compat import *
 
@@ -205,6 +205,13 @@ class Node(NodeBase, Pair):
 
     def equivalent(self, other, why_therefore=None, why_becauseof=None):
         self[True].equivalent(other[True], why_therefore, why_becauseof)
+
+    def implies_all(self, others, why=None):
+        self[True].therefore_all(dict.fromkeys(others, True), why)
+
+    def equivalent_all(self, others, why_therefore=None, why_becauseof=None):
+        self[True].equivalent_all(dict.fromkeys(others, True),
+                                  why_therefore, why_becauseof)
 
 
 class Literal(object):
@@ -461,40 +468,41 @@ ConstNode.types = Pair(FalseConst, TrueConst)
 class SingleOperandNode(Node):
     """A node with a single operand."""
 
-    def __init__(self, operand, **kwargs):
-        super(SingleOperandNode, self).__init__(**kwargs)
+    def __init__(self, operand, *args, **kwargs):
+        super(SingleOperandNode, self).__init__(*args, **kwargs)
         self._operand = operand
 
 
 class OperandSetNode(Node):
     """A node which may have an arbitrary set of unordered unique operands."""
 
-    def __init__(self, operands, **kwargs):
-        super(OperandSetNode, self).__init__(**kwargs)
+    def __init__(self, operands, *args, **kwargs):
+        super(OperandSetNode, self).__init__(*args, **kwargs)
         self._operands = operands
 
     @classmethod
-    def _new(cls, operands, **kwargs):
+    def _new(cls, operands, *args, **kwargs):
         operands = frozenset(operands)
 
         if not operands:
-            new = cls._new_no_operands(**kwargs)
+            new = cls._new_no_operands(*args, **kwargs)
         elif len(operands) == 1:
-            new = cls._new_one_operand(*operands, **kwargs)
+            operand, = operands
+            new = cls._new_one_operand(operand, *args, **kwargs)
         else:
             new = None
 
         if new is None:
-            new = super(OperandSetNode, cls)._new(operands, **kwargs)
+            new = super(OperandSetNode, cls)._new(operands, *args, **kwargs)
 
         return new
 
     @classmethod
-    def _new_no_operands(cls, **kwargs):
+    def _new_no_operands(cls, *args, **kwargs):
         pass
 
     @classmethod
-    def _new_one_operand(cls, operand, **kwargs):
+    def _new_one_operand(cls, operand, *args, **kwargs):
         pass
 
     def __repr__(self):
@@ -517,33 +525,33 @@ class LatticeOpNode(OperandSetNode):
 
     _optimize_new = False
 
-    def __init__(self, operands, **why_kwargs):
+    def __init__(self, operands, *args, **why_kwargs):
         why_therefore = why_kwargs.pop(
                 'why_identity_implies_all_operands_identity', None)
         why_becauseof = why_kwargs.pop(
                 'why_all_operands_identity_implies_identity', None)
 
-        super(LatticeOpNode, self).__init__(operands, **why_kwargs)
+        super(LatticeOpNode, self).__init__(operands, *args, **why_kwargs)
 
         identity = self.identity
         self[identity].equivalent_all(dict.fromkeys(operands, identity),
                                       why_therefore, why_becauseof)
 
     @classmethod
-    def _new(cls, operands, **kwargs):
+    def _new(cls, operands, *args, **kwargs):
         if cls._optimize_new:
             identity_const_type = ConstNode.types[cls.identity]
             operands = filternot(instanceof(identity_const_type), operands)
 
-        return super(LatticeOpNode, cls)._new(operands, **kwargs)
+        return super(LatticeOpNode, cls)._new(operands, *args, **kwargs)
 
     @classmethod
-    def _new_no_operands(cls, **kwargs):
+    def _new_no_operands(cls, *args, **kwargs):
         if cls._optimize_new:
             return cls.pgraph.new_const(cls.identity)
 
     @classmethod
-    def _new_one_operand(cls, operand, **kwargs):
+    def _new_one_operand(cls, operand, *args, **kwargs):
         if cls._optimize_new:
             return operand
 
@@ -580,23 +588,23 @@ class Not(SingleOperandNode):
 
     why_self_equals_negated_operand = None
 
-    def __init__(self, operand, **why_kwargs):
+    def __init__(self, operand, *args, **why_kwargs):
         why = why_kwargs.pop('why_self_equals_negated_operand', None)
 
-        super(Not, self).__init__(operand, **why_kwargs)
+        super(Not, self).__init__(operand, *args, **why_kwargs)
 
         self[False].equivalent(operand[True],
                                why_becauseof=why,
                                why_therefore=why)
 
     @classmethod
-    def _new(cls, operand, **kwargs):
+    def _new(cls, operand, *args, **kwargs):
         if isinstance(operand, Not):
             return operand._operand
         elif isinstance(operand, ConstNode):
             return cls.pgraph.new_const(not operand.const_value)
         else:
-            return super(Not, cls)._new(operand, **kwargs)
+            return super(Not, cls)._new(operand, *args, **kwargs)
 
     def __repr__(self):
         return '(~%r)' % (self._operand,)
@@ -615,8 +623,8 @@ class Implies(Node):
     False   False    True
     """
 
-    def __init__(self, if_, then, **why_kwargs):
-        super(Implies, self).__init__(**why_kwargs)
+    def __init__(self, if_, then, *args, **why_kwargs):
+        super(Implies, self).__init__(*args, **why_kwargs)
 
         self._if = if_
         self._then = then
@@ -624,7 +632,7 @@ class Implies(Node):
         self[False].equivalent_all({if_: True, then: False})  # XXX reasons
 
     @classmethod
-    def _new(cls, if_, then, **kwargs):
+    def _new(cls, if_, then, *args, **kwargs):
         # if (isinstance(if_, FalseConstNode) or
         #       isinstance(then, TrueConstNode)):
         #     return cls.pgraph.new_const(True)
@@ -635,7 +643,7 @@ class Implies(Node):
         # elif isinstance(then, FalseConstNode):
         #     return cls.pgraph.new_node(Not, if_)
 
-        return super(Implies, cls)._new(if_, then, **kwargs)
+        return super(Implies, cls)._new(if_, then, *args, **kwargs)
 
     def __repr__(self):
         return '(%r => %r)' % (self._if, self._then)
@@ -646,10 +654,11 @@ class SingleZeroLatticeOpNode(LatticeOpNode):
     Allows at most a single operand to be Zero, the rest must be Identity.
     """
 
-    def __init__(self, operands, **why_kwargs):
+    def __init__(self, operands, *args, **why_kwargs):
         why = why_kwargs.pop('why_one_operand_zero_implies_others_identity',
                              None)
-        super(SingleZeroLatticeOpNode, self).__init__(operands, **why_kwargs)
+        super(SingleZeroLatticeOpNode, self).__init__(operands,
+                                                      *args, **why_kwargs)
 
         # this introduces N^2 imlications between operands, uff...
         for operand in operands:
@@ -685,10 +694,10 @@ class AllEqual(OperandSetNode):
     False   False   False    False
     """
 
-    def __init__(self, operands, **why_kwargs):
+    def __init__(self, operands, *args, **why_kwargs):
         why = why_kwargs.pop('why_self_equals_all_operands', None)
 
-        super(AllEqual, self).__init__(operands)
+        super(AllEqual, self).__init__(operands, *args, **why_kwargs)
 
         for operand in operands:
             self.equivalent(operand,
