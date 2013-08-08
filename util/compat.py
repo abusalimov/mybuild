@@ -1,6 +1,7 @@
 """
 2to3 compat stuff.
 """
+from __future__ import absolute_import
 
 import abc as _abc
 import operator as _operator
