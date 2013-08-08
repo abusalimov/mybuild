@@ -87,10 +87,10 @@ class Solution(object):
         del self.literals
         del self.reasons
 
-    def update(self, other, check=True):
+    def update(self, other, ignore_errors=False):
         self |= other
 
-        if check and not self.valid:
+        if not ignore_errors and not self.valid:
             raise SolutionError(self)
 
     def difference_update(self, other, check=True):
@@ -115,7 +115,7 @@ class TrunkSolution(Solution):
         self.branchmap = dict()  # maps gen literals to branches
         self.neglefts = dict()   # neglasts to sets of left literals
 
-        self.violation_branches = set()
+        self.violation_branches = {}
 
     def copy(self):
         new = super(TrunkSolution, self).copy()
@@ -200,15 +200,15 @@ class BranchSolutionBase(Solution):
 
         return super(BranchSolutionBase, self).__isub__(other)
 
-    def update(self, other, check=True, handle_todos=False):
-        super(BranchSolutionBase, self).update(other, check)
+    def update(self, other, ignore_errors=False, handle_todos=False):
+        super(BranchSolutionBase, self).update(other, ignore_errors=ignore_errors)
         if handle_todos:
-            self.handle_todos()
+            self.handle_todos(ignore_errors=ignore_errors)
 
-    def difference_update(self, other, check=True, handle_todos=False):
-        super(BranchSolutionBase, self).difference_update(other, check)
+    def difference_update(self, other, ignore_errors=False, handle_todos=False):
+        super(BranchSolutionBase, self).difference_update(other, ignore_errors=ignore_errors)
         if handle_todos:
-            self.handle_todos()
+            self.handle_todos(ignore_errors=ignore_errors)
 
     def substitute_with(self, other):
         raise NotImplementedError('Not implemented in base class')
@@ -243,7 +243,7 @@ class BranchSolutionBase(Solution):
             self.reasons.add(neg_reason)
             self.todo.add(neg_literal)
 
-    def iter_todo_away(self):
+    def iter_todo_away(self, ignore_errors=False):
         trunk = self.trunk
 
         for literal in pop_iter(self.todo):
@@ -258,21 +258,27 @@ class BranchSolutionBase(Solution):
                     continue  # included in the trunk, i.e. unconditionally
 
                 assert ~literal in trunk.literals
-                raise SolutionError(self)
+                if not ignore_errors:
+                    raise SolutionError(self)
+                else:
+                    if literal in trunk.violation_branches:
+                        implied = trunk.violation_branches[literal]
+                    else:
+                        implied = None
 
             yield literal, implied
 
-    def handle_todos(self):
+    def handle_todos(self, ignore_errors=False):
         """
         Must only be called when all branches in trunk.branchmap are
         completely initialized.
         """
-        for literal, implied in self.iter_todo_away():
+        for literal, implied in self.iter_todo_away(ignore_errors=ignore_errors):
             if self.is_implied_by(implied):
                 self.substitute_with(implied)
                 break
 
-            self.update(implied)
+            self.update(implied, ignore_errors=ignore_errors)
 
 class BranchSolution(BranchSolutionBase):
     """docstring for BranchSolution"""
@@ -429,7 +435,7 @@ def create_trunk(pgraph, initial_literals=[]):
     return trunk
 
 
-def prepare_branches(trunk, unresolved_nodes):
+def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
     """
     Non-recursive DFS.
     """
@@ -449,12 +455,12 @@ def prepare_branches(trunk, unresolved_nodes):
 
     def stack_push(branch):
         assert branch.todo_it is None
-        branch.todo_it = branch.iter_todo_away()
+        branch.todo_it = branch.iter_todo_away(ignore_errors)
         stack.append(branch)
 
     def stack_pop():
         branch = stack.pop()
-        del branch.todo_it
+        branch.todo_it = None
         return branch
 
     todo_branches = trunk.branchset()
@@ -471,20 +477,23 @@ def prepare_branches(trunk, unresolved_nodes):
             # intermediate state. Manual iteration also makes it possible to
             # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
+            
+            if implied is None:
+                continue
 
-            if not implied.valid:
+            if not ignore_errors and not implied.valid:
                 branch.todo.add(literal)
-                raise SolutionError(branch)
+                raise SolutionError(branch)            
 
             if implied.initialized:
-                branch.update(implied)
+                branch.update(implied, ignore_errors=ignore_errors)
                 continue
 
             if implied.todo_it is not None:  # Equivalent (mutual implication).
                 implied.todo |= branch.todo
                 branch.todo.clear()
 
-                implied.update(branch)
+                implied.update(branch, ignore_errors=ignore_errors)
                 branch.substitute_with(implied)
 
                 raise StopIteration  # forget about this branch
@@ -537,7 +546,7 @@ def resolve_branches(trunk, branches):
         trunk.update(resolved)
 
         for literal in resolved.literals:
-            trunk.violation_branches.add(trunk.branchmap[~literal])
+            trunk.violation_branches[~literal] = trunk.branchmap[~literal]
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
@@ -575,14 +584,11 @@ def get_trunk_solution(pgraph, initial_values):
     # for literal in trunk.literals:
     #     print 'trunk', literal
 
-    initial_trunk = trunk.copy()
-    prepare_branches(trunk, nodes-trunk.nodes)
+    prepare_branches(trunk, nodes-trunk.nodes, True)
     resolve_branches(trunk, (~branch for branch in trunk.branchset()
                              if not branch.valid))
     stepwise_resolve(trunk)
 
-    for branch in trunk.violation_branches:
-        branch.trunk = initial_trunk
     return trunk
 
 def solve(pgraph, initial_values):
@@ -592,7 +598,7 @@ def solve(pgraph, initial_values):
     logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)
     trunk = get_trunk_solution(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches)
+    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches.values())
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
 

@@ -28,7 +28,7 @@ class NodeContainer(object):
         return (set(literals) == self.literals)
     
 # TODO remove to other place after all types why function realization
-def why_violation(cls, literal, *cause_literals):
+def why_violation(literal, *cause_literals):
     return '%s because of violation %s' % (literal, cause_literals)  
 
 class Rgraph(object): 
@@ -92,14 +92,16 @@ class Rgraph(object):
             node, reason = queue.get()        
             self.dfs(node, reason, used, queue, 0)
             
-        for branch in self.violation_branches:     
-            branch.trunk |= branch 
-            violation_nodes = self.get_violation_nodes(branch.trunk)
+        for branch in self.violation_branches:  
+            trunk = branch.trunk.copy()   
+            branch.trunk = trunk
+            trunk |= branch 
+            violation_nodes = self.get_violation_nodes(trunk)
             
             print '--- violation for', branch.gen_literals, '---'
             for literal in branch.gen_literals:
-                branch.trunk.reasons.add(Reason(None, literal))
-            rgraph_branch = Rgraph(branch.trunk.literals, branch.trunk.reasons)
+                trunk.reasons.add(Reason(None, literal))
+            rgraph_branch = Rgraph(trunk.literals, trunk.reasons)
             rgraph_branch.find_shortest_ways()
             
 #             for node in rgraph_branch.nodes.values():
@@ -183,12 +185,18 @@ class Rgraph(object):
     def print_shortest_way(self, literals):
         node = self.nodes[frozenset([literals])]    
         if node.length == float("+inf"):
+#             for node in self.nodes.values():
+#                 print node.literals, node.length
             return    
         self._print_shortest_way_part(node)
          
     def _print_shortest_way_part(self, node):
         if node.length == 0:
-            self.print_reason(node.becauseof[self.initial], 0)
+            if not node.members:
+                self.print_reason(node.becauseof[self.initial], 0)
+            else:
+                for member in node.members:
+                    self._print_shortest_way_part(member)
             return 1;
                
         if not node.members:
