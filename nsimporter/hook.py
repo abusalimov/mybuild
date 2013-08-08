@@ -17,7 +17,7 @@ import os.path
 from .package import NamespacePackageLoader
 from .package import SubPackageLoader
 
-from util.collections import OrderedDict, Mapping
+from util.collections import OrderedDict
 from util.importlib.abc import MetaPathFinder
 
 from util.compat import *

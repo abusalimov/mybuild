@@ -13,6 +13,8 @@ try:
 except ImportError:
     parse = None
 
+from util.compat import *
+
 
 def load(linker, source, filename=None, builtins={}):
     if parse is None:

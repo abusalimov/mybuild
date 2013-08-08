@@ -12,18 +12,13 @@ __all__ = [
 
 
 from collections import defaultdict
-from collections import namedtuple
-from itertools import combinations
-from itertools import product
 import operator
 
 from .pgraph import *
-from util import pop_iter
-
-from util.compat import *
-
 from .rgraph import *
 
+from util.itertools import pop_iter
+from util.compat import *
 
 import logging
 logger = logging.getLogger(__name__)
@@ -477,13 +472,13 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
             # intermediate state. Manual iteration also makes it possible to
             # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
-            
+
             if implied is None:
                 continue
 
             if not ignore_errors and not implied.valid:
                 branch.todo.add(literal)
-                raise SolutionError(branch)            
+                raise SolutionError(branch)
 
             if implied.initialized:
                 branch.update(implied, ignore_errors=ignore_errors)
@@ -577,7 +572,7 @@ def stepwise_resolve(trunk):
         resolve_branches(trunk, branchset & trunk.branchset())
 
 
-def get_trunk_solution(pgraph, initial_values):
+def get_trunk_solution(pgraph, initial_values={}):
     nodes = pgraph.nodes
 
     trunk = create_trunk(pgraph, initial_values)
@@ -591,7 +586,8 @@ def get_trunk_solution(pgraph, initial_values):
 
     return trunk
 
-def solve(pgraph, initial_values):
+
+def solve(pgraph, initial_values={}):
     logger.debug('Start solving')
     nodes = pgraph.nodes
 
@@ -608,7 +604,6 @@ def solve(pgraph, initial_values):
     for literal in ret:
         logger.debug('\t%s - %s', literal, ret[literal])
     return ret
-
 
 
 class SolveError(Exception):

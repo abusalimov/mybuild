@@ -11,6 +11,8 @@ import ply.lex
 from .errors import IllegalCharacter
 from .location import Location
 
+from util.compat import *
+
 
 def loc(t):
     try:

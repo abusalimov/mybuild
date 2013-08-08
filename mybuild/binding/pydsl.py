@@ -17,7 +17,7 @@ from ..core import ModuleType
 from ..core import Module
 from ..core import Optype
 
-from util import constructor_decorator
+from util.misc import constructor_decorator
 from util.compat import *
 
 
@@ -77,10 +77,10 @@ class PyFileModuleType(ModuleType):
 class PyFileModule(with_meta(PyFileModuleType, intermediate=True), Module):
 
     def _consider(self, expr):
-        self._context.consider(expr, self)
+        self._context.consider(expr, origin=self)
 
     def _constrain(self, expr):
-        self._context.constrain(expr, self)
+        self._context.constrain(expr, origin=self)
 
     def __repr__(self):
         return repr(self._optuple)

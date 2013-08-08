@@ -8,8 +8,8 @@ __date__ = "2013-07-26"
 
 from .errors import *
 
-from util import cached_property
-from util import send_next_iter
+from util.prop import cached_property
+from util.itertools import send_next_iter
 from util.compat import *
 
 

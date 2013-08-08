@@ -19,7 +19,7 @@ from .linkage import Stub
 from .location import Fileinfo
 from .location import Location
 
-from util import cached_property
+from util.prop import cached_property
 from util.compat import *
 
 

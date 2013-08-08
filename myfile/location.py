@@ -6,7 +6,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-29"
 
 
-from util import cached_property
+from util.prop import cached_property
 from util.compat import *
 
 
