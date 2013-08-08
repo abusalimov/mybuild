@@ -20,12 +20,13 @@ __all__ = [
 from collections import namedtuple
 from functools import partial
 from inspect import getargspec
+from itertools import starmap
 from operator import attrgetter
 import sys
 
-from util import getter
-from util import invoker
-from util import InstanceBoundTypeMixin
+from util.operator import getter
+from util.operator import invoker
+from util.misc import InstanceBoundTypeMixin
 
 from util.compat import *
 
@@ -65,10 +66,9 @@ class ModuleType(type):
         else:
             cls._file = getattr(pymodule, '__file__', None)
 
-            package_name = pymodule.__package__
-            if package_name:
-                # note that pymodule name is omitted
-                cls._fullname = package_name + '.' + cls.__name__
+            pymodule_name = pymodule.__name__
+            if pymodule_name:
+                cls._fullname = pymodule_name + '.' + cls.__name__
 
         if optypes is not None:
             cls._init_optypes(optypes)
@@ -96,8 +96,12 @@ class ModuleType(type):
     def __repr__(cls):
         if cls._intermediate:
             return super(ModuleType, cls).__repr__()
-        else:
-            return '%s(%r)' % (cls._fullname, ', '.join(cls._options))
+
+        options_str = ', '.join(cls._options)
+        if options_str:
+            options_str = options_str.join('()')
+
+        return cls._fullname + options_str
 
 
 class Module(with_meta(ModuleType)):
@@ -141,9 +145,11 @@ class OptupleBase(InstanceBoundTypeMixin):
         return self._type_hash() ^ tuple.__hash__(self)
 
     def __repr__(self):
-        return '%s(%s)' % (self._module._name,
-                           ', '.join('%s=%r' % pair
-                                     for pair in self._iterpairs()))
+        options_str = ', '.join(starmap('{0}={1}'.format, self._iterpairs()))
+        if options_str:
+            options_str = options_str.join('()')
+
+        return self._module._fullname + options_str
 
 
 class Optuple(OptupleBase):
@@ -159,13 +165,14 @@ class Optuple(OptupleBase):
                 (v for v in self if v is not Ellipsis))
 
     def _iterpairs(self, with_ellipsis=False):
-        return self._zipwith(self._fields, with_ellipsis, swap=True)
-
-    def _zipwith(self, other, with_ellipsis=False, swap=False):
-        it = zip(self, other) if not swap else zip(other, self)
-        self_idx = int(bool(swap))
+        it = zip(self._options, self)
         return (it if with_ellipsis else
-                (pair for pair in it if pair[self_idx] is not Ellipsis))
+                (pair for pair in it if pair[1] is not Ellipsis))
+
+    def _zipwith(self, other, with_ellipsis=False):
+        it = zip(self, other)
+        return (it if with_ellipsis else
+                (pair for pair in it if pair[0] is not Ellipsis))
 
     def _get(self, attr):
         return getattr(self, attr)
@@ -220,7 +227,7 @@ class EmptyOptuple(OptupleBase):
     def _iterpairs(self, with_ellipsis=False):
         return iter(())
 
-    def _zipwith(self, other, with_ellipsis=False, swap=False):
+    def _zipwith(self, other, with_ellipsis=False):
         return iter(())
 
     def _get(self, attr):
@@ -232,7 +239,7 @@ class EmptyOptuple(OptupleBase):
         return _self
 
     def __repr__(self):
-        return '%s()' % self._module._name
+        return self._module._fullname
 
     __empty_base = namedtuple('EmptyOptuple', [])
     for bogus_attr in OptupleBase._tuple_attrs:
