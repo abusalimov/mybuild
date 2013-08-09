@@ -87,6 +87,53 @@ def compute_default_metaclass(bases):
 ABCBase = with_meta(_abc.ABCMeta)
 
 
+import functools as _functools
+def _foo(): pass
+def _bar(): pass
+_functools.update_wrapper(_foo, _bar)
+if not hasattr(_foo, '__wrapped__'):
+    def _patch_it(wrapped_func):
+        def wrapper_func(wrapper, wrapped, *args, **kwargs):
+            ret = wrapped_func(wrapper, wrapped, *args, **kwargs)
+            wrapper.__wrapped__ = wrapped
+            return ret
+        return wrapper_func(wrapper_func, wrapped_func)
+    _functools.update_wrapper = _patch_it(_functools.update_wrapper)
+    del _patch_it
+del _foo
+del _bar
+del _functools
+
+import inspect as _inspect
+if not hasattr(_inspect, 'unwrap'):
+    def unwrap(func, stop=None):
+        """Get the object wrapped by *func*.
+
+       Follows the chain of :attr:`__wrapped__` attributes returning the last
+       object in the chain.
+
+       :exc:`ValueError` is raised if a cycle is encountered.
+
+        """
+        if stop is None:
+            def _is_wrapper(f):
+                return hasattr(f, '__wrapped__')
+        else:
+            def _is_wrapper(f):
+                return hasattr(f, '__wrapped__') and not stop(f)
+        f = func  # remember the original func for error reporting
+        memo = set([id(f)]) # Memoise by id to tolerate non-hashable objects
+        while _is_wrapper(func):
+            func = func.__wrapped__
+            id_func = id(func)
+            if id_func in memo:
+                raise ValueError('wrapper loop when unwrapping {!r}'.format(f))
+            memo.add(id_func)
+        return func
+    _inspect.unwrap = unwrap
+del _inspect
+
+
 del _abc
 del _operator
 del _sys
