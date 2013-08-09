@@ -26,8 +26,7 @@ class YamlFileLoader(SourceFileLoader):
 
     TODO Does not fully comply InspectLoader protocol."""
 
-    MODULE   = 'MY_YAML'
-    FILENAME = 'MyYaml'
+    MODULE = 'MyYaml'
 
     @classmethod
     def init_ctx(cls, ctx, initials):

@@ -33,8 +33,7 @@ class DslLoaderMixin(object):
 
 class MyDslLoader(DslLoaderMixin, myfile.MyFileLoader):
 
-    MODULE   = 'MYBUILD'
-    FILENAME = 'Mybuild'
+    MODULE = 'Mybuild'
 
     @classmethod
     def default_initials(cls):
@@ -44,8 +43,7 @@ class MyDslLoader(DslLoaderMixin, myfile.MyFileLoader):
 
 class PyDslLoader(DslLoaderMixin, pyfile.PyFileLoader):
 
-    MODULE   = 'PYBUILD'
-    FILENAME = 'Pybuild'
+    MODULE = 'Pybuild'
 
     @classmethod
     def default_initials(cls):
@@ -56,8 +54,7 @@ class PyDslLoader(DslLoaderMixin, pyfile.PyFileLoader):
 
 class YamlDslLoader(DslLoaderMixin, yamlfile.YamlFileLoader):
 
-    MODULE   = 'YAMLBUILD'
-    FILENAME = 'MyYaml'
+    MODULE = 'MyYaml'
 
     @classmethod
     def default_initials(cls):

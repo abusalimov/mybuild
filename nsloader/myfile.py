@@ -28,8 +28,7 @@ class LoaderFileLinker(FileLinker):
 class MyFileLoader(SourceFileLoader):
     """Loads My-files using myfile parser/linker."""
 
-    MODULE   = 'MYFILE'
-    FILENAME = 'Myfile'
+    MODULE = 'Myfile'
 
     @classmethod
     def init_ctx(cls, ctx, initials):
