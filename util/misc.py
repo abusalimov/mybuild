@@ -1,6 +1,7 @@
 """
 Misc stuff.
 """
+from .compat import *
 
 import functools as _functools
 
@@ -10,7 +11,6 @@ from collections import Mapping as _Mapping
 from collections import namedtuple as _namedtuple
 from collections import deque as _deque
 
-from .compat import *
 from .itertools import pop_iter
 from .operator import instanceof
 
@@ -53,11 +53,16 @@ def constructor_decorator(cls, **kwargs):
             # definition, not a dict.
             #
             # So instead we create a new type manually.
+            @_functools.wraps(func)
+            def __init__(self, *args, **kwargs):
+                super(ret_type, self).__init__(*args, **kwargs)
+                func(self, *args, **kwargs)
             type_dict = dict(func.__dict__,
-                             __init__   = func,
-                             __module__ = func.__module__,
-                             __doc__    = func.__doc__)
-            return mcls(func.__name__, (cls,), type_dict)
+                             __init__   = __init__,
+                             __module__ = __init__.__module__,
+                             __doc__    = __init__.__doc__)
+            ret_type = mcls(func.__name__, (cls,), type_dict)
+            return ret_type
 
     ret_cls = metaclass(cls.__name__, None, dict(cls.__dict__, **kwargs))
     return ret_cls
