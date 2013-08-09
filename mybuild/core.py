@@ -336,7 +336,7 @@ class Optype(object):
 class MybuildError(Exception):
     """Base class for errors providing a logging-like constructor."""
 
-    def __init__(self, msg, *args, **kwargs):
+    def __init__(self, msg='', *args, **kwargs):
         if not isinstance(msg, basestring):
             raise TypeError("'msg' argument must be a string")
         if args and kwargs:
