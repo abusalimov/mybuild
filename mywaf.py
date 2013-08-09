@@ -39,6 +39,7 @@ def my_load(ctx, namespace, path=None, loaders=DEFAULT_LOADERS):
     loaders_init = (dict if is_mapping(loaders) else dict.fromkeys)(loaders)
 
     if path is not None:
+        path = wafutils.to_list(path)
         path_nodes = [ctx.path.find_node(entry) for entry in path]
     else:
         path_nodes = [ctx.path]
@@ -97,12 +98,19 @@ def mybuild(ctx, conf_name, path=None, loaders=DEFAULT_LOADERS):
     ns_pymodule = ctx.my_load(namespace, path, loaders)
     conf_module = conf_getter(ns_pymodule)
 
-    instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
+    try:
+        conf_instance, instances = ctx._my_cache[conf_module]
+    except KeyError:
+        instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
+        conf_instance = next(filter(instanceof(conf_module), instances))
+        ctx._my_cache[conf_module] = conf_instance, instances
+
     ctx.my_recurse(instances)
 
-    return next(filter(instanceof(conf_module), instances))
+    return conf_instance
 
 wafcontext.Context.mybuild = mybuild
+wafcontext.Context._my_cache = {}  # {conf_module: instances}
 
 
 class MyWafModuleMixin(object):
@@ -116,6 +124,9 @@ class MyWafModuleMixin(object):
         print('mywaf build: %r' % self)
         print('\tsources: %r' % self.sources)
         # bld(features='mylink', source=src, target='test')
+
+    def configure(self, ctx):
+        print('mywaf configure: %r' % self)
 
 # try:
 #     from waflib.Task import Task
