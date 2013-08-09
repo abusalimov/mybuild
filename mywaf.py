@@ -18,8 +18,8 @@ from glue import MyDslLoader
 from nsimporter import import_all
 from nsimporter import loader_filename
 
-from util import is_mapping
-from util import instanceof
+from util.misc import is_mapping
+from util.operator import instanceof
 from util.compat import *
 
 
@@ -100,8 +100,6 @@ def mybuild(ctx, conf_name, path=None, loaders=DEFAULT_LOADERS):
     instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
     ctx.my_recurse(instances)
 
-    raise NotImplementedError
-
     return next(filter(instanceof(conf_module), instances))
 
 wafcontext.Context.mybuild = mybuild
@@ -111,9 +109,8 @@ class MyWafModuleMixin(object):
     """docstring for MyWafModuleMixin"""
 
     def __init__(self, *args, **kwargs):
-        print self, args, kwargs
-        self.sources = []
         super(MyWafModuleMixin, self).__init__(*args, **kwargs)
+        self.sources = []
 
     def build(self, bld):
         print('mywaf build: %r' % self)
