@@ -231,7 +231,7 @@ class BranchSolutionBase(Solution):
         op(negexcl, *args)  # TODO don't like this
 
         left = len(negleft) - len(negexcl)
-        if left <= 1:
+        if left == 1:
             neg_literal, neg_reason = neglast.neg_reason_for(
                 last_literal=(negleft-negexcl).pop() if left else None)
 
@@ -256,10 +256,7 @@ class BranchSolutionBase(Solution):
                 if not ignore_errors:
                     raise SolutionError(self)
                 else:
-                    if literal in trunk.violation_branches:
-                        implied = trunk.violation_branches[literal]
-                    else:
-                        implied = None
+                    implied = trunk.violation_branches[literal]
 
             yield literal, implied
 
@@ -329,7 +326,10 @@ class BranchSolution(BranchSolutionBase):
 
         # Fixup any references to this one.
         for gen_literal in self.gen_literals:
-            self.trunk.branchmap[gen_literal] = other
+            if gen_literal in self.trunk.branchmap:
+                self.trunk.branchmap[gen_literal] = other
+            else:
+                self.trunk.violation_branches[gen_literal] = other
 
         self.dispose()  # make gc happy
 
@@ -445,7 +445,9 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
             branch.todo_it = None
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
-
+    expand_branches(trunk, ignore_errors)
+    
+def expand_branches(trunk, ignore_errors=False):
     stack = list()
 
     def stack_push(branch):
@@ -458,7 +460,7 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
         branch.todo_it = None
         return branch
 
-    todo_branches = trunk.branchset()
+    todo_branches = trunk.branchset() | set(itervalues(trunk.violation_branches))
 
     while stack or todo_branches:
         if not stack:
@@ -579,10 +581,11 @@ def get_trunk_solution(pgraph, initial_values={}):
     # for literal in trunk.literals:
     #     print 'trunk', literal
 
-    prepare_branches(trunk, nodes-trunk.nodes, True)
+    prepare_branches(trunk, nodes-trunk.nodes)
     resolve_branches(trunk, (~branch for branch in trunk.branchset()
                              if not branch.valid))
     stepwise_resolve(trunk)
+    expand_branches(trunk, True)
 
     return trunk
 
