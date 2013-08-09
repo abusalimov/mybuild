@@ -43,7 +43,7 @@ class PyFileModuleType(ModuleType):
             # wrapper descriptor, give up
             return []
 
-        args, va, kw, defaults = inspect.getargspec(func)
+        args, va, kw, defaults = inspect.getargspec(inspect.unwrap(func))
         defaults = defaults or ()
 
         if va is not None:
