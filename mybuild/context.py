@@ -36,8 +36,10 @@ class Context(object):
         super(Context, self).__init__()
         self.module_mixin = module_mixin
 
-        self._instances = dict()  # {optuple: instance}
-        self._mdata     = dict()  # {module: mdata}
+        self._mdata = dict()  # {module: mdata}
+
+        self._instances_alive = dict()   # {optuple: instance}
+        self._instance_errors = dict()   # {optuple: error}
 
         self._constraints = defaultdict(set)  # {instance: optuples...}
 
@@ -46,12 +48,11 @@ class Context(object):
         logger.debug("new %s (posted by %s)", optuple, origin)
         try:
             instance = mdata.ctxtype._instantiate(optuple)
-        except InstanceError as e:
-            logger.debug("    %s inviable: %s", optuple, e)
-            instance = None
-
-        assert optuple not in self._instances
-        self._instances[optuple] = instance
+        except InstanceError as error:
+            logger.debug("    %s inviable: %s", optuple, error)
+            self._instance_errors[optuple] = error
+        else:
+            self._instances_alive[optuple] = instance
 
     def _instantiate_product(self, mdata, iterables_optuple, origin=None):
         for optuple in map(iterables_optuple._make,
@@ -94,6 +95,15 @@ class Context(object):
         for mdata in itervalues(self._mdata):
             mdata.init_pgraph(g)
 
+        for optuple, instance in iteritems(self._instances_alive):
+            g.node_for(optuple).instance = instance
+
+        for optuple, error in iteritems(self._instance_errors):
+            optuple_node = g.node_for(optuple)
+            optuple_node.error = error
+            g.new_const(False, optuple_node,
+                        why=why_inviable_instance_is_disabled)
+
         for origin, constraints in iteritems(self._constraints):
             if origin is not None:
                 origin_node = g.node_for(origin._optuple)
@@ -111,7 +121,8 @@ class Context(object):
         pgraph = self.create_pgraph()
         solution = solve(pgraph)
 
-        return [instance for optuple, instance in iteritems(self._instances)
+        return [instance
+                for optuple, instance in iteritems(self._instances_alive)
                 if solution[pgraph.node_for(optuple)]]
 
 
@@ -143,13 +154,13 @@ class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
                               for optype in module._optypes)
 
     def init_pgraph(self, g):
-        module = self.module
-        module_atom = ModuleAtom(g, module)
+        atom_for_module = partial(g.atom_for, self.module)
+        module_atom = atom_for_module()
 
         for option, values in self.domain._iterpairs():
-            atom_for_value = partial(g.atom_for, module, option)
+            atom_for_option = partial(atom_for_module, option)
 
-            option_node = AtMostOne(g, map(atom_for_value, values),
+            option_node = AtMostOne(g, map(atom_for_option, values),
                     why_one_operand_zero_implies_others_identity=
                         why_option_can_have_at_most_one_value,
                     why_identity_implies_all_operands_identity=
@@ -249,7 +260,17 @@ def why_module_implies_option(outcome, *causes):
     return 'module implies option: %s: %s' % (outcome, causes)
 
 def why_instance_implies_its_constraints(outcome, cause):
-    return '%s as a dependence of %s' % (outcome, cause)
+    node, value = outcome
+    what = ('enabled as a dependence' if value else
+            'disabled as a dependent')
+    fmt = '{node} is {what} of {cause.node}'
+    return fmt.format(**locals())
+
+def why_inviable_instance_is_disabled(outcome, *_):
+    node, value = outcome
+    assert not value
+    fmt = '{node} is disabled because of an error: {node.error}'
+    return fmt.format(**locals())
 
 
 def resolve(initial_module, module_mixin=object):
@@ -266,17 +287,18 @@ if __name__ == '__main__':
 
     @module
     def conf(self):
-        self._constrain(m1)
-        self._constrain(m3)
+        self._constrain(m1(bar=17))
+        # self._constrain(m3)
         self.sources = 'test.c'
 
     @module
-    def m1(self):
-        self._constrain(m2(foo=17))
+    def m1(self, bar=42):
+        self._constrain(m2(foo=bar))
 
     @module
     def m2(self, foo=42):
-        pass
+        if foo == 42:
+            raise InstanceError('FUUU')
 
     @module
     def m3(self):
