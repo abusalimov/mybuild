@@ -23,18 +23,55 @@ from util.operator import instanceof
 from util.compat import *
 
 
-def init(ctx):
-    print('mywaf: init %r' % ctx)
-
-def options(ctx):
-    print('mywaf: options %r' % ctx)
-
-def configure(ctx):
-    print('mywaf: configure %r' % ctx)
+def wafcontext_method(func):
+    setattr(wafcontext.Context, func.__name__, func)
+    return func
 
 
 DEFAULT_LOADERS = [MyDslLoader, PyDslLoader]
 
+@wafcontext_method
+def mybuild(ctx, conf_name,
+            path=None, loaders=DEFAULT_LOADERS,
+            recurse_name=None):
+    """Facade function for the whole Mybuild machinery.
+
+    Loads all Mybuild files found in path using given loaders, resolves
+    a configuration specified by conf_name and recurses into each enabled
+    module.
+
+    Args:
+        conf_name (str): a fully qualified name of the configuration including
+            a namespace, e.g. 'ns.path.to.conf'.
+        path (list/str): a list of strings (or a string of space-separated
+            entries) denoting directories to search for Mybuild files.
+            If not specified, ctx.path is used instead.
+        loaders (iterable/mapping): a list of loaders used to recognize and
+            load Mybuild files, or a dictionary mapping such loaders to
+            their initializing values (loader-specific).
+        recurse_name (str):
+            Name of method to invoke on each resolved module. Defaults to
+            the name of current context.
+
+    Returns:
+        The namespace root wrapped by a module instance accessor
+        (see MybuildInstanceAccessor).
+    """
+    namespace, _, conf_relname = conf_name.partition('.')
+    if not conf_relname:
+        raise ValueError("conf_name must be a qualified name "
+                         "(including a namespace): '%s'" % conf_name)
+    else:
+        conf_getter = attrgetter(conf_relname)
+
+    ns_pymodule = ctx.my_load(namespace, path, loaders)
+    instance_map = ctx.my_resolve(conf_getter(ns_pymodule))
+    ctx.my_recurse(itervalues(instance_map))
+
+    return MybuildInstanceAccessor(ns_pymodule, instance_map)
+
+
+@wafcontext_method
 def my_load(ctx, namespace, path=None, loaders=DEFAULT_LOADERS):
     loaders_init = (dict if is_mapping(loaders) else dict.fromkeys)(loaders)
 
@@ -61,10 +98,25 @@ def my_load(ctx, namespace, path=None, loaders=DEFAULT_LOADERS):
     return import_all(filter(no_dots, found_rel_dirs), namespace, path,
                       loaders_init)
 
-wafcontext.Context.my_load = my_load
+
+@wafcontext_method
+def my_resolve(ctx, conf_module):
+    cache = ctx._my_resolve_cache
+    try:
+        instance_map = cache[conf_module]
+    except KeyError:
+        instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
+        instance_map = dict((instance._module, instance)
+                            for instance in instances)
+        cache[conf_module] = instance_map
+
+    return instance_map
+
+wafcontext.Context._my_resolve_cache = {}  # {conf_module: instance_map}
 
 
-def my_recurse(ctx, instances, name=None, mandatory=True, once=True):
+@wafcontext_method
+def my_recurse(ctx, instances, name=None, mandatory=True):
     if name is None:
         name = ctx.fun
 
@@ -74,7 +126,7 @@ def my_recurse(ctx, instances, name=None, mandatory=True, once=True):
         ctx.pre_recurse(node)
         try:
             user_function = getattr(instance, name, None)
-            if not user_function:
+            if user_function is None:
                 if not mandatory:
                     continue
                 raise waferrors.WafError('No method %s defined in %s' %
@@ -84,33 +136,32 @@ def my_recurse(ctx, instances, name=None, mandatory=True, once=True):
         finally:
             ctx.post_recurse(node)
 
-wafcontext.Context.my_recurse = my_recurse
 
+class MybuildInstanceAccessor(object):
+    """Proxy class that mimics an underlying object in attribute and item
+    access and maps the return value using an internal mapping
+    or wraps it with another proxy."""
 
-def mybuild(ctx, conf_name, path=None, loaders=DEFAULT_LOADERS):
-    namespace, _, conf_relname = conf_name.partition('.')
-    if not conf_relname:
-        raise ValueError("conf_name must be a qualified name "
-                         "(including a namespace): '%s'" % conf_name)
-    else:
-        conf_getter = attrgetter(conf_relname)
+    __slots__ = ('_{0}__obj _{0}__retmap'
+                 .format('MybuildInstanceAccessor').split())
 
-    ns_pymodule = ctx.my_load(namespace, path, loaders)
-    conf_module = conf_getter(ns_pymodule)
+    def __init__(self, obj, retmap):
+        super(MybuildInstanceAccessor, self).__init__()
+        self.__obj = obj
+        self.__retmap = retmap
 
-    try:
-        conf_instance, instances = ctx._my_cache[conf_module]
-    except KeyError:
-        instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
-        conf_instance = next(filter(instanceof(conf_module), instances))
-        ctx._my_cache[conf_module] = conf_instance, instances
+    def __getattr__(self, attr):
+        return self.__get(getattr(self.__obj, attr))
+    def __getitem__(self, item):
+        return self.__get(self.__obj[item])
 
-    ctx.my_recurse(instances)
-
-    return conf_instance
-
-wafcontext.Context.mybuild = mybuild
-wafcontext.Context._my_cache = {}  # {conf_module: instances}
+    def __get(self, retobj):
+        retmap = self.__retmap
+        try:
+            return retmap[retobj]
+        except KeyError:
+            cls = type(self)
+            return cls(retobj, retmap)
 
 
 class MyWafModuleMixin(object):
@@ -127,6 +178,17 @@ class MyWafModuleMixin(object):
 
     def configure(self, ctx):
         print('mywaf configure: %r' % self)
+
+
+def init(ctx):
+    print('mywaf: init %r' % ctx)
+
+def options(ctx):
+    print('mywaf: options %r' % ctx)
+
+def configure(ctx):
+    print('mywaf: configure %r' % ctx)
+
 
 # try:
 #     from waflib.Task import Task
