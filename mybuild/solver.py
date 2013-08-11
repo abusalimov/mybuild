@@ -216,7 +216,7 @@ class Diff(Solution):
         op(negexcl, *args)  # TODO don't like this
 
         left = len(negleft) - len(negexcl)
-        if left == 1:
+        if left <= 1:
             neg_literal, neg_reason = neglast.neg_reason_for(
                 last_literal=(negleft-negexcl).pop() if left else None)
 
