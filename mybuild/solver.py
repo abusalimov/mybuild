@@ -20,6 +20,7 @@ from mybuild.pgraph import *
 from mybuild.rgraph import *
 
 from util.itertools import pop_iter
+from util.operator import invoker
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,11 +61,6 @@ class Solution(object):
         self.reasons  |= other.reasons
 
         return self
-
-    def __or__(self, other):
-        ret = self.copy()
-        ret |= other
-        return ret
 
     def __isub__(self, other):
         self.nodes    -= other.nodes
@@ -221,7 +217,7 @@ class Diff(Solution):
 
     def add_literal(self, literal, reason=None):
         for neglast in literal.neglasts:
-            self.__do_neglast(neglast, operator.methodcaller('add', literal))
+            self.__do_neglast(neglast, invoker.add(literal))
 
         super(Diff, self).add_literal(literal, reason)
 
