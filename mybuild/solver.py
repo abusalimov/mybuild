@@ -530,25 +530,34 @@ def expand_branches(trunk, ignore_errors=False):
             stack_push(implied)
 
 
+
 def resolve_branches(trunk, branches):
-    logger.debug('Branch resolving started')
-    resolved = Patch(trunk)
+    """
+    Merges given branches back into trunk updating its branchmap and rest
+    branches.
+    """
+    while branches:
+        logger.debug('resolving %d branches', len(branches))
 
-    for branch in branches:
-        resolved.update(branch, handle_todos=True)
-    logger.debug('Resolved created')
+        resolved = Diff(trunk)  # a patch created by merging together all diffs
 
-    while resolved:
+        for branch in branches:
+            resolved.update(branch)
+        resolved.handle_todos()
+
+        # reintegrate it back into trunk (cannot fail, always succeeds)
         trunk.update(resolved)
 
+        # remove resolved branches and their opposites from branchmap
         for literal in resolved.literals:
-            trunk.dead_branches[~literal] = trunk.branchmap[~literal]
-            for each in literal.node:  # remove both literal and ~literal
-                del trunk.branchmap[each]
+            del trunk.branchmap[literal]
+            trunk.dead_branches[~literal] = trunk.branchmap.pop(~literal)
 
-        next_resolved = Patch(trunk)
+        # Maintain remaining branches to be strict diffs with just updated
+        # trunk. This may involve new conflicts, i.e. new branches can be
+        # resolved, so we create a new list of branches to resolve next.
+        branches = list()
 
-        logger.debug('Unresolved branches updating')
         for branch in trunk.branchset():
             assert branch.valid, 'only valid branches must have left'
 
@@ -556,11 +565,8 @@ def resolve_branches(trunk, branches):
                 branch.difference_update(resolved, handle_todos=True)
 
             except SolutionError:
-                next_resolved.update(~branch, handle_todos=True)  # may raise as well
-        logger.debug('Unresolved branches updated')
+                branches.append(~branch)
 
-        resolved = next_resolved
-    logger.debug('Branch resolving completed')
 
 def stepwise_resolve(trunk):
     levelmap = defaultdict(set)
@@ -581,8 +587,8 @@ def get_trunk_solution(pgraph, initial_values={}):
     #     print 'trunk', literal
 
     prepare_branches(trunk, nodes-trunk.nodes)
-    resolve_branches(trunk, (~branch for branch in trunk.branchset()
-                             if not branch.valid))
+    resolve_branches(trunk, list(~branch for branch in trunk.branchset()
+                                 if not branch.valid))
     stepwise_resolve(trunk)
     expand_branches(trunk, True)
 
