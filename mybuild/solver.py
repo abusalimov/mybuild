@@ -141,9 +141,6 @@ class Trunk(Solution):
 class Diff(Solution):
     """docstring for Diff"""
 
-    def is_implied_by(self, other):
-        raise NotImplementedError('Not implemented in base class')
-
     def __init__(self, trunk):
         super(Diff, self).__init__()
 
@@ -173,15 +170,6 @@ class Diff(Solution):
     def __ior__(self, other):
         self._check_capable(other)
 
-        if other.is_implied_by(self):
-            assert self.nodes    >= other.nodes
-            assert self.literals >= other.literals
-            assert self.reasons  >= other.reasons
-            assert self.todo     >= other.todo
-            for neglast, negexcl in iteritems(other.negexcls):
-                assert self.negexcls[neglast] >= negexcl
-            return self
-
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__ior__, negexcl)
 
@@ -204,9 +192,6 @@ class Diff(Solution):
         super(Diff, self).difference_update(other, ignore_errors)
         if handle_todos:
             self.handle_todos(ignore_errors)
-
-    def substitute_with(self, other):
-        raise NotImplementedError('Not implemented in base class')
 
     def clear(self):
         self.todo     .clear()
@@ -251,12 +236,12 @@ class Diff(Solution):
             except KeyError:
                 if literal in trunk.literals:
                     continue  # included in the trunk, i.e. unconditionally
-
                 assert ~literal in trunk.literals
+
                 if not ignore_errors:
                     raise SolutionError(self)
-                else:
-                    implied = trunk.dead_branches[literal]
+
+                implied = trunk.dead_branches[literal]
 
             yield literal, implied
 
@@ -265,12 +250,9 @@ class Diff(Solution):
         Must only be called when all branches in trunk.branchmap are
         completely initialized.
         """
-        for literal, implied in self.iter_todo_away(ignore_errors):
-            if self.is_implied_by(implied):
-                self.substitute_with(implied)
-                break
-
+        for _, implied in self.iter_todo_away(ignore_errors):
             self.update(implied, ignore_errors)
+
 
 class Branch(Diff):
     """docstring for Branch"""
@@ -282,9 +264,6 @@ class Branch(Diff):
     @property
     def initialized(self):
         return not self.todo
-
-    def is_implied_by(self, other):
-        return self.gen_literals <= other.literals
 
     def __init__(self, trunk, gen_literal):
         super(Branch, self).__init__(trunk)
@@ -311,6 +290,21 @@ class Branch(Diff):
 
         return inv_branch
 
+    def __le__(self, other):
+        return self.gen_literals <= other.literals
+
+    def __ior__(self, other):
+        if self >= other:  # other is already in self
+            assert self.nodes    >= other.nodes
+            assert self.literals >= other.literals
+            assert self.reasons  >= other.reasons
+            assert self.todo     >= other.todo
+            assert all(self.negexcls[neglast] >= negexcl
+                       for neglast, negexcl in iteritems(other.negexcls))
+            return self
+
+        return super(Branch, self).__ior__(other)
+
     def copy(self):
         new = super(Branch, self).copy()
 
@@ -318,18 +312,29 @@ class Branch(Diff):
         new.error = None
         return new
 
+    def handle_todos(self, ignore_errors=False):
+        # Overloaded, adds a call to substitute_with in case of equivalence.
+
+        for _, implied in self.iter_todo_away(ignore_errors):
+            if self <= implied:  # mutual implication
+                self.substitute_with(implied)
+                break
+
+            self.update(implied, ignore_errors)
+
     def substitute_with(self, other):
         """
         Upon replacement, this branch is disposed and must not be used anymore.
         """
         other.gen_literals |= self.gen_literals
 
+        trunk = self.trunk
+        branchmap = trunk.branchmap if self.valid else trunk.dead_branches
+
         # Fixup any references to this one.
         for gen_literal in self.gen_literals:
-            if gen_literal in self.trunk.branchmap:
-                self.trunk.branchmap[gen_literal] = other
-            else:
-                self.trunk.dead_branches[gen_literal] = other
+            assert branchmap[gen_literal] is self
+            branchmap[gen_literal] = other
 
         self.dispose()  # make gc happy
 
@@ -338,9 +343,6 @@ class Branch(Diff):
                             ' & '.join(repr(literal).join('()')
                                        for literal in self.gen_literals))
 
-class Patch(Diff):
-    def is_implied_by(self, other):
-        return False
 
 def create_trunk(pgraph, initial_literals=[]):
     initial_literals = to_lset(initial_literals)
@@ -533,7 +535,6 @@ def expand_branches(trunk, ignore_errors=False):
             stack_push(implied)
 
 
-
 def resolve_branches(trunk, branches):
     """
     Merges given branches back into trunk updating its branchmap and rest
@@ -593,7 +594,7 @@ def get_trunk_solution(pgraph, initial_values={}):
     resolve_branches(trunk, list(~branch for branch in trunk.branchset()
                                  if not branch.valid))
     stepwise_resolve(trunk)
-    expand_branches(trunk, True)
+    expand_branches(trunk, ignore_errors=True)
 
     return trunk
 
