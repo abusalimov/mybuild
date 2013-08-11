@@ -121,7 +121,10 @@ class Trunk(Solution):
 
     def __ior__(self, diff):
         if self is not diff.trunk:
-            raise ValueError('Diff must belong to this trunk')
+            raise ValueError('Diff must be created from this trunk')
+
+        assert self.literals.isdisjoint(diff.literals), \
+                "diff must not intersect the trunk (must be a strict diff)"
 
         for neglast, negexcl in iteritems(diff.negexcls):
             self.neglefts[neglast] -= negexcl
