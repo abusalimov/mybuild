@@ -10,9 +10,7 @@ __all__ = ['module', 'option']
 
 from _compat import *
 
-import functools
 import inspect
-import threading
 
 from mybuild.core import ModuleType
 from mybuild.core import Module

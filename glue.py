@@ -51,7 +51,6 @@ class PyDslLoader(DslLoaderMixin, pyfile.PyFileLoader):
                 'option': pydsl.option}
 
 
-
 class YamlDslLoader(DslLoaderMixin, yamlfile.YamlFileLoader):
 
     MODULE = 'MyYaml'

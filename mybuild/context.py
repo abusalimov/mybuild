@@ -24,8 +24,6 @@ from mybuild.core import *
 from mybuild.pgraph import *
 from mybuild.solver import solve
 
-from util.itertools import pop_iter
-from util.misc import NotifyingMixin
 from util.misc import no_reent
 
 import logging
@@ -81,7 +79,6 @@ class Context(object):
         self.consider(optuple, origin)
 
         self._constraints[origin].add(optuple)
-
 
     def mdata_for(self, module):
         try:

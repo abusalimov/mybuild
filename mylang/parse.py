@@ -21,8 +21,6 @@ from mylang.linkage import Stub
 from mylang.location import Fileinfo
 from mylang.location import Location
 
-from util.prop import cached_property
-
 
 # Here go scoping-related stuff + some utils.
 

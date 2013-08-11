@@ -341,7 +341,6 @@ class Linker(LinkerBase):
         assert len(self.objects) == len(self.stubs)
 
 
-
 class FileLinker(LinkerBase):
 
     def __init__(self, global_linker):
@@ -363,7 +362,6 @@ class FileLinker(LinkerBase):
                     scope.raise_errors()
                 except LinkageError as e:
                     yield e
-
 
         CompoundError.raise_if_any(iter_errors())
 

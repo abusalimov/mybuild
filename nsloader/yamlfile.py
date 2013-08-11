@@ -7,7 +7,6 @@ from _compat import *
 
 import functools
 
-from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
 
 try:

@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
 
     '''
-    from util import singleton
+    from util.misc import singleton
 
     from pprint import pprint
 

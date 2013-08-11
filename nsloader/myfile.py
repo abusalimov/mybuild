@@ -13,7 +13,6 @@ from mylang.errors import MyfileError
 from mylang.linkage import Linker
 from mylang.linkage import FileLinker
 
-from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
 
 

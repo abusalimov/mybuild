@@ -10,8 +10,6 @@ __all__ = ['module', 'option']
 
 from _compat import *
 
-import functools
-
 from mybuild.core import ModuleType
 from mybuild.core import Module
 from mybuild.core import Optype

@@ -37,7 +37,6 @@ from _compat import *
 
 from collections import Mapping
 from collections import namedtuple
-from itertools import combinations
 
 from util.misc import bools
 from util.misc import Pair
@@ -219,7 +218,8 @@ class Literal(object):
     Depending on a node value the node may behave differently.
     Literal object describes such behavior.
 
-    Literal object is tightly related to its node. Do not construct it manually.
+    Literal object is tightly related to its node. Do not construct it
+    manually.
     """
     __slots__ = 'node', 'level', 'implies', 'imply_reasons', 'neglasts'
 
@@ -260,8 +260,8 @@ class Literal(object):
         if self.node.pgraph is not other.node.pgraph:
             raise ValueError('Must belong to the same Pgraph')
 
-        self.__imply( self,   other,  why)
-        self.__imply(~other, ~self,   why)
+        self.__imply(self,   other,  why)
+        self.__imply(~other, ~self,  why)
 
     def becauseof(self, other, why=None):
         """Implication: other => self"""
