@@ -428,33 +428,34 @@ def create_trunk(pgraph, initial_literals=[]):
 
 
 def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
-    """
-    Non-recursive DFS.
-    """
-
     logger.debug('preparing branches for %d nodes', len(unresolved_nodes))
 
     for node in unresolved_nodes:
         logger.debug('\tunresolved node: %r', node)
 
         for literal in node:
-            branch = trunk.branchmap[literal] = Branch(trunk, literal)
-            branch.todo_it = None
+            trunk.branchmap[literal] = Branch(trunk, literal)
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
+
     expand_branches(trunk, ignore_errors)
 
+
 def expand_branches(trunk, ignore_errors=False):
+    """
+    Non-recursive DFS.
+    """
     stack = list()
 
     def stack_push(branch):
-        assert branch.todo_it is None
+        assert not hasattr(branch, 'todo_it'), ("A branch has 'todo_it' attr "
+                                                "iff it is already in stack")
         branch.todo_it = branch.iter_todo_away(ignore_errors)
         stack.append(branch)
 
     def stack_pop():
         branch = stack.pop()
-        branch.todo_it = None
+        del branch.todo_it
         return branch
 
     todo_branches = trunk.branchset() | set(itervalues(trunk.dead_branches))
@@ -476,16 +477,16 @@ def expand_branches(trunk, ignore_errors=False):
                 continue
 
             if not ignore_errors and not implied.valid:
-                branch.todo.add(literal)
+                branch.todo.add(literal)  # it was NOT handled, save it back
                 raise SolutionError(branch)
 
             if implied.initialized:
                 branch.update(implied, ignore_errors)
                 continue
 
-            if implied.todo_it is not None:  # Equivalent (mutual implication).
+            if hasattr(implied, 'todo_it'):  # equivalent (mutual implication)
                 implied.todo |= branch.todo
-                branch.todo.clear()
+                branch.todo.clear()  # otherwise update() would refuse it
 
                 implied.update(branch, ignore_errors)
                 branch.substitute_with(implied)
@@ -493,6 +494,7 @@ def expand_branches(trunk, ignore_errors=False):
                 raise StopIteration  # forget about this branch
 
         except SolutionError as error:
+            assert not ignore_errors
             logger.debug('\t%sinviable  %r', log_indent, branch)
 
             # unwind implication stack
