@@ -108,29 +108,29 @@ class Trunk(Solution):
     def __init__(self):
         super(Trunk, self).__init__()
 
-        self.branchmap = dict()  # maps gen literals to branches
-        self.neglefts = dict()   # neglasts to sets of left literals
+        self.branchmap     = dict()  # maps gen literals to branches
+        self.dead_branches = dict()  # gen literals to dead branches
 
-        self.violation_branches = {}
+        self.neglefts = dict()   # neglasts to sets of left literals
 
     def copy(self):
         new = super(Trunk, self).copy()
 
-        new.branchmap   = self.branchmap.copy()
-        new.neglefts    = self.neglefts.copy()
+        new.branchmap     = self.branchmap.copy()
+        new.dead_branches = self.dead_branches.copy()
 
-        new.violation_branches = self.violation_branches.copy()
+        new.neglefts = self.neglefts.copy()
 
         return new
 
-    def __ior__(self, branch):
-        if self is not branch.trunk:
-            raise ValueError('Branch must belong to this trunk')
+    def __ior__(self, diff):
+        if self is not diff.trunk:
+            raise ValueError('Diff must belong to this trunk')
 
-        for neglast, negexcl in iteritems(branch.negexcls):
+        for neglast, negexcl in iteritems(diff.negexcls):
             self.neglefts[neglast] -= negexcl
 
-        return super(Trunk, self).__ior__(branch)
+        return super(Trunk, self).__ior__(diff)
 
     def __isub__(self, other):
         return NotImplemented
@@ -257,7 +257,7 @@ class Diff(Solution):
                 if not ignore_errors:
                     raise SolutionError(self)
                 else:
-                    implied = trunk.violation_branches[literal]
+                    implied = trunk.dead_branches[literal]
 
             yield literal, implied
 
@@ -330,7 +330,7 @@ class Branch(Diff):
             if gen_literal in self.trunk.branchmap:
                 self.trunk.branchmap[gen_literal] = other
             else:
-                self.trunk.violation_branches[gen_literal] = other
+                self.trunk.dead_branches[gen_literal] = other
 
         self.dispose()  # make gc happy
 
@@ -461,7 +461,7 @@ def expand_branches(trunk, ignore_errors=False):
         branch.todo_it = None
         return branch
 
-    todo_branches = trunk.branchset() | set(itervalues(trunk.violation_branches))
+    todo_branches = trunk.branchset() | set(itervalues(trunk.dead_branches))
 
     while stack or todo_branches:
         if not stack:
@@ -544,7 +544,7 @@ def resolve_branches(trunk, branches):
         trunk.update(resolved)
 
         for literal in resolved.literals:
-            trunk.violation_branches[~literal] = trunk.branchmap[~literal]
+            trunk.dead_branches[~literal] = trunk.branchmap[~literal]
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
@@ -598,7 +598,7 @@ def solve(pgraph, initial_values={}):
     logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)
     trunk = get_trunk_solution(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.violation_branches.values())
+    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.dead_branches.values())
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
 
