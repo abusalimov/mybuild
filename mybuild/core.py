@@ -18,14 +18,13 @@ __all__ = [
 
 
 from collections import namedtuple
-from functools import partial
-from inspect import getargspec
 from itertools import starmap
 from operator import attrgetter
 import sys
 
 from util.operator import getter
 from util.operator import invoker
+from util.operator import instanceof
 from util.misc import InstanceBoundTypeMixin
 
 from util.compat import *
@@ -325,7 +324,7 @@ class Optype(object):
 
     @classmethod
     def of_type(cls, types, default=Ellipsis):
-        ret = cls(_check_func=partial(isinstance, classinfo=types))
+        ret = cls(_check_func=instanceof(types))
 
         if default is not Ellipsis:
             ret.set(default=default)
