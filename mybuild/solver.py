@@ -102,11 +102,11 @@ class Solution(object):
             self.reasons.add(reason)
 
 
-class TrunkSolution(Solution):
-    """docstring for TrunkSolution"""
+class Trunk(Solution):
+    """docstring for Trunk"""
 
     def __init__(self):
-        super(TrunkSolution, self).__init__()
+        super(Trunk, self).__init__()
 
         self.branchmap = dict()  # maps gen literals to branches
         self.neglefts = dict()   # neglasts to sets of left literals
@@ -114,7 +114,7 @@ class TrunkSolution(Solution):
         self.violation_branches = {}
 
     def copy(self):
-        new = super(TrunkSolution, self).copy()
+        new = super(Trunk, self).copy()
 
         new.branchmap   = self.branchmap.copy()
         new.neglefts    = self.neglefts.copy()
@@ -130,7 +130,7 @@ class TrunkSolution(Solution):
         for neglast, negexcl in iteritems(branch.negexcls):
             self.neglefts[neglast] -= negexcl
 
-        return super(TrunkSolution, self).__ior__(branch)
+        return super(Trunk, self).__ior__(branch)
 
     def __isub__(self, other):
         return NotImplemented
@@ -139,14 +139,14 @@ class TrunkSolution(Solution):
         return set(itervalues(self.branchmap))
 
 
-class BranchSolutionBase(Solution):
-    """docstring for BranchSolutionBase"""
+class Diff(Solution):
+    """docstring for Diff"""
 
     def is_implied_by(self, other):
         raise NotImplementedError('Not implemented in base class')
 
     def __init__(self, trunk):
-        super(BranchSolutionBase, self).__init__()
+        super(Diff, self).__init__()
 
         self.trunk        = trunk
 
@@ -154,7 +154,7 @@ class BranchSolutionBase(Solution):
         self.negexcls     = defaultdict(set)  # {neglast: literals...}
 
     def copy(self):
-        new = super(BranchSolutionBase, self).copy()
+        new = super(Diff, self).copy()
 
         new.trunk         = self.trunk
 
@@ -183,7 +183,7 @@ class BranchSolutionBase(Solution):
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__ior__, negexcl)
 
-        return super(BranchSolutionBase, self).__ior__(other)
+        return super(Diff, self).__ior__(other)
 
     def __isub__(self, other):
         if self.trunk is not other.trunk:
@@ -194,15 +194,15 @@ class BranchSolutionBase(Solution):
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__isub__, negexcl)
 
-        return super(BranchSolutionBase, self).__isub__(other)
+        return super(Diff, self).__isub__(other)
 
     def update(self, other, ignore_errors=False, handle_todos=False):
-        super(BranchSolutionBase, self).update(other, ignore_errors=ignore_errors)
+        super(Diff, self).update(other, ignore_errors=ignore_errors)
         if handle_todos:
             self.handle_todos(ignore_errors=ignore_errors)
 
     def difference_update(self, other, ignore_errors=False, handle_todos=False):
-        super(BranchSolutionBase, self).difference_update(other, ignore_errors=ignore_errors)
+        super(Diff, self).difference_update(other, ignore_errors=ignore_errors)
         if handle_todos:
             self.handle_todos(ignore_errors=ignore_errors)
 
@@ -212,18 +212,18 @@ class BranchSolutionBase(Solution):
     def clear(self):
         self.todo     .clear()
         self.negexcls .clear()
-        super(BranchSolutionBase, self).clear()
+        super(Diff, self).clear()
 
     def dispose(self):
         del self.todo
         del self.negexcls
-        super(BranchSolutionBase, self).dispose()
+        super(Diff, self).dispose()
 
     def add_literal(self, literal, reason=None):
         for neglast in literal.neglasts:
             self.__do_neglast(neglast, operator.methodcaller('add', literal))
 
-        super(BranchSolutionBase, self).add_literal(literal, reason)
+        super(Diff, self).add_literal(literal, reason)
 
     def __do_neglast(self, neglast, op, *args):
         negleft = self.trunk.neglefts[neglast]
@@ -273,8 +273,8 @@ class BranchSolutionBase(Solution):
 
             self.update(implied, ignore_errors=ignore_errors)
 
-class BranchSolution(BranchSolutionBase):
-    """docstring for BranchSolution"""
+class Branch(Diff):
+    """docstring for Branch"""
 
     @property
     def valid(self):
@@ -288,7 +288,7 @@ class BranchSolution(BranchSolutionBase):
         return self.gen_literals <= other.literals
 
     def __init__(self, trunk, gen_literal):
-        super(BranchSolution, self).__init__(trunk)
+        super(Branch, self).__init__(trunk)
         self.gen_literals = set()
 
         self.error = None
@@ -313,7 +313,7 @@ class BranchSolution(BranchSolutionBase):
         return inv_branch
 
     def copy(self):
-        new = super(BranchSolution, self).copy()
+        new = super(Branch, self).copy()
 
         new.gen_literals = set()  # this is not copied
         new.error = None
@@ -339,7 +339,7 @@ class BranchSolution(BranchSolutionBase):
                             ' & '.join(repr(literal).join('()')
                                        for literal in self.gen_literals))
 
-class ResolvedBranchSolution(BranchSolutionBase):
+class Patch(Diff):
     def is_implied_by(self, other):
         return False
 
@@ -351,7 +351,7 @@ def create_trunk(pgraph, initial_literals=[]):
         for literal in initial_literals:
             logger.debug('\tinitial literal: %r', literal)
 
-    trunk = TrunkSolution()
+    trunk = Trunk()
 
     nodes    = trunk.nodes
     literals = trunk.literals
@@ -442,7 +442,7 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
         logger.debug('\tunresolved node: %r', node)
 
         for literal in node:
-            branch = trunk.branchmap[literal] = BranchSolution(trunk, literal)
+            branch = trunk.branchmap[literal] = Branch(trunk, literal)
             branch.todo_it = None
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
@@ -534,7 +534,7 @@ def expand_branches(trunk, ignore_errors=False):
 
 def resolve_branches(trunk, branches):
     logger.debug('Branch resolving started')
-    resolved = ResolvedBranchSolution(trunk)
+    resolved = Patch(trunk)
 
     for branch in branches:
         resolved.update(branch, handle_todos=True)
@@ -548,7 +548,7 @@ def resolve_branches(trunk, branches):
             for each in literal.node:  # remove both literal and ~literal
                 del trunk.branchmap[each]
 
-        next_resolved = ResolvedBranchSolution(trunk)
+        next_resolved = Patch(trunk)
 
         logger.debug('Unresolved branches updating')
         for branch in trunk.branchset():
