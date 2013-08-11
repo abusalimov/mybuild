@@ -148,15 +148,15 @@ class Diff(Solution):
     def __init__(self, trunk):
         super(Diff, self).__init__()
 
-        self.trunk        = trunk
+        self.trunk = trunk
 
-        self.todo         = set()  # literals
-        self.negexcls     = defaultdict(set)  # {neglast: literals...}
+        self.todo = set()  # literals
+        self.negexcls = defaultdict(set)  # {neglast: literals...}
 
     def copy(self):
         new = super(Diff, self).copy()
 
-        new.trunk         = self.trunk
+        new.trunk = self.trunk
 
         new.todo = self.todo.copy()
         negexcls = new.negexcls = defaultdict(set)
@@ -165,11 +165,14 @@ class Diff(Solution):
 
         return new
 
-    def __ior__(self, other):
+    def _check_capable(self, other):
         if self.trunk is not other.trunk:
-            raise ValueError('Both branches must belong to the same trunk')
+            raise ValueError('Both diffs must belong to the same trunk')
         if other.todo:
-            raise NotImplementedError('Other is not ready')
+            raise NotImplementedError('Other is not ready: {0}'.format(other))
+
+    def __ior__(self, other):
+        self._check_capable(other)
 
         if other.is_implied_by(self):
             assert self.nodes    >= other.nodes
@@ -186,10 +189,7 @@ class Diff(Solution):
         return super(Diff, self).__ior__(other)
 
     def __isub__(self, other):
-        if self.trunk is not other.trunk:
-            raise ValueError('Both branches must belong to the same trunk')
-        if other.todo:
-            raise NotImplementedError('Other is not ready')
+        self._check_capable(other)
 
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__isub__, negexcl)
@@ -197,14 +197,14 @@ class Diff(Solution):
         return super(Diff, self).__isub__(other)
 
     def update(self, other, ignore_errors=False, handle_todos=False):
-        super(Diff, self).update(other, ignore_errors=ignore_errors)
+        super(Diff, self).update(other, ignore_errors)
         if handle_todos:
-            self.handle_todos(ignore_errors=ignore_errors)
+            self.handle_todos(ignore_errors)
 
     def difference_update(self, other, ignore_errors=False, handle_todos=False):
-        super(Diff, self).difference_update(other, ignore_errors=ignore_errors)
+        super(Diff, self).difference_update(other, ignore_errors)
         if handle_todos:
-            self.handle_todos(ignore_errors=ignore_errors)
+            self.handle_todos(ignore_errors)
 
     def substitute_with(self, other):
         raise NotImplementedError('Not implemented in base class')
@@ -266,12 +266,12 @@ class Diff(Solution):
         Must only be called when all branches in trunk.branchmap are
         completely initialized.
         """
-        for literal, implied in self.iter_todo_away(ignore_errors=ignore_errors):
+        for literal, implied in self.iter_todo_away(ignore_errors):
             if self.is_implied_by(implied):
                 self.substitute_with(implied)
                 break
 
-            self.update(implied, ignore_errors=ignore_errors)
+            self.update(implied, ignore_errors)
 
 class Branch(Diff):
     """docstring for Branch"""
@@ -484,14 +484,14 @@ def expand_branches(trunk, ignore_errors=False):
                 raise SolutionError(branch)
 
             if implied.initialized:
-                branch.update(implied, ignore_errors=ignore_errors)
+                branch.update(implied, ignore_errors)
                 continue
 
             if implied.todo_it is not None:  # Equivalent (mutual implication).
                 implied.todo |= branch.todo
                 branch.todo.clear()
 
-                implied.update(branch, ignore_errors=ignore_errors)
+                implied.update(branch, ignore_errors)
                 branch.substitute_with(implied)
 
                 raise StopIteration  # forget about this branch
