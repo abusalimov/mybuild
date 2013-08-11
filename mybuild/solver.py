@@ -134,6 +134,9 @@ class Trunk(Solution):
     def __isub__(self, other):
         return NotImplemented
 
+    def add_literal(self, literal, reason=None):
+        raise NotImplementedError('Unsupported operation')
+
     def branchset(self):
         return set(itervalues(self.branchmap))
 
@@ -251,7 +254,10 @@ class Diff(Solution):
                 if not ignore_errors:
                     raise SolutionError(self)
 
-                implied = trunk.dead_branches[literal]
+                # If ~literal was added into trunk by create_trunk, then
+                # there is no branch for literal, even dead.
+                # Give up in this case and yield None.
+                implied = trunk.dead_branches.get(literal)
 
             yield literal, implied
 
@@ -260,8 +266,11 @@ class Diff(Solution):
         Must only be called when all branches in trunk.branchmap are
         completely initialized.
         """
-        for _, implied in self.iter_todo_away(ignore_errors):
-            self.update(implied, ignore_errors)
+        for literal, implied in self.iter_todo_away(ignore_errors):
+            if implied is not None:
+                self.update(implied, ignore_errors)
+            else:
+                self.add_literal(literal)
 
 
 class Branch(Diff):
@@ -325,12 +334,14 @@ class Branch(Diff):
     def handle_todos(self, ignore_errors=False):
         # Overloaded, adds a call to substitute_with in case of equivalence.
 
-        for _, implied in self.iter_todo_away(ignore_errors):
-            if self <= implied:  # mutual implication
-                self.substitute_with(implied)
-                break
-
-            self.update(implied, ignore_errors)
+        for literal, implied in self.iter_todo_away(ignore_errors):
+            if implied is not None:
+                if self <= implied:  # mutual implication
+                    self.substitute_with(implied)
+                    break
+                self.update(implied, ignore_errors)
+            else:
+                self.add_literal(literal)
 
     def substitute_with(self, other):
         """
@@ -489,6 +500,8 @@ def expand_branches(trunk, ignore_errors=False):
             literal, implied = next(branch.todo_it)
 
             if implied is None:
+                assert ignore_errors
+                branch.add_literal(literal)
                 continue
 
             if not ignore_errors and not implied.valid:
