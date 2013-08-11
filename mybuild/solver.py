@@ -193,6 +193,16 @@ class Diff(Solution):
         if handle_todos:
             self.handle_todos(ignore_errors)
 
+    def sync_with_trunk(self):
+        """Keep self a strict diff with the trunk."""
+        trunk = self.trunk
+
+        for neglast in self.negexcls:
+            self.__do_neglast(neglast, operator.__isub__,
+                              trunk.neglefts[neglast])
+
+        super(Diff, self).__isub__(trunk)
+
     def clear(self):
         self.todo     .clear()
         self.negexcls .clear()
@@ -594,6 +604,9 @@ def get_trunk_solution(pgraph, initial_values={}):
     resolve_branches(trunk, list(~branch for branch in trunk.branchset()
                                  if not branch.valid))
     stepwise_resolve(trunk)
+
+    for branch in itervalues(trunk.dead_branches):
+        branch.sync_with_trunk()
     expand_branches(trunk, ignore_errors=True)
 
     return trunk
