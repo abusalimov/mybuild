@@ -2,7 +2,9 @@
 Misc stuff.
 """
 from __future__ import absolute_import
-from util.compat import *
+
+
+from _compat import *
 
 import functools as _functools
 from functools import partial

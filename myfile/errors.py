@@ -6,9 +6,9 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-28"
 
 
-import traceback as _traceback
+from _compat import *
 
-from util.compat import *
+import traceback as _traceback
 
 
 class MyfileError(Exception):

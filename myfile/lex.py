@@ -6,12 +6,12 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
 
 
+from _compat import *
+
 import ply.lex
 
 from myfile.errors import IllegalCharacter
 from myfile.location import Location
-
-from util.compat import *
 
 
 def loc(t):

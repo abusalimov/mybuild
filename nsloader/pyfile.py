@@ -2,8 +2,10 @@
 Python-like loader which is able to customize default global namespace.
 """
 
+
+from _compat import *
+
 from util.importlib.machinery import SourceFileLoader
-from util.compat import *
 
 
 class PyFileLoader(SourceFileLoader):

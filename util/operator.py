@@ -3,10 +3,11 @@ Extends the standard operator module with few handy functions.
 """
 from __future__ import absolute_import
 
+
+from _compat import *
+
 from operator import *
 from functools import partial as _partial
-
-from util.compat import *
 
 
 class GetterType(object):

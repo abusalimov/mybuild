@@ -11,6 +11,8 @@ __all__ = [
 ]
 
 
+from _compat import *
+
 from collections import defaultdict
 import operator
 
@@ -18,7 +20,6 @@ from mybuild.pgraph import *
 from mybuild.rgraph import *
 
 from util.itertools import pop_iter
-from util.compat import *
 
 import logging
 logger = logging.getLogger(__name__)

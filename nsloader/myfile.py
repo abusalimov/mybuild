@@ -8,6 +8,8 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
 
 
+from _compat import *
+
 from myfile import load
 from myfile.errors import MyfileError
 from myfile.linkage import Linker
@@ -15,8 +17,6 @@ from myfile.linkage import FileLinker
 
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
-
-from util.compat import *
 
 
 class LoaderFileLinker(FileLinker):

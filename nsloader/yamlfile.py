@@ -2,12 +2,13 @@
 Loader for YAML files. Uses PyYaml library.
 """
 
+
+from _compat import *
+
 import functools
 
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader
-
-from util.compat import *
 
 try:
     import yaml

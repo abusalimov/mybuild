@@ -33,6 +33,8 @@ __all__ = [
 ]
 
 
+from _compat import *
+
 from collections import Mapping
 from collections import namedtuple
 from itertools import combinations
@@ -40,8 +42,6 @@ from itertools import combinations
 from util.misc import bools
 from util.misc import Pair
 from util.operator import instanceof
-
-from util.compat import *
 
 
 class PgraphMeta(type):

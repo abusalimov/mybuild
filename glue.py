@@ -6,14 +6,14 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-08-07"
 
 
+from _compat import *
+
 from nsloader import myfile
 from nsloader import pyfile
 from nsloader import yamlfile
 
 from mybuild.binding import mydsl
 from mybuild.binding import pydsl
-
-from util.compat import *
 
 
 class DslLoaderMixin(object):

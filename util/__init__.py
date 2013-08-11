@@ -2,8 +2,10 @@
 Utils package.
 """
 
+
+from _compat import *
+
 import logging as _logging
-from util.compat import *
 
 
 def identity(x):

@@ -10,6 +10,8 @@ __all__ = [
 ]
 
 
+from _compat import *
+
 import contextlib
 import sys
 import os.path
@@ -19,8 +21,6 @@ from nsimporter.package import SubPackageLoader
 
 from util.collections import OrderedDict
 from util.importlib.abc import MetaPathFinder
-
-from util.compat import *
 
 
 class Loader(object):

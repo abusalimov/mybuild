@@ -2,7 +2,8 @@
 Property descriptors.
 """
 
-from util.compat import *
+
+from _compat import *
 
 
 class cached_property(object):

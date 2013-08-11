@@ -6,14 +6,14 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
 
 
+from _compat import *
+
 from myfile.linkage import Linker
 from myfile.errors import MyfileError
 try:
     from myfile.parse import parse
 except ImportError:
     parse = None
-
-from util.compat import *
 
 
 def load(linker, source, filename=None, builtins={}):

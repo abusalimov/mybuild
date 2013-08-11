@@ -8,6 +8,8 @@ __date__ = "2013-07-29"
 __all__ = ['module', 'option']
 
 
+from _compat import *
+
 import functools
 import inspect
 import threading
@@ -18,7 +20,6 @@ from mybuild.core import Module
 from mybuild.core import Optype
 
 from util.misc import constructor_decorator
-from util.compat import *
 
 
 class PyFileModuleType(ModuleType):

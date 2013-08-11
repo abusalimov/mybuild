@@ -5,8 +5,13 @@ Types used on a per-build basis.
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-09"
 
-__all__ = ["Context"]
+__all__ = [
+    "Context",
+    "resolve",
+]
 
+
+from _compat import *
 
 from collections import namedtuple
 from collections import defaultdict
@@ -22,8 +27,6 @@ from mybuild.solver import solve
 from util.itertools import pop_iter
 from util.misc import NotifyingMixin
 from util.misc import no_reent
-
-from util.compat import *
 
 import logging
 logger = logging.getLogger(__name__)

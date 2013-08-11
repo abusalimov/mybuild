@@ -3,10 +3,11 @@ Extends the standard itertools module.
 """
 from __future__ import absolute_import
 
+
+from _compat import *
+
 from itertools import *
 from functools import partial
-
-from util.compat import *
 
 
 def raises(exception, func, *args, **kwargs):

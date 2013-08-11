@@ -3,9 +3,10 @@ Abstract base classes related to import. Primarily for documentation purposes.
 """
 from __future__ import absolute_import
 
-import abc
 
-from util.compat import *
+from _compat import *
+
+import abc
 
 
 # Everything below is derived from py3k importlib.abc

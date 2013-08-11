@@ -2,15 +2,16 @@
 Mybuild tool for Waf.
 """
 
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-02"
+
+__all__ = ["MyWafModuleMixin"]  # the rest is bound as Waf Context methods.
+
+
+from _compat import *
+
 import os.path
-
 from operator import attrgetter
-
-from waflib import Context as wafcontext
-from waflib import Utils   as wafutils
-from waflib import Errors  as waferrors
-
-from mybuild.context import resolve
 
 from glue import PyDslLoader
 from glue import MyDslLoader
@@ -18,9 +19,14 @@ from glue import MyDslLoader
 from nsimporter import import_all
 from nsimporter import loader_filename
 
+from mybuild.context import resolve
+
 from util.misc import is_mapping
 from util.operator import instanceof
-from util.compat import *
+
+from waflib import Context as wafcontext
+from waflib import Utils   as wafutils
+from waflib import Errors  as waferrors
 
 
 def wafcontext_method(func):

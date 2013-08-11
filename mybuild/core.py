@@ -17,6 +17,8 @@ __all__ = [
 ]
 
 
+from _compat import *
+
 from collections import namedtuple
 from itertools import starmap
 from operator import attrgetter
@@ -26,8 +28,6 @@ from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
 from util.misc import InstanceBoundTypeMixin
-
-from util.compat import *
 
 
 class ModuleType(type):

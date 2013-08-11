@@ -6,6 +6,8 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
 
 
+from _compat import *
+
 import functools
 import operator
 import ply.yacc
@@ -20,7 +22,6 @@ from myfile.location import Fileinfo
 from myfile.location import Location
 
 from util.prop import cached_property
-from util.compat import *
 
 
 # Here go scoping-related stuff + some utils.

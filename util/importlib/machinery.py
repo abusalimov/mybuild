@@ -3,6 +3,9 @@ Machinery: implementations of some finders and loaders.
 """
 from __future__ import absolute_import
 
+
+from _compat import *
+
 import abc
 import functools
 import imp
@@ -10,8 +13,6 @@ import sys
 import os.path
 
 from util.importlib import abc as abc_
-
-from util.compat import *
 
 
 # Everything below is derived from py3k importlib

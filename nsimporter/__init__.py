@@ -13,13 +13,13 @@ __all__ = [
 ]
 
 
+from _compat import *
+
 import os.path
 
 from nsimporter.hook import loader_module
 from nsimporter.hook import loader_filename
 from nsimporter.hook import NamespaceImportHook
-
-from util.compat import *
 
 
 importer_instance = NamespaceImportHook()  # singleton instance
