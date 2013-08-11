@@ -13,7 +13,6 @@ from _compat import *
 import functools
 import inspect
 import threading
-from operator import attrgetter
 
 from mybuild.core import ModuleType
 from mybuild.core import Module

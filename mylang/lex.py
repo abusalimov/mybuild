@@ -10,8 +10,8 @@ from _compat import *
 
 import ply.lex
 
-from myfile.errors import IllegalCharacter
-from myfile.location import Location
+from mylang.errors import IllegalCharacter
+from mylang.location import Location
 
 
 def loc(t):

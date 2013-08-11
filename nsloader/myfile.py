@@ -1,8 +1,6 @@
 """
 Loader for plain old Mybuild files.
 """
-from __future__ import absolute_import
-
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
@@ -10,10 +8,10 @@ __date__ = "2013-07-05"
 
 from _compat import *
 
-from myfile import load
-from myfile.errors import MyfileError
-from myfile.linkage import Linker
-from myfile.linkage import FileLinker
+from mylang import load
+from mylang.errors import MyfileError
+from mylang.linkage import Linker
+from mylang.linkage import FileLinker
 
 from util.importlib.abc import Loader
 from util.importlib.machinery import SourceFileLoader

@@ -12,14 +12,14 @@ import functools
 import operator
 import ply.yacc
 
-from myfile import lex
-from myfile.errors import UnexpectedToken
-from myfile.errors import UnexpectedEOF
-from myfile.linkage import BuiltinScope
-from myfile.linkage import ObjectScope
-from myfile.linkage import Stub
-from myfile.location import Fileinfo
-from myfile.location import Location
+from mylang import lex
+from mylang.errors import UnexpectedToken
+from mylang.errors import UnexpectedEOF
+from mylang.linkage import BuiltinScope
+from mylang.linkage import ObjectScope
+from mylang.linkage import Stub
+from mylang.location import Fileinfo
+from mylang.location import Location
 
 from util.prop import cached_property
 

@@ -8,10 +8,10 @@ __date__ = "2013-07-30"
 
 from _compat import *
 
-from myfile.linkage import Linker
-from myfile.errors import MyfileError
+from mylang.linkage import Linker
+from mylang.errors import MyfileError
 try:
-    from myfile.parse import parse
+    from mylang.parse import parse
 except ImportError:
     parse = None
 

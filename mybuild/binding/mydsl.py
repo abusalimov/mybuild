@@ -16,7 +16,7 @@ from mybuild.core import ModuleType
 from mybuild.core import Module
 from mybuild.core import Optype
 
-from myfile.linkage import MyfileObjectProxy
+from mylang.linkage import MyfileObjectProxy
 
 
 class MyFileModuleType(ModuleType):
