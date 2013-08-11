@@ -65,7 +65,7 @@ class YamlFileLoader(SourceFileLoader):
 
         except IOError:
             raise ImportError("IO error while reading a stream")
-        except yaml.YamlError as e:
+        except yaml.YAMLError as e:
             raise e  # XXX convert into SyntaxError
 
         else:
