@@ -3,7 +3,7 @@ Utils package.
 """
 
 import logging as _logging
-from .compat import *
+from util.compat import *
 
 
 def identity(x):

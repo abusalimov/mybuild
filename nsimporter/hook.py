@@ -14,8 +14,8 @@ import contextlib
 import sys
 import os.path
 
-from .package import NamespacePackageLoader
-from .package import SubPackageLoader
+from nsimporter.package import NamespacePackageLoader
+from nsimporter.package import SubPackageLoader
 
 from util.collections import OrderedDict
 from util.importlib.abc import MetaPathFinder

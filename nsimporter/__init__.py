@@ -15,9 +15,9 @@ __all__ = [
 
 import os.path
 
-from .hook import loader_module
-from .hook import loader_filename
-from .hook import NamespaceImportHook
+from nsimporter.hook import loader_module
+from nsimporter.hook import loader_filename
+from nsimporter.hook import NamespaceImportHook
 
 from util.compat import *
 

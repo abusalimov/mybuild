@@ -10,14 +10,14 @@ import functools
 import operator
 import ply.yacc
 
-from . import lex
-from .errors import UnexpectedToken
-from .errors import UnexpectedEOF
-from .linkage import BuiltinScope
-from .linkage import ObjectScope
-from .linkage import Stub
-from .location import Fileinfo
-from .location import Location
+from myfile import lex
+from myfile.errors import UnexpectedToken
+from myfile.errors import UnexpectedEOF
+from myfile.linkage import BuiltinScope
+from myfile.linkage import ObjectScope
+from myfile.linkage import Stub
+from myfile.location import Fileinfo
+from myfile.location import Location
 
 from util.prop import cached_property
 from util.compat import *

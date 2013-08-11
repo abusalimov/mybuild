@@ -6,10 +6,10 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
 
 
-from .linkage import Linker
-from .errors import MyfileError
+from myfile.linkage import Linker
+from myfile.errors import MyfileError
 try:
-    from .parse import parse
+    from myfile.parse import parse
 except ImportError:
     parse = None
 

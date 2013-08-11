@@ -6,7 +6,7 @@ from __future__ import absolute_import
 from operator import *
 from functools import partial as _partial
 
-from .compat import *
+from util.compat import *
 
 
 class GetterType(object):

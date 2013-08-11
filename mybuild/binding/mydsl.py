@@ -10,9 +10,9 @@ __all__ = ['module', 'option']
 
 import functools
 
-from ..core import ModuleType
-from ..core import Module
-from ..core import Optype
+from mybuild.core import ModuleType
+from mybuild.core import Module
+from mybuild.core import Optype
 
 from myfile.linkage import MyfileObjectProxy
 

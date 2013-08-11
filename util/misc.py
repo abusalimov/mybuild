@@ -1,18 +1,18 @@
 """
 Misc stuff.
 """
-from .compat import *
+from __future__ import absolute_import
+from util.compat import *
 
 import functools as _functools
-
 from functools import partial
 
 from collections import Mapping as _Mapping
 from collections import namedtuple as _namedtuple
 from collections import deque as _deque
 
-from .itertools import pop_iter
-from .operator import instanceof
+from util.itertools import pop_iter
+from util.operator import instanceof
 
 
 def constructor_decorator(cls, **kwargs):

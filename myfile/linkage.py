@@ -6,7 +6,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-26"
 
 
-from .errors import *
+from myfile.errors import *
 
 from util.prop import cached_property
 from util.itertools import send_next_iter

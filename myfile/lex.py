@@ -8,8 +8,8 @@ __date__ = "2013-07-05"
 
 import ply.lex
 
-from .errors import IllegalCharacter
-from .location import Location
+from myfile.errors import IllegalCharacter
+from myfile.location import Location
 
 from util.compat import *
 

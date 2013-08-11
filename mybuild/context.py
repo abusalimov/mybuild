@@ -15,9 +15,9 @@ from itertools import product
 from itertools import starmap
 from operator import attrgetter
 
-from .core import *
-from .pgraph import *
-from .solver import solve
+from mybuild.core import *
+from mybuild.pgraph import *
+from mybuild.solver import solve
 
 from util.itertools import pop_iter
 from util.misc import NotifyingMixin

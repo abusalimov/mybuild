@@ -5,7 +5,7 @@ from __future__ import absolute_import
 
 import abc
 
-from ..compat import *
+from util.compat import *
 
 
 # Everything below is derived from py3k importlib.abc

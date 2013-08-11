@@ -4,9 +4,9 @@ from unittest import TestCase
 from functools import partial
 from itertools import izip_longest
 
-from .. import pgraph
-from ..pgraph import *
-from ..solver import *
+from mybuild import pgraph
+from mybuild.pgraph import *
+from mybuild.solver import *
 
 
 class TestPgraph(Pgraph):

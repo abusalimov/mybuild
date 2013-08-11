@@ -14,8 +14,8 @@ __all__ = [
 from collections import defaultdict
 import operator
 
-from .pgraph import *
-from .rgraph import *
+from mybuild.pgraph import *
+from mybuild.rgraph import *
 
 from util.itertools import pop_iter
 from util.compat import *
@@ -446,7 +446,7 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
     expand_branches(trunk, ignore_errors)
-    
+
 def expand_branches(trunk, ignore_errors=False):
     stack = list()
 

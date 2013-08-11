@@ -4,8 +4,9 @@ Extends the standard itertools module.
 from __future__ import absolute_import
 
 from itertools import *
+from functools import partial
 
-from .compat import *
+from util.compat import *
 
 
 def raises(exception, func, *args, **kwargs):

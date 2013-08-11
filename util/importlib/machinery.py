@@ -9,9 +9,9 @@ import imp
 import sys
 import os.path
 
-from . import abc as abc_
+from util.importlib import abc as abc_
 
-from ..compat import *
+from util.compat import *
 
 
 # Everything below is derived from py3k importlib
