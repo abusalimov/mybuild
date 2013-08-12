@@ -35,33 +35,44 @@ class Rgraph(object):
     """
     Rgraph or Reason graph
     """  
-    def __init__(self, literals, reasons, violation_branches = set()):
-        self.violation_branches = violation_branches
+    def __init__(self, trunk, use_dead_branches = True):
+        self.trunk = trunk
         self.initial = NodeContainer(set())  
         self.nodes = {}    
         self.nodes[frozenset(set())] = self.initial
+        self.violation_graphs = {}
         
-        for literal in literals:
-            self.nodes[frozenset([literal])] = NodeContainer(frozenset([literal]))
+        for node in trunk.nodes:
+            self.nodes[frozenset([node[True]])] = NodeContainer(frozenset([node[True]]))
+            self.nodes[frozenset([node[False]])] = NodeContainer(frozenset([node[False]]))
                 
-        for reason in reasons:
+        for reason in trunk.reasons:
             self.fill_data(reason)
-              
-        for branch in violation_branches:
-            for literal in branch.gen_literals:
-                self.fill_data(Reason(why_violation, ~literal, literal))
-                self.fill_data(Reason(None, literal))  
+        
+        if use_dead_branches:      
+            for literal, branch in trunk.dead_branches.items():
+                self.violation_graphs[literal] = Rgraph(trunk, False)
+                self.violation_graphs[literal].add_branch(branch)
+                for gen_literal in branch.gen_literals:
+                    self.fill_data(Reason(why_violation, ~gen_literal, gen_literal))
+                    self.fill_data(Reason(None, gen_literal))
+                    
+    def add_branch(self, branch):
+        if self.trunk is not branch.trunk:
+            raise ValueError('Branch must belong to the rgraph trunk')
+        
+        branch.sync_with_trunk()
+         
+        for literal in branch.gen_literals:
+            self.fill_data(Reason(None, literal))       
+        for reason in branch.reasons:
+            self.fill_data(reason) 
          
     def fill_data(self, reason): 
         if len(reason.cause_literals) > 1:
             s = frozenset(reason.cause_literals)
             self.nodes[s] = NodeContainer(s)
             self.update_containers(self.nodes[s])
-        elif frozenset(reason.cause_literals) not in self.nodes:
-            self.nodes[frozenset(reason.cause_literals)] = NodeContainer(frozenset(reason.cause_literals))
-            
-        if frozenset([reason.literal]) not in self.nodes:
-            self.nodes[frozenset([reason.literal])] = NodeContainer(frozenset([reason.literal]))
                      
         cause_node = self.nodes[frozenset(reason.cause_literals)]
         literal_node = self.nodes[frozenset([reason.literal])]
@@ -92,21 +103,14 @@ class Rgraph(object):
             node, reason = queue.get()        
             self.dfs(node, reason, used, queue, 0)
             
-        for branch in self.violation_branches:  
-            trunk = branch.trunk.copy()   
-            branch.trunk = trunk
-            trunk |= branch 
-            violation_nodes = self.get_violation_nodes(trunk)
+        for literal, branch in self.trunk.dead_branches.items(): 
+            violation_nodes = self.get_violation_nodes(branch)
             
             print '--- violation for', branch.gen_literals, '---'
-            for literal in branch.gen_literals:
-                trunk.reasons.add(Reason(None, literal))
-            rgraph_branch = Rgraph(trunk.literals, trunk.reasons)
-            rgraph_branch.find_shortest_ways()
             
-#             for node in rgraph_branch.nodes.values():
-#                 print node.literals, node.length
-                
+            rgraph_branch = self.violation_graphs[literal]
+            rgraph_branch.find_shortest_ways()
+                            
             for node in violation_nodes:
                 print '------ because of {0} and {1} ------'.format(node[True], node[False])
                 rgraph_branch.print_shortest_way(node[True])
@@ -114,10 +118,12 @@ class Rgraph(object):
                 print '------'
             print '---'
             
-    def get_violation_nodes(self, trunk):
+    def get_violation_nodes(self, branch):
         violation_nodes = set()
-        for node in trunk.nodes:
-            if node[False] in trunk.literals and node[True] in trunk.literals:
+        literals = self.trunk.literals | branch.literals
+        nodes = self.trunk.nodes | branch.nodes
+        for node in nodes:
+            if node[False] in literals and node[True] in literals:
                 violation_nodes.add(node)
         return violation_nodes
                 
@@ -185,9 +191,7 @@ class Rgraph(object):
     def print_shortest_way(self, literals):
         node = self.nodes[frozenset([literals])]    
         if node.length == float("+inf"):
-#             for node in self.nodes.values():
-#                 print node.literals, node.length
-            return    
+            raise Exception    
         self._print_shortest_way_part(node)
          
     def _print_shortest_way_part(self, node):

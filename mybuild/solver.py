@@ -632,7 +632,7 @@ def solve(pgraph, initial_values={}):
     logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)
     trunk = get_trunk_solution(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk.literals, trunk.reasons, trunk.dead_branches.values())
+    rgraph = Rgraph(trunk)
     rgraph.print_graph() #prints a rgraph to console
     rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
 
