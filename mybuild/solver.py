@@ -634,7 +634,6 @@ def solve(pgraph, initial_values={}):
 
     rgraph = Rgraph(trunk)
     rgraph.print_graph() #prints a rgraph to console
-    rgraph.find_shortest_ways() #fills fields length and parent, see rgraph.py
 
     ret = dict.fromkeys(nodes)
     ret.update(trunk.literals)

@@ -57,6 +57,8 @@ class Rgraph(object):
                     self.fill_data(Reason(why_violation, ~gen_literal, gen_literal))
                     self.fill_data(Reason(None, gen_literal))
                     
+        self.find_shortest_ways()
+                    
     def add_branch(self, branch):
         if self.trunk is not branch.trunk:
             raise ValueError('Branch must belong to the rgraph trunk')
@@ -109,7 +111,6 @@ class Rgraph(object):
             print '--- violation for', branch.gen_literals, '---'
             
             rgraph_branch = self.violation_graphs[literal]
-            rgraph_branch.find_shortest_ways()
                             
             for node in violation_nodes:
                 print '------ because of {0} and {1} ------'.format(node[True], node[False])
@@ -157,6 +158,10 @@ class Rgraph(object):
         the shortest way to the initial nodes. Parent is the previous node in 
         the shortest way.
         """ 
+        
+        for rgraph in self.violation_graphs.values():
+            rgraph.find_shortest_ways()
+        
         queue = Queue.PriorityQueue()
         used = set()
         for node in self.initial.therefore:
