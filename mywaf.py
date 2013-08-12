@@ -10,7 +10,6 @@ __all__ = ["MyWafModuleMixin"]  # the rest is bound as Waf Context methods.
 
 from _compat import *
 
-import os.path
 from operator import attrgetter
 
 from glue import PyDslLoader
@@ -22,7 +21,6 @@ from nsimporter import loader_filename
 from mybuild.context import resolve
 
 from util.misc import is_mapping
-from util.operator import instanceof
 
 from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
@@ -72,7 +70,7 @@ def mybuild(ctx, conf_name,
 
     ns_pymodule = ctx.my_load(namespace, path, loaders)
     instance_map = ctx.my_resolve(conf_getter(ns_pymodule))
-    ctx.my_recurse(itervalues(instance_map))
+    ctx.my_recurse(sorted(itervalues(instance_map), key=str))
 
     return MybuildInstanceAccessor(ns_pymodule, instance_map)
 
@@ -175,12 +173,16 @@ class MyWafModuleMixin(object):
 
     def __init__(self, *args, **kwargs):
         super(MyWafModuleMixin, self).__init__(*args, **kwargs)
-        self.sources = []
+        self._bld_calls = []  # list of (args, kwargs) tuples
+
+    def bld(self, *args, **kwargs):
+        self._bld_calls.append((args, kwargs))
 
     def build(self, bld):
         print('mywaf build: %r' % self)
-        print('\tsources: %r' % self.sources)
-        # bld(features='mylink', source=src, target='test')
+
+        for args, kwargs in self._bld_calls:
+            bld(*args, **kwargs)
 
     def configure(self, ctx):
         print('mywaf configure: %r' % self)
