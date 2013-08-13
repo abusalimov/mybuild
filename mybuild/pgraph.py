@@ -13,7 +13,6 @@ __all__ = [
     "Reason",
 
     "to_lset",
-    "to_nvdict",
 
     "AtomicNode",
     "Atom",
@@ -35,12 +34,13 @@ __all__ = [
 
 from _compat import *
 
-from collections import Mapping
 from collections import namedtuple
+from operator import attrgetter
 
 from util.misc import bools
 from util.misc import Pair
 from util.operator import instanceof
+from util.collections import is_mapping
 
 
 class PgraphMeta(type):
@@ -223,7 +223,8 @@ class Literal(object):
     """
     __slots__ = 'node', 'level', 'implies', 'imply_reasons', 'neglasts'
 
-    value = property(lambda self: self is self.node[True])
+    pgraph = property(attrgetter('node.pgraph'))
+    value  = property(lambda self: self is self.node[True])
 
     def __init__(self):
         super(Literal, self).__init__()
@@ -242,6 +243,10 @@ class Literal(object):
     def __iter__(self):
         """Support for tuple unpacking: (node, value)"""
         return iter((self.node, self.value))
+
+    def __getitem__(self, item):
+        """Returns the opposite literal."""
+        return (self if bools[item] else ~self)  # bools if for type check
 
     @staticmethod
     def __imply(if_, then, why=None):
@@ -282,7 +287,7 @@ class Literal(object):
     def becauseof_all(self, others, why=None):
         """Group implication: all(others) => self"""
 
-        node_values = to_nvdict(others)
+        node_values = dict(to_lset(others))
         if node_values.pop(self.node, self.value) is not self.value:
             raise ValueError('Implication of self negation')
 
@@ -304,7 +309,7 @@ class Literal(object):
     def equivalent_all(self, others, why_therefore=None, why_becauseof=None):
         """Group equivalence: self <=> all(others)"""
 
-        others = to_nvdict(others)
+        others = to_lset(others)
 
         self.therefore_all(others, why_therefore)
         self.becauseof_all(others, why_becauseof)
@@ -357,6 +362,10 @@ class Neglast(object):
 
         return neg_literal, reason
 
+    def __repr__(self):
+        return ('<{cls.__name__}: {nr_literals} literals, {default}>'
+                .format(cls=type(self),
+                        nr_literals=len(self.literals), default=self.default))
 
 class Reason(namedtuple('_Reason', 'why, literal, cause_literals')):
     """docstring for Reason"""
@@ -390,9 +399,8 @@ def to_lset(mapping_pairs_or_literals, check=True):
     """
     mpls = mapping_pairs_or_literals
 
-    if isinstance(mpls, Mapping):
+    if is_mapping(mpls):
         mpls = iteritems(mpls)
-        check = False
 
     literals = set(node[value] for node, value in mpls)
 
@@ -400,25 +408,6 @@ def to_lset(mapping_pairs_or_literals, check=True):
         _do_check(dict(literals), literals)
 
     return literals
-
-def to_nvdict(mapping_pairs_or_literals, check=True):
-    """
-    Returns node-value dictionary.
-    """
-    mpls = mapping_pairs_or_literals
-    if isinstance(mpls, Mapping):
-        check = False
-
-    if check:
-        # unpack literals, if needed
-        mpls = set((node, value) for node, value in mpls)
-
-    nvdict = dict(mpls)
-
-    if check:
-        _do_check(nvdict, mpls)
-
-    return nvdict
 
 
 #
@@ -607,7 +596,7 @@ class Not(SingleOperandNode):
             return super(Not, cls)._new(operand, *args, **kwargs)
 
     def __repr__(self):
-        return '(~%r)' % (self._operand,)
+        return '!%r' % (self._operand,)
 
 
 @Pgraph.node_type
