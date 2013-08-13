@@ -279,7 +279,7 @@ def resolve(initial_module, module_mixin=object):
 
 if __name__ == '__main__':
     import util
-    util.init_logging(filename='%s.log' % __name__)
+    util.init_logging('%s.log' % __name__)
 
     from pprint import pprint
 

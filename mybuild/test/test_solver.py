@@ -101,7 +101,7 @@ class SolverTestCase(TestCase):
 
 if __name__ == '__main__':
     import util
-    util.init_logging(filename='%s.log' % __name__)
+    util.init_logging('%s.log' % __name__)
 
     unittest.main()
 
