@@ -9,12 +9,11 @@ from _compat import *
 import functools as _functools
 from functools import partial
 
-from collections import Mapping as _Mapping
 from collections import namedtuple as _namedtuple
 from collections import deque as _deque
 
 from util.itertools import pop_iter
-from util.operator import instanceof
+from util.collections import is_mapping
 
 
 def constructor_decorator(cls, **kwargs):
@@ -115,8 +114,6 @@ class Pair(_namedtuple('_Pair', 'false true')):
 
 bools = Pair(False, True)
 
-
-is_mapping = instanceof(_Mapping)
 
 def to_dict(iterable_or_mapping, check_exclusive=False):
     if isinstance(iterable_or_mapping, dict):

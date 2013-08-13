@@ -2,6 +2,15 @@ from __future__ import absolute_import
 
 from collections import *
 
+from util.operator import instanceof
+
+
+is_mapping   = instanceof(Mapping)
+is_container = instanceof(Container)
+is_sequence  = instanceof(Sequence)
+is_set       = instanceof(Set)
+
+
 try:
     OrderedDict
 

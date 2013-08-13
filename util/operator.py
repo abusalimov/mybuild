@@ -36,9 +36,9 @@ class InvokerType(object):
 invoker = InvokerType()
 
 
-def instanceof(classinfo):
+def instanceof(*classinfo):
     return lambda obj: isinstance(obj, classinfo)
-def subclassof(classinfo):
+def subclassof(*classinfo):
     return lambda obj: issubclass(obj, classinfo)
 
 
