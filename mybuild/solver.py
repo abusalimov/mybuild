@@ -20,16 +20,23 @@ from mybuild.pgraph import *
 from mybuild.rgraph import *
 
 from util.itertools import pop_iter
+from util.operator import getter
 from util.operator import invoker
 
-import logging
-logger = logging.getLogger(__name__)
+import util, logging
+logger = util.get_extended_logger(__name__)
+
+
+def log_debug_enabled(logger=logger):
+    return logger.isEnabledFor(logging.DEBUG)
 
 
 class Solution(object):
     """
     Solution backed by sets of nodes and their literals.
     """
+
+    _dump_attrs = 'valid nodes literals'.split()# + ['reasons']
 
     @property
     def valid(self):
@@ -42,64 +49,35 @@ class Solution(object):
         self.literals = set()
         self.reasons  = set()
 
-    def copy(self):
-        cls = type(self)
-        new = cls.__new__(cls)
-
-        new.nodes    = self.nodes    .copy()
-        new.literals = self.literals .copy()
-        new.reasons  = self.reasons  .copy()
-
-        return new
-
-    def __len__(self):
-        return len(self.literals)
-
-    def __ior__(self, other):
-        self.nodes    |= other.nodes
-        self.literals |= other.literals
-        self.reasons  |= other.reasons
-
-        return self
-
-    def __isub__(self, other):
-        self.nodes    -= other.nodes
-        self.literals -= other.literals
-        self.reasons  -= other.reasons
-
-        return self
-
-    def clear(self):
-        self.nodes    .clear()
-        self.literals .clear()
-        self.reasons  .clear()
-
     def dispose(self):
         del self.nodes
         del self.literals
         del self.reasons
 
     def update(self, other, ignore_errors=False):
-        self |= other
+        self.nodes    |= other.nodes
+        self.literals |= other.literals
+        self.reasons  |= other.reasons
 
+        self._error_check(ignore_errors)
+
+    def difference_update(self, other, ignore_errors=False):
+        self.nodes    -= other.nodes
+        self.literals -= other.literals
+        self.reasons  -= other.reasons
+
+        self._error_check(ignore_errors)
+
+    def _error_check(self, ignore_errors=False):
         if not ignore_errors and not self.valid:
             raise SolutionError(self)
-
-    def difference_update(self, other, check=True):
-        self -= other
-
-        if check and not self.valid:
-            raise SolutionError(self)
-
-    def add_literal(self, literal, reason=None):
-        self.literals .add(literal)
-        self.nodes    .add(literal.node)
-        if reason is not None:
-            self.reasons.add(reason)
 
 
 class Trunk(Solution):
     """docstring for Trunk"""
+
+    _dump_attrs = (Solution._dump_attrs +
+                   'branchmap dead_branches neglefts'.split())
 
     def __init__(self):
         super(Trunk, self).__init__()
@@ -109,17 +87,7 @@ class Trunk(Solution):
 
         self.neglefts = dict()   # neglasts to sets of left literals
 
-    def copy(self):
-        new = super(Trunk, self).copy()
-
-        new.branchmap     = self.branchmap.copy()
-        new.dead_branches = self.dead_branches.copy()
-
-        new.neglefts = self.neglefts.copy()
-
-        return new
-
-    def __ior__(self, diff):
+    def update(self, diff, ignore_errors=False):
         if self is not diff.trunk:
             raise ValueError('Diff must be created from this trunk')
 
@@ -129,12 +97,9 @@ class Trunk(Solution):
         for neglast, negexcl in iteritems(diff.negexcls):
             self.neglefts[neglast] -= negexcl
 
-        return super(Trunk, self).__ior__(diff)
+        super(Trunk, self).update(diff, ignore_errors)
 
-    def __isub__(self, other):
-        return NotImplemented
-
-    def add_literal(self, literal, reason=None):
+    def difference_update(self, other, ignore_errors=False):
         raise NotImplementedError('Unsupported operation')
 
     def branchset(self):
@@ -144,6 +109,15 @@ class Trunk(Solution):
 class Diff(Solution):
     """docstring for Diff"""
 
+    _dump_attrs = (Solution._dump_attrs + 'todo negexcls'.split())
+
+    @property
+    def trunked(self):
+        return self.trunk is not None
+    @property
+    def ready(self):
+        return not self.todo
+
     def __init__(self, trunk):
         super(Diff, self).__init__()
 
@@ -152,86 +126,73 @@ class Diff(Solution):
         self.todo = set()  # literals
         self.negexcls = defaultdict(set)  # {neglast: literals...}
 
-    def copy(self):
-        new = super(Diff, self).copy()
-
-        new.trunk = self.trunk
-
-        new.todo = self.todo.copy()
-        negexcls = new.negexcls = defaultdict(set)
-        for neglast, negexcl in iteritems(self.negexcls):
-            negexcls[neglast] = negexcl.copy()
-
-        return new
-
     def _check_capable(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both diffs must belong to the same trunk')
-        if other.todo:
-            raise NotImplementedError('Other is not ready: {0}'.format(other))
+        if not other.ready:
+            raise NotImplementedError('Other is not ready: {0}: {0.todo}'
+                                      .format(other))
 
-    def __ior__(self, other):
+    def dispose(self):
+        self.trunk = None
+        del self.todo
+        del self.negexcls
+        super(Diff, self).dispose()
+
+    def update(self, other, ignore_errors=False):
         self._check_capable(other)
 
         for neglast, negexcl in iteritems(other.negexcls):
+            assert self.trunk.neglefts[neglast] >= negexcl
             self.__do_neglast(neglast, operator.__ior__, negexcl)
 
-        return super(Diff, self).__ior__(other)
+        super(Diff, self).update(other, ignore_errors)
 
-    def __isub__(self, other):
+    def difference_update(self, other, ignore_errors=False):
         self._check_capable(other)
 
         for neglast, negexcl in iteritems(other.negexcls):
             self.__do_neglast(neglast, operator.__isub__, negexcl)
 
-        return super(Diff, self).__isub__(other)
-
-    def update(self, other, ignore_errors=False, handle_todos=False):
-        super(Diff, self).update(other, ignore_errors)
-        if handle_todos:
-            self.handle_todos(ignore_errors)
-
-    def difference_update(self, other, ignore_errors=False, handle_todos=False):
         super(Diff, self).difference_update(other, ignore_errors)
-        if handle_todos:
-            self.handle_todos(ignore_errors)
 
-    def sync_with_trunk(self):
+    def add_literal(self, literal, ignore_errors=False):
+        for neglast in literal.neglasts:
+            self.__do_neglast(neglast, invoker.add(literal))
+
+        if literal not in self.trunk.literals:
+            self.literals.add(literal)
+        if literal.node not in self.trunk.nodes:
+            self.nodes.add(literal.node)
+
+        self._error_check(ignore_errors)
+
+    def sync_with_trunk(self, ignore_errors=False):
         """Keep self a strict diff with the trunk."""
         trunk = self.trunk
 
         for neglast in self.negexcls:
             self.__do_neglast(neglast, operator.__isub__,
-                              trunk.neglefts[neglast])
+                              neglast.literals-trunk.neglefts[neglast])
 
-        super(Diff, self).__isub__(trunk)
+        super(Diff, self).difference_update(trunk, ignore_errors)
 
-    def clear(self):
-        self.todo     .clear()
-        self.negexcls .clear()
-        super(Diff, self).clear()
-
-    def dispose(self):
-        del self.todo
-        del self.negexcls
-        super(Diff, self).dispose()
-
-    def add_literal(self, literal, reason=None):
-        for neglast in literal.neglasts:
-            self.__do_neglast(neglast, invoker.add(literal))
-
-        super(Diff, self).add_literal(literal, reason)
-
-    def __do_neglast(self, neglast, op, *args):
-        negleft = self.trunk.neglefts[neglast]
+    def __do_neglast(self, neglast, op=None, *args):
+        trunk_negleft = self.trunk.neglefts[neglast]
         negexcl = self.negexcls[neglast]
 
-        op(negexcl, *args)  # TODO don't like this
+        if op is not None:
+            op(negexcl, *args)  # TODO don't like this
 
-        left = len(negleft) - len(negexcl)
+        assert trunk_negleft >= negexcl, (
+                "branch: %r; neglast: %r; negexcl %r must be subset of trunk negleft %r" %
+                (self, neglast.literals, negexcl, trunk_negleft))
+
+        left = len(trunk_negleft) - len(negexcl)
         if left <= 1:
-            neg_literal, neg_reason = neglast.neg_reason_for(
-                last_literal=(negleft-negexcl).pop() if left else None)
+            negleft = (trunk_negleft-negexcl) if left else ()
+
+            neg_literal, neg_reason = neglast.neg_reason_for(*negleft)
 
             self.reasons.add(neg_reason)
             self.todo.add(neg_literal)
@@ -261,28 +222,21 @@ class Diff(Solution):
 
             yield literal, implied
 
-    def handle_todos(self, ignore_errors=False):
-        """
-        Must only be called when all branches in trunk.branchmap are
-        completely initialized.
-        """
-        for literal, implied in self.iter_todo_away(ignore_errors):
-            if implied is not None:
-                self.update(implied, ignore_errors)
-            else:
-                self.add_literal(literal)
+    def __repr__(self):
+        return ('<{cls.__name__}: {nr_todos} todo ({state})>'
+                .format(cls=type(self),
+                        nr_todos=len(self.todo),
+                        state='valid' if self.valid else 'dead'))
 
 
 class Branch(Diff):
     """docstring for Branch"""
 
+    _dump_attrs = (Diff._dump_attrs + 'gen_literals'.split())
+
     @property
     def valid(self):
         return self.error is None and len(self.nodes) == len(self.literals)
-
-    @property
-    def initialized(self):
-        return not self.todo
 
     def __init__(self, trunk, gen_literal):
         super(Branch, self).__init__(trunk)
@@ -312,7 +266,7 @@ class Branch(Diff):
     def __le__(self, other):
         return self.gen_literals <= other.literals
 
-    def __ior__(self, other):
+    def update(self, other, ignore_errors=False):
         if self >= other:  # other is already in self
             assert self.nodes    >= other.nodes
             assert self.literals >= other.literals
@@ -320,37 +274,24 @@ class Branch(Diff):
             assert self.todo     >= other.todo
             assert all(self.negexcls[neglast] >= negexcl
                        for neglast, negexcl in iteritems(other.negexcls))
-            return self
+            return
 
-        return super(Branch, self).__ior__(other)
-
-    def copy(self):
-        new = super(Branch, self).copy()
-
-        new.gen_literals = set()  # this is not copied
-        new.error = None
-        return new
-
-    def handle_todos(self, ignore_errors=False):
-        # Overloaded, adds a call to substitute_with in case of equivalence.
-
-        for literal, implied in self.iter_todo_away(ignore_errors):
-            if implied is not None:
-                if self <= implied:  # mutual implication
-                    self.substitute_with(implied)
-                    break
-                self.update(implied, ignore_errors)
-            else:
-                self.add_literal(literal)
+        super(Branch, self).update(other, ignore_errors)
 
     def substitute_with(self, other):
         """
         Upon replacement, this branch is disposed and must not be used anymore.
         """
+        if self is other:
+            raise ValueError("Can't substitute self with itself")
+
         other.gen_literals |= self.gen_literals
 
-        trunk = self.trunk
-        branchmap = trunk.branchmap if self.valid else trunk.dead_branches
+        assert self.valid or not other.valid
+
+        # Even if other is not valid, use a branchmap for self.
+        branchmap = (self.trunk.branchmap if self.valid else
+                     self.trunk.dead_branches)
 
         # Fixup any references to this one.
         for gen_literal in self.gen_literals:
@@ -360,16 +301,22 @@ class Branch(Diff):
         self.dispose()  # make gc happy
 
     def __repr__(self):
-        return '<%s %s>' % (type(self).__name__,
-                            ' & '.join(repr(literal).join('()')
-                                       for literal in self.gen_literals))
+        try:
+            return ('<{cls.__name__}: {nr_todos} todo ({state}) {gen_list!r}>'
+                    .format(cls=type(self),
+                            gen_list=list(self.gen_literals),
+                            nr_todos=len(self.todo),
+                            state='valid' if self.valid else 'dead'))
+        except AttributeError:
+            return '<{cls.__name__}: DISPOSED>'.format(cls=type(self))
 
 
+@logger.wrap
 def create_trunk(pgraph, initial_literals=[]):
     initial_literals = to_lset(initial_literals)
 
-    logger.info('creating trunk for %d nodes', len(initial_literals))
-    if logger.isEnabledFor(logging.DEBUG):
+    logger.info('creating trunk for %d node(s)', len(initial_literals))
+    if log_debug_enabled():
         for literal in initial_literals:
             logger.debug('\tinitial literal: %r', literal)
 
@@ -380,7 +327,7 @@ def create_trunk(pgraph, initial_literals=[]):
     reasons  = trunk.reasons
     neglefts = trunk.neglefts
 
-    neglasts_todo = list()
+    neg_todo = list()
 
     for node in pgraph.nodes:
         for literal in node:
@@ -389,7 +336,7 @@ def create_trunk(pgraph, initial_literals=[]):
 
                 if len(negleft) <= 1:  # will not happen, generally speaking
                     logger.warning('len(negleft) <= 1')
-                    neglasts_todo.append(neglast)
+                    neg_todo.append((neglast, negleft))
 
     # During the loop below we admit possible violation of the main context
     # invariant, i.e. len(nodes) may become less than len(literals).
@@ -406,7 +353,7 @@ def create_trunk(pgraph, initial_literals=[]):
     literals |= todo
 
     for literal in pop_iter(todo):
-        logger.debug('\thandling literal: %r', literal)
+        logger.debug('\ttrunk literal: %r', literal)
 
         assert literal in literals, "must has already been added"
         nodes.add(literal.node)
@@ -420,23 +367,24 @@ def create_trunk(pgraph, initial_literals=[]):
             if len(negleft) == 1:
                 # defer negating the last literal,
                 # cause it still may be excluded.
-                neglasts_todo.append(neglast)
+                neg_todo.append((neglast, negleft))
 
         newly_seen = literal.implies - literals
 
         if not todo and not newly_seen:
-            # no more direct implications, flush neglasts_todo
-            for neglast in neglasts_todo:
-                neg_literal, neg_reason = neglast.neg_reason_for(
-                        # at most one literal is contained in a negleft
-                        *neglefts[neglast])
+            # no more direct implications, flush neg_todo
+            for neglast, negleft in neg_todo:
+                logger.debug('\ttrunk negleft: %r', negleft)
+
+                assert len(negleft) <= 1, "at most one literal must have left"
+                neg_literal, neg_reason = neglast.neg_reason_for(*negleft)
 
                 if neg_literal not in literals:
                     newly_seen.add(neg_literal)
 
                 reasons.add(neg_reason)
 
-            del neglasts_todo[:]
+            del neg_todo[:]
 
         literals |= newly_seen
         todo     |= newly_seen
@@ -448,13 +396,10 @@ def create_trunk(pgraph, initial_literals=[]):
 
         raise SolutionError(trunk)
 
-    logger.info('created trunk with %d nodes', len(trunk.nodes))
+    logger.info('created trunk with %d node(s)', len(trunk.nodes))
 
-    return trunk
-
-
-def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
-    logger.debug('preparing branches for %d nodes', len(unresolved_nodes))
+    unresolved_nodes = (pgraph.nodes - trunk.nodes)
+    logger.info('preparing branchmap for %d node(s)', len(unresolved_nodes))
 
     for node in unresolved_nodes:
         logger.debug('\tunresolved node: %r', node)
@@ -464,13 +409,30 @@ def prepare_branches(trunk, unresolved_nodes, ignore_errors=False):
 
     assert len(trunk.branchmap) == 2*len(unresolved_nodes)
 
-    expand_branches(trunk, ignore_errors)
+    logger.dump(trunk)
+    return trunk
 
 
-def expand_branches(trunk, ignore_errors=False):
-    """
-    Non-recursive DFS.
-    """
+def expand_branchset(trunk, ignore_errors=False):
+    branchset = trunk.branchset()
+
+    if ignore_errors:
+        dead_branchset = set(itervalues(trunk.dead_branches))
+        for branch in dead_branchset:
+            branch.sync_with_trunk(ignore_errors=True)
+        branchset.update(dead_branchset)
+
+    for branch in filter(getter.trunked, branchset):
+        expand_branch(branch, ignore_errors)
+
+
+def expand_branch(branch, ignore_errors=False):
+    """Handles all branch todos (if any), in other words makes it ready.
+
+    Implementation of non-recursive DFS."""
+    if branch.ready:
+        return
+
     stack = list()
 
     def stack_push(branch):
@@ -484,45 +446,49 @@ def expand_branches(trunk, ignore_errors=False):
         del branch.todo_it
         return branch
 
-    todo_branches = trunk.branchset() | set(itervalues(trunk.dead_branches))
+    stack_push(branch)
 
-    while stack or todo_branches:
-        if not stack:
-            stack_push(todo_branches.pop())
-
-        log_indent = '. '*len(stack)
+    while stack:
         branch = stack[-1]
 
+        log_indent = '. '*len(stack)
+        logger.debug('\t%shandling  %r', log_indent, branch)
+
         try:
-            # Can't use branch.handle_todos since some branches are in an
-            # intermediate state. Manual iteration also makes it possible to
-            # check for mutual implication more efficiently.
             literal, implied = next(branch.todo_it)
+            logger.debug('\t%stodo literal: %r, implied: %r', log_indent,
+                         literal, implied)
 
             if implied is None:
                 assert ignore_errors
-                branch.add_literal(literal)
+                branch.add_literal(literal, ignore_errors)
                 continue
 
             if not ignore_errors and not implied.valid:
+                logger.debug('\t%s(implied is not valid: %r)', log_indent,
+                             implied)
                 branch.todo.add(literal)  # it was NOT handled, save it back
                 raise SolutionError(branch)
 
-            if implied.initialized:
+            if implied.ready:
                 branch.update(implied, ignore_errors)
                 continue
 
             if hasattr(implied, 'todo_it'):  # equivalent (mutual implication)
+                logger.debug('\t%s(mutual implication with %r)', log_indent,
+                             implied)
                 implied.todo |= branch.todo
                 branch.todo.clear()  # otherwise update() would refuse it
 
-                implied.update(branch, ignore_errors)
-                branch.substitute_with(implied)
+                try:
+                    implied.update(branch, ignore_errors)
+                finally:
+                    branch.substitute_with(implied)
 
                 raise StopIteration  # forget about this branch
 
         except SolutionError as error:
-            assert not ignore_errors
+            assert not ignore_errors, "Hey, no errors when ignore_errors=True!"
             logger.debug('\t%sinviable  %r', log_indent, branch)
 
             # unwind implication stack
@@ -554,23 +520,37 @@ def expand_branches(trunk, ignore_errors=False):
             # literal from the beginning.
             branch.todo.add(literal)
 
-            todo_branches.remove(implied)
+            # what to handle next
             stack_push(implied)
 
 
-def resolve_branches(trunk, branches):
+def branchset_to_resolve(trunk):
+    dead_literals = set()
+    for branch in filternot(getter.valid, trunk.branchset()):
+        dead_literals |= branch.gen_literals
+    return set(trunk.branchmap[~literal] for literal in dead_literals)
+
+
+@logger.wrap
+def resolve_branches(trunk, branches=None):
     """
     Merges given branches back into trunk updating its branchmap and rest
     branches.
     """
+    if branches is None:
+        branches = branchset_to_resolve(trunk)
+
+    logger.dump(trunk)
+
     while branches:
-        logger.debug('resolving %d branches', len(branches))
+        logger.info('resolving %d branch(es)', len(branches))
 
         resolved = Diff(trunk)  # a patch created by merging together all diffs
 
         for branch in branches:
+            logger.debug('\tmerging: %r', branch)
             resolved.update(branch)
-        resolved.handle_todos()
+        expand_branch(resolved)  # handle todos, if any
 
         # reintegrate it back into trunk (cannot fail, always succeeds)
         trunk.update(resolved)
@@ -582,19 +562,19 @@ def resolve_branches(trunk, branches):
 
         # Maintain remaining branches to be strict diffs with just updated
         # trunk. This may involve new conflicts, i.e. new branches can be
-        # resolved, so we create a new list of branches to resolve next.
-        branches = list()
+        # resolved, so we'll create a new list of branches to resolve next.
 
         for branch in trunk.branchset():
             assert branch.valid, 'only valid branches must have left'
+            branch.difference_update(resolved, ignore_errors=True)
+        expand_branchset(trunk)
 
-            try:
-                branch.difference_update(resolved, handle_todos=True)
+        logger.dump(trunk)
 
-            except SolutionError:
-                branches.append(~branch)
+        branches = branchset_to_resolve(trunk)
 
 
+@logger.wrap
 def stepwise_resolve(trunk):
     levelmap = defaultdict(set)
 
@@ -606,40 +586,32 @@ def stepwise_resolve(trunk):
         resolve_branches(trunk, branchset & trunk.branchset())
 
 
-def get_trunk_solution(pgraph, initial_values={}):
-    nodes = pgraph.nodes
-
+def solve_trunk(pgraph, initial_values={}):
     trunk = create_trunk(pgraph, initial_values)
-    # for literal in trunk.literals:
-    #     print 'trunk', literal
 
-    prepare_branches(trunk, nodes-trunk.nodes)
-    resolve_branches(trunk, list(~branch for branch in trunk.branchset()
-                                 if not branch.valid))
+    expand_branchset(trunk)
+    resolve_branches(trunk)
     stepwise_resolve(trunk)
 
-    for branch in itervalues(trunk.dead_branches):
-        branch.sync_with_trunk()
-    expand_branches(trunk, ignore_errors=True)
+    # to be called from rgraph
+    expand_branchset(trunk, ignore_errors=True)
 
     return trunk
 
 
 def solve(pgraph, initial_values={}):
-    logger.debug('Start solving')
-    nodes = pgraph.nodes
+    logger.info('solving %r with initials: %r', pgraph, initial_values)
 
-    logger.debug('Initial data:\n\tpgraph nodes:%s\n\tinitial values: %s', nodes, initial_values)
-    trunk = get_trunk_solution(pgraph, initial_values)
+    trunk = solve_trunk(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk)
-    rgraph.print_graph() #prints a rgraph to console
+    # rgraph = Rgraph(trunk)
+    # rgraph.print_graph() #prints a rgraph to console
 
-    ret = dict.fromkeys(nodes)
+    ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
     logger.debug('Solution:')
     for literal in ret:
-        logger.debug('\t%s - %s', literal, ret[literal])
+        logger.debug('\t%s: %s', literal, ret[literal])
     return ret
 
 
