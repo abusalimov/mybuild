@@ -8,6 +8,8 @@ from mybuild import pgraph
 from mybuild.pgraph import *
 from mybuild.solver import *
 
+from util.operator import getter
+
 
 class TestPgraph(Pgraph):
 
@@ -20,42 +22,45 @@ class TestPgraph(Pgraph):
                         partial(self.new_node, node_type))
 
 
-@TestPgraph.node_type
-class NamedAtom(Atom):
-    def __init__(self, name):
-        super(NamedAtom, self).__init__()
-        self.name = name
+class Named(object):
+
+    @classmethod
+    def _new(cls, *args, **kwargs):
+        kwargs.setdefault('cache_kwargs', True)
+        return super(Named, cls)._new(*args, **kwargs)
+
+    def __init__(self, *args, **kwargs):
+        self._name = kwargs.pop('name', None)
+        super(Named, self).__init__(*args, **kwargs)
+
     def __repr__(self):
-        return self.name
+        return self._name or super(Named, self).__repr__()
+
 
 @TestPgraph.node_type
-class NamedAtomWithCost(NamedAtom):
-    def __init__(self, name, cost=0):
-        super(NamedAtomWithCost, self).__init__(name)
-        self.cost = cost
-    def __repr__(self):
-        return '%s(%s)' % (self.name, self.cost)
+class NamedAtom(Named, Atom):
+    pass
 
 
 class StarArgsToArg(object):
     """For compatibility with tests, to let them to pass operands in *args."""
     @classmethod
-    def _new(cls, *operands):
-        return super(StarArgsToArg, cls)._new(operands)
+    def _new(cls, *operands, **kwargs):
+        return super(StarArgsToArg, cls)._new(operands, **kwargs)
 
 
 @TestPgraph.node_type
-class Or(StarArgsToArg, pgraph.Or):
+class Or(Named, StarArgsToArg, pgraph.Or):
     pass
 @TestPgraph.node_type
-class And(StarArgsToArg, pgraph.And):
+class And(Named, StarArgsToArg, pgraph.And):
     pass
 
 @TestPgraph.node_type
-class AtMostOne(StarArgsToArg, pgraph.AtMostOne):
+class AtMostOne(Named, StarArgsToArg, pgraph.AtMostOne):
     pass
 @TestPgraph.node_type
-class AllEqual(StarArgsToArg, pgraph.AllEqual):
+class AllEqual(Named, StarArgsToArg, pgraph.AllEqual):
     pass
 
 
@@ -64,15 +69,12 @@ class PdagDtreeTestCase(TestCase):
     def setUp(self):
         self.pgraph = TestPgraph()
 
-    @classmethod
-    def atoms(cls, pgraph, names, costs=()):
-        atom, atom_with_cost = pgraph.NamedAtom, pgraph.NamedAtomWithCost
-        return [atom_with_cost(name or '', cost) if cost is not None else
-                atom(name) for name, cost in izip_longest(names, costs)]
+    def atoms(self, names):
+        return [self.pgraph.NamedAtom(name=name) for name in names]
 
     def test_00(self):
         g = self.pgraph
-        A, = self.atoms(g, 'A')
+        A, = self.atoms('A')
 
         pnode = g.Not(A)
         solution = solve(g, {pnode:True})
@@ -82,7 +84,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_01(self):
         g = self.pgraph
-        A,B,C,D = self.atoms(g, 'ABCD')
+        A,B,C,D = self.atoms('ABCD')
 
         # (A|B) & (C|D) & (B|~C) & ~B
         pnode = g.And(g.Or(A,B), g.Or(C,D), g.Or(B, g.Not(C)), g.Not(B))
@@ -94,21 +96,9 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(False, solution[C])
         self.assertIs(True,  solution[D])
 
-    def test_02(self):
-        g = self.pgraph
-        A,B = self.atoms(g, 'AB')
-
-        # (A|B) & (~A|B) & (A|~B)
-        pnode = g.And(g.Or(A,B), g.Or(g.Not(A), B), g.Or(A, g.Not(B)))
-        solution = solve(g, {pnode:True})
-
-        self.assertIs(True, solution[pnode])
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-
     def test_03(self):
         g = self.pgraph
-        A, = self.atoms(g, 'A')
+        A, = self.atoms('A')
 
         # A & ~A
         pnode = g.And(A, g.Not(A))
@@ -118,7 +108,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_04(self):
         g = self.pgraph
-        A,B = self.atoms(g, 'AB')
+        A,B = self.atoms('AB')
 
         # (A|B) & (~A | A&~A)
         pnode = g.And(g.Or(A, B), g.Or(g.Not(A), g.And(A, g.Not(A))))
@@ -129,7 +119,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_05(self):
         g = self.pgraph
-        A,B = self.atoms(g, 'AB')
+        A,B = self.atoms('AB')
         nA,nB = map(g.Not, (A,B))
 
         # (A + ~A&~B + ~B) & (B + B&~A)
@@ -142,85 +132,9 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
 
-    @unittest.skip("NIY")
-    def test_06(self):
-        g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
-        nA,nB,nC = map(g.Not, (A,B,C))
-
-        # (A+B+C)&(~A+B+C)&(A+~B+C)&(A+B+~C)&(~A+~B+C)&(A+~B+~C)&(~A+B+~C)
-        pnode = g.And(
-            g.Or( A, B, C),
-            g.Or(nA, B, C),
-            g.Or( A,nB, C),
-            g.Or( A, B,nC),
-            g.Or( A,nB,nC),
-            g.Or(nA, B,nC),
-            g.Or(nA,nB, C),
-        )
-        solution = solve(g, {pnode:True})
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
-
-    @unittest.skip("Outputs too much when loing is on")
-    def test_07(self):
-        g = self.pgraph
-        A,B,C,D,E = self.atoms(g, 'ABCDE')
-        nA,nB,nC,nD,nE = map(g.Not, (A,B,C,D,E))
-
-        # the same as test_06 but for 5 variables
-        pnode = g.And(
-            g.Or( A, B, C, D, E),
-
-            g.Or(nA, B, C, D, E),
-            g.Or( A,nB, C, D, E),
-            g.Or( A, B,nC, D, E),
-            g.Or( A, B, C,nD, E),
-            g.Or( A, B, C, D,nE),
-
-            g.Or(nA,nB, C, D, E),
-            g.Or( A,nB,nC, D, E),
-            g.Or( A, B,nC,nD, E),
-            g.Or( A, B, C,nD,nE),
-            g.Or(nA, B, C, D,nE),
-
-            g.Or(nA, B,nC, D, E),
-            g.Or( A,nB, C,nD, E),
-            g.Or( A, B,nC, D,nE),
-            g.Or(nA, B, C,nD, E),
-            g.Or( A,nB, C, D,nE),
-
-            g.Or( A, B,nC,nD,nE),
-            g.Or(nA, B, C,nD,nE),
-            g.Or(nA,nB, C, D,nE),
-            g.Or(nA,nB,nC, D, E),
-            g.Or( A,nB,nC,nD, E),
-
-            g.Or( A,nB, C,nD,nE),
-            g.Or(nA, B,nC, D,nE),
-            g.Or(nA,nB, C,nD, E),
-            g.Or( A,nB,nC, D,nE),
-            g.Or(nA, B,nC,nD, E),
-
-            g.Or( A,nB,nC,nD,nE),
-            g.Or(nA, B,nC,nD,nE),
-            g.Or(nA,nB, C,nD,nE),
-            g.Or(nA,nB,nC, D,nE),
-            g.Or(nA,nB,nC,nD, E),
-        )
-        solution = solve(g, {pnode:True})
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
-        self.assertIs(True, solution[D])
-        self.assertIs(True, solution[E])
-
     def test_08(self):
         g = self.pgraph
-        A,B = self.atoms(g, 'AB')
+        A,B = self.atoms('AB')
 
         # (A=>B) & A
         pnode = g.And(g.Implies(A,B), A)
@@ -232,7 +146,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_09(self):
         g = self.pgraph
-        A,B = self.atoms(g, 'AB')
+        A,B = self.atoms('AB')
 
         # (A=>B) & ~B
         pnode = g.And(g.Implies(A,B), g.Not(B))
@@ -244,7 +158,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_10(self):
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
+        A,B,C = self.atoms('ABC')
 
         pnode = g.AtMostOne(A,B,C)
         solution = solve(g, {pnode:True, A:True})
@@ -254,7 +168,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_11(self):
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
+        A,B,C = self.atoms('ABC')
 
         pnode = g.AtMostOne(A,B,C)
         solution = solve(g, {pnode:True, A:False, B:False})
@@ -263,7 +177,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_12(self):
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
+        A,B,C = self.atoms('ABC')
 
         pnode = g.AtMostOne(A,B,C)
         solution = solve(g, {pnode:False})
@@ -274,7 +188,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_13(self):
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
+        A,B,C = self.atoms('ABC')
 
         pnode = g.AtMostOne(A,B,C)
         with self.assertRaises(SolveError):
@@ -282,7 +196,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_14(self):
         g = self.pgraph
-        A, = self.atoms(g, 'A')
+        A, = self.atoms('A')
 
         pnode = g.new_const(True, A)
         solution = solve(g, {})
@@ -291,7 +205,7 @@ class PdagDtreeTestCase(TestCase):
 
     def test_15(self):
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
+        A,B,C = self.atoms('ABC')
 
         # (A | A&~A) & (A=>B) & (B=>C) & (C=>A)
         A[True] >> B[True] >> C[True] >> A[True]
@@ -302,28 +216,91 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
 
-    @unittest.skip("Need make it work")
-    def test_16(self):
+    def sneaky_pair_and(self, a, b, **kwargs):
+        """(A | B) & (~A | B) & (A | ~B)"""
         g = self.pgraph
-        A,B,C = self.atoms(g, 'ABC')
-        nA,nB,nC = map(g.Not, (A,B,C))
+        # return g.And(g.Or(a,        b),
+        #              g.Or(g.Not(a), b),
+        #              g.Or(a, g.Not(b)), **kwargs)
 
-        #(A | X) & (~A | X) & (A | ~X), where X = (B | C) & (~B | C) & (B | ~C)
-        pnode = g.And(
-            g.Or( A, g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC))),
-            g.Or(nA, g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC))),
-            g.Or( A, g.Not(g.And(g.Or(B, C), g.Or(nB, C), g.Or(B, nC)))),
-        )
-        solution = solve(g, {pnode:True})
+        # solved the same way as an expr above, but gives lesser logs
+        return g.And(g.Or(a[True],  b[True]),
+                     g.Or(a[False], b[True]),
+                     g.Or(a[True], b[False]), **kwargs)
+
+    def test_resolve_braches_1(self):
+        g = self.pgraph
+        A, B = self.atoms('AB')
+
+        solution = solve(g, {self.sneaky_pair_and(A, B): True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+
+    def test_resolve_braches_2(self):
+        g = self.pgraph
+        A, B, C = self.atoms('ABC')
+
+        #     (C | X) & (~C | X) & (C | ~X), where
+        # X = (A | B) & (~A | B) & (A | ~B)
+        X = self.sneaky_pair_and(A, B, name='X')
+        P = self.sneaky_pair_and(C, X)
+
+        solution = solve(g, {P: True})
 
         self.assertIs(True, solution[A])
         self.assertIs(True, solution[B])
         self.assertIs(True, solution[C])
+        self.assertIs(True, solution[X])
+
+    def test_resolve_braches_3(self):
+        g = self.pgraph
+        A, B, C, D = self.atoms('ABCD')
+
+        #     (D | Y) & (~D | Y) & (D | ~Y), where
+        # Y = (C | X) & (~C | X) & (C | ~X), where
+        # X = (A | B) & (~A | B) & (A | ~B)
+        X = self.sneaky_pair_and(A, B, name='X')
+        Y = self.sneaky_pair_and(C, X, name='Y')
+        P = self.sneaky_pair_and(D, Y)
+
+        solution = solve(g, {P: True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+        self.assertIs(True, solution[X])
+        self.assertIs(True, solution[Y])
+
+    def test_resolve_braches_4(self):
+        g = self.pgraph
+        A, B, C, D, E = self.atoms('ABCDE')
+
+        #     (E | Z) & (~E | Z) & (E | ~Z), where
+        # Z = (D | Y) & (~D | Y) & (D | ~Y), where
+        # Y = (C | X) & (~C | X) & (C | ~X), where
+        # X = (A | B) & (~A | B) & (A | ~B)
+        X = self.sneaky_pair_and(A, B, name='X')
+        Y = self.sneaky_pair_and(C, X, name='Y')
+        Z = self.sneaky_pair_and(D, Y, name='Z')
+        P = self.sneaky_pair_and(E, Z)
+
+        solution = solve(g, {P: True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+        self.assertIs(True, solution[X])
+        self.assertIs(True, solution[Y])
+        self.assertIs(True, solution[Z])
 
 
 if __name__ == '__main__':
-    import util
-    util.init_logging(filename='%s.log' % __name__)
+    import util, sys, logging
+    # util.init_logging(filename='%s.log' % __name__)
+    util.init_logging(sys.stderr,
+                      # level=logging.INFO
+                      )
 
     unittest.main()
 
