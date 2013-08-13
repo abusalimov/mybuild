@@ -102,6 +102,52 @@ class Trunk(Solution):
     def difference_update(self, other, ignore_errors=False):
         raise NotImplementedError('Unsupported operation')
 
+    def substitute_branch(self, branch, other):
+        """
+        Replaces a branch by another one by updating gen_literals of the other
+        and a branchmap of self.
+        """
+        if branch is other:
+            raise ValueError("Can't substitute branch with itself")
+        if not (self is branch.trunk is other.trunk):
+            raise ValueError("Both branches must be created from this trunk")
+
+        other.gen_literals |= branch.gen_literals
+
+        assert branch.valid or not other.valid
+
+        # Even if other is not valid, use a branchmap for branch.
+        branchmap = (self.branchmap if branch.valid else
+                     self.dead_branches)
+
+        # Fixup any references to this one.
+        for gen_literal in branch.gen_literals:
+            assert branchmap[gen_literal] is branch
+            branchmap[gen_literal] = other
+
+    def iter_branch_todo_away(self, branch, ignore_errors=False):
+        if self is not branch.trunk:
+            raise ValueError("Branch must be created from this trunk")
+
+        for literal in branch.iter_todo_away():
+            try:
+                implied = self.branchmap[literal]
+
+            except KeyError:
+                if literal in self.literals:
+                    continue  # included in the trunk, i.e. unconditionally
+                assert ~literal in self.literals
+
+                if not ignore_errors:
+                    raise SolutionError(branch)
+
+                # If ~literal was added into trunk by create_trunk, then
+                # there is no branch for literal, even dead.
+                # Give up in this case and yield None.
+                implied = self.dead_branches.get(literal)
+
+            yield literal, implied
+
     def branchset(self):
         return set(itervalues(self.branchmap))
 
@@ -114,6 +160,7 @@ class Diff(Solution):
     @property
     def trunked(self):
         return self.trunk is not None
+
     @property
     def ready(self):
         return not self.todo
@@ -126,18 +173,24 @@ class Diff(Solution):
         self.todo = set()  # literals
         self.negexcls = defaultdict(set)  # {neglast: literals...}
 
+    def dispose(self):
+        self.trunk = None
+        del self.todo
+        del self.negexcls
+        super(Diff, self).dispose()
+
+    def flatten(self):
+        ret = Solution()
+        ret.update(trunk)
+        ret.update(self)
+        return ret
+
     def _check_capable(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both diffs must belong to the same trunk')
         if not other.ready:
             raise NotImplementedError('Other is not ready: {0}: {0.todo}'
                                       .format(other))
-
-    def dispose(self):
-        self.trunk = None
-        del self.todo
-        del self.negexcls
-        super(Diff, self).dispose()
 
     def update(self, other, ignore_errors=False):
         self._check_capable(other)
@@ -197,30 +250,8 @@ class Diff(Solution):
             self.reasons.add(neg_reason)
             self.todo.add(neg_literal)
 
-    def iter_todo_away(self, ignore_errors=False):
-        trunk = self.trunk
-
-        for literal in pop_iter(self.todo):
-            if literal in self.literals:
-                continue  # already handled
-
-            try:
-                implied = trunk.branchmap[literal]
-
-            except KeyError:
-                if literal in trunk.literals:
-                    continue  # included in the trunk, i.e. unconditionally
-                assert ~literal in trunk.literals
-
-                if not ignore_errors:
-                    raise SolutionError(self)
-
-                # If ~literal was added into trunk by create_trunk, then
-                # there is no branch for literal, even dead.
-                # Give up in this case and yield None.
-                implied = trunk.dead_branches.get(literal)
-
-            yield literal, implied
+    def iter_todo_away(self):
+        return filternot(self.literals.__contains__, pop_iter(self.todo))
 
     def __repr__(self):
         return ('<{cls.__name__}: {nr_todos} todo ({state})>'
@@ -250,24 +281,8 @@ class Branch(Diff):
         self.reasons |= gen_literal.imply_reasons
         self.todo    |= gen_literal.implies
 
-    def __invert__(self):
-        try:
-            any_gen = next(iter(self.gen_literals))
-            inv_branch = self.trunk.branchmap[~any_gen]
-        except (StopIteration, KeyError):
-            assert False, 'should not happen'
-        else:
-            assert (not self.valid or not inv_branch.valid or
-                    self.gen_literals == set(map(operator.__invert__,
-                                                 inv_branch.gen_literals)))
-
-        return inv_branch
-
-    def __le__(self, other):
-        return self.gen_literals <= other.literals
-
     def update(self, other, ignore_errors=False):
-        if self >= other:  # other is already in self
+        if self.literals >= other.gen_literals:  # other is already in self
             assert self.nodes    >= other.nodes
             assert self.literals >= other.literals
             assert self.reasons  >= other.reasons
@@ -277,28 +292,6 @@ class Branch(Diff):
             return
 
         super(Branch, self).update(other, ignore_errors)
-
-    def substitute_with(self, other):
-        """
-        Upon replacement, this branch is disposed and must not be used anymore.
-        """
-        if self is other:
-            raise ValueError("Can't substitute self with itself")
-
-        other.gen_literals |= self.gen_literals
-
-        assert self.valid or not other.valid
-
-        # Even if other is not valid, use a branchmap for self.
-        branchmap = (self.trunk.branchmap if self.valid else
-                     self.trunk.dead_branches)
-
-        # Fixup any references to this one.
-        for gen_literal in self.gen_literals:
-            assert branchmap[gen_literal] is self
-            branchmap[gen_literal] = other
-
-        self.dispose()  # make gc happy
 
     def __repr__(self):
         try:
@@ -413,19 +406,6 @@ def create_trunk(pgraph, initial_literals=[]):
     return trunk
 
 
-def expand_branchset(trunk, ignore_errors=False):
-    branchset = trunk.branchset()
-
-    if ignore_errors:
-        dead_branchset = set(itervalues(trunk.dead_branches))
-        for branch in dead_branchset:
-            branch.sync_with_trunk(ignore_errors=True)
-        branchset.update(dead_branchset)
-
-    for branch in filter(getter.trunked, branchset):
-        expand_branch(branch, ignore_errors)
-
-
 def expand_branch(branch, ignore_errors=False):
     """Handles all branch todos (if any), in other words makes it ready.
 
@@ -433,12 +413,14 @@ def expand_branch(branch, ignore_errors=False):
     if branch.ready:
         return
 
+    trunk = branch.trunk
+
     stack = list()
 
     def stack_push(branch):
         assert not hasattr(branch, 'todo_it'), ("A branch has 'todo_it' attr "
                                                 "iff it is already in stack")
-        branch.todo_it = branch.iter_todo_away(ignore_errors)
+        branch.todo_it = trunk.iter_branch_todo_away(branch, ignore_errors)
         stack.append(branch)
 
     def stack_pop():
@@ -483,7 +465,8 @@ def expand_branch(branch, ignore_errors=False):
                 try:
                     implied.update(branch, ignore_errors)
                 finally:
-                    branch.substitute_with(implied)
+                    trunk.substitute_branch(branch, implied)
+                    branch.dispose()  # make gc happy
 
                 raise StopIteration  # forget about this branch
 
@@ -522,6 +505,19 @@ def expand_branch(branch, ignore_errors=False):
 
             # what to handle next
             stack_push(implied)
+
+
+def expand_branchset(trunk, ignore_errors=False):
+    branchset = trunk.branchset()
+
+    if ignore_errors:
+        dead_branchset = set(itervalues(trunk.dead_branches))
+        for branch in dead_branchset:
+            branch.sync_with_trunk(ignore_errors=True)
+        branchset.update(dead_branchset)
+
+    for branch in filter(getter.trunked, branchset):
+        expand_branch(branch, ignore_errors)
 
 
 def branchset_to_resolve(trunk):
