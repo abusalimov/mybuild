@@ -180,17 +180,21 @@ class Diff(Solution):
         super(Diff, self).dispose()
 
     def flatten(self):
+        if not self.ready:
+            raise NotImplementedError('not ready: {0}: {0.todo}'.format(self))
+
         ret = Solution()
-        ret.update(trunk)
+        ret.update(self.trunk)
         ret.update(self)
+        assert ret.valid == self.valid
+
         return ret
 
     def _check_capable(self, other):
         if self.trunk is not other.trunk:
             raise ValueError('Both diffs must belong to the same trunk')
         if not other.ready:
-            raise NotImplementedError('Other is not ready: {0}: {0.todo}'
-                                      .format(other))
+            raise NotImplementedError('not ready: {0}: {0.todo}'.format(other))
 
     def update(self, other, ignore_errors=False):
         self._check_capable(other)
