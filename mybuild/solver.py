@@ -6,6 +6,18 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-30"
 
 __all__ = [
+    "Solution",
+    "Trunk",
+    "Diff",
+    "Branch",
+
+    "create_trunk",
+    "expand_branch",
+    "expand_branchset",
+    "resolve_branches",
+    "stepwise_resolve",
+    "solve_trunk",
+
     "solve",
     "SolveError",
 ]
@@ -43,7 +55,7 @@ class Solution(object):
     def valid(self):
         return len(self.nodes) == len(self.literals)
 
-    def __init__(self):
+    def __init__(self, initial=None):
         super(Solution, self).__init__()
 
         self.nodes    = set()
@@ -51,6 +63,9 @@ class Solution(object):
         self.reasons  = set()  # note that this set does NOT include reasons
                                # from each literal's imply_reasons set, only
                                # special (like for neglasts or assumptions).
+
+        if initial is not None:
+            self |= initial
 
     def dispose(self):
         del self.nodes
@@ -73,6 +88,13 @@ class Solution(object):
         return (self.nodes    .isdisjoint(other.nodes) and
                 self.literals .isdisjoint(other.literals) and
                 self.reasons  .isdisjoint(other.reasons))
+
+    def __eq__(self, other):
+        if not isinstance(other, Solution):
+            return NotImplemented
+        return (self.nodes    == other.nodes and
+                self.literals == other.literals and
+                self.reasons  == other.reasons)
 
 
 class Trunk(Solution):
