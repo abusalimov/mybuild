@@ -68,9 +68,9 @@ class Solution(object):
         return self
 
     def isdisjoint(self, other):
-        # note that reasons are not inspected
         return (self.nodes    .isdisjoint(other.nodes) and
-                self.literals .isdisjoint(other.literals))
+                self.literals .isdisjoint(other.literals) and
+                self.reasons  .isdisjoint(other.reasons))
 
 
 class Trunk(Solution):
@@ -272,7 +272,8 @@ class Diff(Solution):
 
             neg_literal, neg_reason = neglast.neg_reason_for(*negleft)
 
-            self.reasons.add(neg_reason)
+            if neg_reason not in self.trunk.reasons:
+                self.reasons.add(neg_reason)
             self.todo.add(neg_literal)
 
     def iter_todo_away(self):
