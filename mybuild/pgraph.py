@@ -378,8 +378,8 @@ class Reason(namedtuple('_Reason', 'why, literal, cause_literals')):
 
     @classmethod
     def default_why_func(cls, outcome, *causes):
-        cause_str = ', '.join(map(str, causes)) or 'no cause'
-        return '%s <= %s' % (outcome, cause_str)
+        cause_str = ' + '.join(map(str, causes)) or 'no cause'
+        return '%s <= (%s)' % (outcome, cause_str)
 
     def __repr__(self):
         return self.why(self.literal, *self.cause_literals)
