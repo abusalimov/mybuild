@@ -253,26 +253,7 @@ class PdagDtreeTestCase(TestCase):
         self.assertIs(True, solution[C])
         self.assertIs(True, solution[X])
 
-    def test_resolve_braches_3(self):
-        g = self.pgraph
-        A, B, C, D = self.atoms('ABCD')
-
-        #     (D | Y) & (~D | Y) & (D | ~Y), where
-        # Y = (C | X) & (~C | X) & (C | ~X), where
-        # X = (A | B) & (~A | B) & (A | ~B)
-        X = self.sneaky_pair_and(A, B, name='X')
-        Y = self.sneaky_pair_and(C, X, name='Y')
-        P = self.sneaky_pair_and(D, Y)
-
-        solution = solve(g, {P: True})
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
-        self.assertIs(True, solution[X])
-        self.assertIs(True, solution[Y])
-
-    def test_resolve_braches_4(self):
+    def sneaky_chain(self):
         g = self.pgraph
         A, B, C, D, E = self.atoms('ABCDE')
 
@@ -285,14 +266,28 @@ class PdagDtreeTestCase(TestCase):
         Z = self.sneaky_pair_and(D, Y, name='Z')
         P = self.sneaky_pair_and(E, Z)
 
+        return P, (X, Y, Z), (A, B, C, D, E)
+
+    def test_resolve_braches_4(self):
+        g = self.pgraph
+
+        P, pair_ands, atoms = self.sneaky_chain()
+
         solution = solve(g, {P: True})
 
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
-        self.assertIs(True, solution[X])
-        self.assertIs(True, solution[Y])
-        self.assertIs(True, solution[Z])
+        for node in (pair_ands + atoms):
+            self.assertIs(True, solution[node], "{0} is not True".format(node))
+
+    def test_trunk_base(self):
+        g = self.pgraph
+
+        P, pair_ands, atoms = self.sneaky_chain()
+
+        initial_trunk = create_trunk(g, {P: True})
+        solved_trunk  = solve_trunk(g, {P: True})
+
+        self.assertEqual(Solution(initial_trunk), solved_trunk.base)
+        self.assertEqual(initial_trunk.base, solved_trunk.base)
 
 
 if __name__ == '__main__':
