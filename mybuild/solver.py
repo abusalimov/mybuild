@@ -437,7 +437,8 @@ def create_trunk(pgraph, initial_literals=[]):
     logger.info('created trunk with %d node(s)', len(trunk.nodes))
 
     unresolved_nodes = (pgraph.nodes - trunk.nodes)
-    logger.info('preparing branchmap for %d node(s)', len(unresolved_nodes))
+    logger.info('preparing branchmap for %d unresolved node(s)',
+                len(unresolved_nodes))
 
     for node in unresolved_nodes:
         logger.debug('\tunresolved node: %r', node)
@@ -552,8 +553,8 @@ def resolve_branches(trunk, branches=None):
 
         for branch in branches:
             logger.debug('\t+merge %r', branch)
-            for gen_literal in branch.gen_literals:
-                branch.reasons
+            # for gen_literal in branch.gen_literals:
+            #     branch.reasons  # TODO
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
 
@@ -606,9 +607,9 @@ def solve(pgraph, initial_values={}):
 
     trunk = solve_trunk(pgraph, initial_values)
 
-    rgraph = Rgraph(trunk)
-    rgraph.find_shortest_ways()
-    rgraph.print_graph() #prints a rgraph to console
+    # rgraph = Rgraph(trunk)
+    # rgraph.find_shortest_ways()
+    # rgraph.print_graph() #prints a rgraph to console
 
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
