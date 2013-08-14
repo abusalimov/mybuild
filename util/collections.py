@@ -7,6 +7,7 @@ from util.operator import instanceof
 
 is_mapping   = instanceof(Mapping)
 is_container = instanceof(Container)
+is_sized     = instanceof(Sized)
 is_sequence  = instanceof(Sequence)
 is_set       = instanceof(Set)
 

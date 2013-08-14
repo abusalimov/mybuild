@@ -8,8 +8,8 @@ from _compat import *
 import logging as _logging
 import functools as _functools
 
-from util.collections import is_mapping
 from util.collections import is_container
+from util.collections import is_mapping
 import pprint
 
 
@@ -77,11 +77,17 @@ def logger_dump(logger, target, attrs=None):
             obj = e
         else:
             obj = _log_dump_normalize(obj)
-        msg = '.{0}:'.format(attr)
-        fmt = '\t||%s'
-        logger.debug(fmt, msg)
+
+        try:
+            obj_len = len(obj)
+        except TypeError:
+            msg = '.{0}:'.format(attr)
+        else:
+            msg = '.{0}: (len={1})'.format(attr, obj_len)
+
+        logger.debug('\t||%s', msg)
         for line in pprint.pformat(obj).splitlines():
-            logger.debug(fmt, '\t\t'+line)
+            logger.debug('\t||\t\t%s', line)
 
 
 def _log_dump_normalize(obj):
