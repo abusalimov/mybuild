@@ -85,10 +85,6 @@ class Rgraph(object):
     def add_branch(self, branch):
         if self.trunk is not branch.trunk:
             raise ValueError('Branch must belong to the rgraph trunk')
-        
-
-        branch.sync_with_trunk(ignore_errors = True)
-        self.branch = branch
          
         for literal in branch.gen_literals:
             self.fill_data(Reason(None, literal))       
@@ -113,68 +109,6 @@ class Rgraph(object):
             member = self.nodes[frozenset([literal])]
             node.members.add(member)
             member.containers.add(node)  
-    
-    def print_graph(self):
-        """
-        Simple way to print reason graph. Nodes of more one reason are printed 
-        in new line without offset.
-        """
-        queue = Queue.LifoQueue()
-        used = set()
-        
-        #queue contains touples (node, reason)
-        for node in self.initial.therefore:
-            queue.put((node, self.initial.therefore[node]))
-            self._process_containers_dfs(node, used, queue)
-        
-        while not queue.empty():
-            node, reason = queue.get()        
-            self.dfs(node, reason, used, queue, 0)
-            
-        for literal, branch in self.trunk.dead_branches.items(): 
-            violation_nodes = self.get_violation_nodes(branch)
-            
-            print '--- violation for', branch.gen_literals, '---'
-            
-            rgraph_branch = self.violation_graphs[literal]
-                            
-            for node in violation_nodes:
-                print '------ because of {0} and {1} ------'.format(node[True], node[False])
-                rgraph_branch.print_shortest_way(node[True])
-                rgraph_branch.print_shortest_way(node[False])
-                print '------'
-            print '---'
-            
-    def get_violation_nodes(self, branch):
-        violation_nodes = set()
-        literals = self.trunk.literals | branch.literals
-        nodes = self.trunk.nodes | branch.nodes
-        for node in nodes:
-            if node[False] in literals and node[True] in literals:
-                violation_nodes.add(node)
-        return violation_nodes
-                
-    def dfs(self, node, reason, used, queue, depth):
-        if node in used:
-            self.print_reason(reason,depth)
-            return
-        
-        used.add(node)
-        self.print_reason(reason,depth)
-        for cons in node.therefore:
-            self.dfs(cons, node.therefore[cons], used, queue, depth + 1)
-            self._process_containers_dfs(cons, used, queue)
-                            
-    def _process_containers_dfs(self, node, used, queue):
-        for container in node.containers:
-            if container not in used:
-                used.add(container)
-                for ccons in container.therefore:
-                    if node not in queue.queue:
-                        queue.put((ccons, container.therefore[ccons]))
-                            
-    def print_reason(self, reason, depth):
-        print '  ' * depth, reason
 
     def find_shortest_ways(self):
         """
@@ -221,6 +155,68 @@ class Rgraph(object):
                     push(cons)
                     for container in cons.containers:
                         push(container)
+                        
+    def print_graph(self):
+        """
+        Simple way to print reason graph. Nodes of more one reason are printed 
+        in new line without offset.
+        """
+        queue = Queue.LifoQueue()
+        used = set()
+        
+        #queue contains touples (node, reason)
+        for node in self.initial.therefore:
+            queue.put((node, self.initial.therefore[node]))
+            self._process_containers_dfs(node, used, queue)
+        
+        while not queue.empty():
+            node, reason = queue.get()        
+            self.dfs(node, reason, used, queue, 0)
+            
+        for literal, branch in iteritems(self.trunk.dead_branches): 
+            violation_nodes = self.get_violation_nodes(branch)
+            
+            print '--- violation for', branch.gen_literals, '---'
+            
+            rgraph_branch = self.violation_graphs[literal]
+                            
+            for node in violation_nodes:
+                print '------ because of {0} and {1} ------'.format(node[True], node[False])
+                rgraph_branch.print_shortest_way(node[True])
+                rgraph_branch.print_shortest_way(node[False])
+                print '------'
+            print '---'
+            
+    def get_violation_nodes(self, branch):
+        violation_nodes = set()
+        literals = self.trunk.literals | branch.literals
+        nodes = self.trunk.nodes | branch.nodes
+        for node in nodes:
+            if node[False] in literals and node[True] in literals:
+                violation_nodes.add(node)
+        return violation_nodes
+                
+    def dfs(self, node, reason, used, queue, depth):
+        if node in used:
+            self.print_reason(reason,depth)
+            return
+        
+        used.add(node)
+        self.print_reason(reason,depth)
+        for cons in node.therefore:
+            self.dfs(cons, node.therefore[cons], used, queue, depth + 1)
+            self._process_containers_dfs(cons, used, queue)
+                            
+    def _process_containers_dfs(self, node, used, queue):
+        for container in node.containers:
+            if container not in used:
+                used.add(container)
+                for ccons in container.therefore:
+                    if node not in queue.queue:
+                        queue.put((ccons, container.therefore[ccons]))
+                            
+    def print_reason(self, reason, depth):
+        print '  ' * depth, reason
 
     def print_shortest_way(self, literals):
         node = self.nodes[frozenset([literals])]    
