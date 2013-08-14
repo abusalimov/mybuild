@@ -48,7 +48,9 @@ class Solution(object):
 
         self.nodes    = set()
         self.literals = set()
-        self.reasons  = set()
+        self.reasons  = set()  # note that this set does NOT include reasons
+                               # from each literal's imply_reasons set, only
+                               # special (like for neglasts or assumptions).
 
     def dispose(self):
         del self.nodes
@@ -302,8 +304,7 @@ class Branch(Diff):
         self.gen_literals.add(gen_literal)
         self.add_literal(gen_literal)
 
-        self.reasons |= gen_literal.imply_reasons
-        self.todo    |= gen_literal.implies
+        self.todo |= gen_literal.implies
 
     def merge(self, other):
         if self.literals >= other.gen_literals:  # other is already in self
@@ -374,8 +375,6 @@ def create_trunk(pgraph, initial_literals=[]):
 
         assert literal in literals, "must has already been added"
         nodes.add(literal.node)
-
-        reasons |= literal.imply_reasons
 
         for neglast in literal.neglasts:
             negleft = neglefts[neglast]
