@@ -36,7 +36,7 @@ class Solution(object):
     Solution backed by sets of nodes and their literals.
     """
 
-    _dump_attrs = 'valid nodes literals'.split()# + ['reasons']
+    _dump_attrs = 'valid nodes literals'.split() + ['reasons']
 
     @property
     def valid(self):
@@ -593,9 +593,6 @@ def solve_trunk(pgraph, initial_values={}):
     resolve_branches(trunk)
     stepwise_resolve(trunk)
 
-    # to be called from rgraph
-    expand_branchset(trunk, ignore_errors=True)
-
     return trunk
 
 
@@ -604,8 +601,9 @@ def solve(pgraph, initial_values={}):
 
     trunk = solve_trunk(pgraph, initial_values)
 
-    # rgraph = Rgraph(trunk)
-    # rgraph.print_graph() #prints a rgraph to console
+    rgraph = Rgraph(trunk)
+    rgraph.find_shortest_ways()
+    rgraph.print_graph() #prints a rgraph to console
 
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)

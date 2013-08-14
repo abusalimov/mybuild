@@ -5,11 +5,28 @@ Graph for reasons of pgraph solution
 __author__ = "Vita Loginova"
 __date__ = "2013-06-28"
 
-import sys
+from  _compat import *
 import Queue
-from mybuild.pgraph import *
+from mybuild.pgraph import Reason
+import heapq
+import solver
+
+import util, logging
+logger = util.get_extended_logger(__name__)
 
 class NodeContainer(object):
+    
+    @property
+    def length(self):
+        if self.members:
+            return sum(r.length for r in self.members)
+        else:
+            return self._length
+
+    @length.setter
+    def length(self, value):
+        self._length = value
+    
     def __init__(self, literals):
         self.literals = frozenset(literals) 
         self.containers = set() #NodeContainrs set that contains nodes with
@@ -18,7 +35,7 @@ class NodeContainer(object):
                                 #node.literals
         self.therefore = {} #key = node, value = reason
         self.becauseof = {} #key = node, value = reason
-        self.length = float("+inf")
+        self._length = float("+inf")
         self.parent = None
         
     def __lt__(self, other):
@@ -26,6 +43,10 @@ class NodeContainer(object):
     
     def compare_literals(self, literals):
         return (set(literals) == self.literals)
+    
+    def __repr__(self):
+        return ("<{cls.__name__}: {literals}>"
+                .format(cls=type(self), literals=list(self.literals)))
     
 # TODO remove to other place after all types why function realization
 def why_violation(literal, *cause_literals):
@@ -42,6 +63,10 @@ class Rgraph(object):
         self.nodes[frozenset(set())] = self.initial
         self.violation_graphs = {}
         
+        solver.expand_branchset(trunk, ignore_errors=True)
+        
+        logger.dump(trunk)
+        
         for node in trunk.nodes:
             self.nodes[frozenset([node[True]])] = NodeContainer(frozenset([node[True]]))
             self.nodes[frozenset([node[False]])] = NodeContainer(frozenset([node[False]]))
@@ -50,20 +75,20 @@ class Rgraph(object):
             self.fill_data(reason)
         
         if use_dead_branches:      
-            for literal, branch in trunk.dead_branches.items():
+            for literal, branch in iteritems(trunk.dead_branches):
                 self.violation_graphs[literal] = Rgraph(trunk, False)
                 self.violation_graphs[literal].add_branch(branch)
                 for gen_literal in branch.gen_literals:
                     self.fill_data(Reason(why_violation, ~gen_literal, gen_literal))
                     self.fill_data(Reason(None, gen_literal))
-                    
-        self.find_shortest_ways()
-                    
+                                 
     def add_branch(self, branch):
         if self.trunk is not branch.trunk:
             raise ValueError('Branch must belong to the rgraph trunk')
         
-        branch.sync_with_trunk()
+
+        branch.sync_with_trunk(ignore_errors = True)
+        self.branch = branch
          
         for literal in branch.gen_literals:
             self.fill_data(Reason(None, literal))       
@@ -73,8 +98,9 @@ class Rgraph(object):
     def fill_data(self, reason): 
         if len(reason.cause_literals) > 1:
             s = frozenset(reason.cause_literals)
-            self.nodes[s] = NodeContainer(s)
-            self.update_containers(self.nodes[s])
+            if s not in self.nodes:
+                self.nodes[s] = NodeContainer(s)
+                self.update_containers(self.nodes[s])
                      
         cause_node = self.nodes[frozenset(reason.cause_literals)]
         literal_node = self.nodes[frozenset([reason.literal])]
@@ -149,7 +175,7 @@ class Rgraph(object):
                             
     def print_reason(self, reason, depth):
         print '  ' * depth, reason
-               
+
     def find_shortest_ways(self):
         """
         This algorithm a common Dijkstra's algorithm with small modification,
@@ -161,42 +187,45 @@ class Rgraph(object):
         
         for rgraph in self.violation_graphs.values():
             rgraph.find_shortest_ways()
-        
-        queue = Queue.PriorityQueue()
+
+        queue = []  
         used = set()
-        for node in self.initial.therefore:
-            queue.put_nowait(node)
-            node.length = 0
-            node.parent = node
-            used.add(node) 
-            self._process_containers_shortest_ways(node, used, queue)
+        
+        def push(node):
+            heapq.heappush(queue, (node.length, node))
             
-        while not queue.empty():
-            node = queue.get_nowait()
+        def pop():
+            node = heapq.heappop(queue)[1]
+            if node in used:
+                return pop()       
+            used.add(node)
+            return node 
+                    
+        for node in self.initial.therefore:
+            node.length = 0
+            node.parent = node 
+            push(node)
+         
+        heapq.heapify(queue)     
+            
+        while queue:
+            try:
+                node = pop()
+            except IndexError:
+                continue        
                      
             for cons in node.therefore:
                 if cons.length > node.length + 1:
                     cons.length = node.length + 1
                     cons.parent = node
-                        
-                if cons not in used:      
-                    queue.put_nowait(cons)
-                    used.add(cons)
-                
-                self._process_containers_shortest_ways(cons, used, queue)
-
-                    
-    def _process_containers_shortest_ways(self, node, used, queue):         
-        for container in node.containers:
-            container.length = sum(r.length for r in container.members)
-            if container not in used:
-                used.add(container)
-                queue.put_nowait(container)
+                    push(cons)
+                    for container in cons.containers:
+                        push(container)
 
     def print_shortest_way(self, literals):
         node = self.nodes[frozenset([literals])]    
         if node.length == float("+inf"):
-            raise Exception    
+            raise Exception   
         self._print_shortest_way_part(node)
          
     def _print_shortest_way_part(self, node):
