@@ -6,11 +6,13 @@ __author__ = "Vita Loginova"
 __date__ = "2013-06-28"
 
 from  _compat import *
-import Queue
-from mybuild.pgraph import Reason
-import heapq
-import solver
 
+import Queue
+import heapq
+
+from mybuild.pgraph import Reason
+
+from util.operator import getter
 import util, logging
 logger = util.get_extended_logger(__name__)
 
@@ -46,11 +48,7 @@ class NodeContainer(object):
     
     def __repr__(self):
         return ("<{cls.__name__}: {literals}>"
-                .format(cls=type(self), literals=list(self.literals)))
-    
-# TODO remove to other place after all types why function realization
-def why_violation(literal, *cause_literals):
-    return '%s because of violation %s' % (literal, cause_literals)  
+                .format(cls=type(self), literals=list(self.literals))) 
 
 class Rgraph(object): 
     """
@@ -63,24 +61,37 @@ class Rgraph(object):
         self.nodes[frozenset(set())] = self.initial
         self.violation_graphs = {}
         
-        solver.expand_branchset(trunk, ignore_errors=True)
-        
         logger.dump(trunk)
         
-        for node in trunk.nodes:
-            self.nodes[frozenset([node[True]])] = NodeContainer(frozenset([node[True]]))
-            self.nodes[frozenset([node[False]])] = NodeContainer(frozenset([node[False]]))
-                
+        for literal in trunk.literals:
+            self.nodes[frozenset([literal])] = NodeContainer(frozenset([literal]))
+            self.nodes[frozenset([~literal])] = NodeContainer(frozenset([~literal]))
+         
         for reason in trunk.reasons:
             self.fill_data(reason)
         
-        if use_dead_branches:      
+        if use_dead_branches:    
+            branchmap = {}  
             for literal, branch in iteritems(trunk.dead_branches):
-                self.violation_graphs[literal] = Rgraph(trunk, False)
-                self.violation_graphs[literal].add_branch(branch)
-                for gen_literal in branch.gen_literals:
-                    self.fill_data(Reason(why_violation, ~gen_literal, gen_literal))
-                    self.fill_data(Reason(None, gen_literal))
+                if frozenset(branch.gen_literals) in branchmap:
+                    self.violation_graphs[literal] = \
+                            branchmap[frozenset(branch.gen_literals)]
+                    continue
+                self.violation_graphs[literal] = \
+                        self.create_rgraph_branch(trunk, branch)
+                branchmap[frozenset(branch.gen_literals)] = \
+                        self.violation_graphs[literal]
+                
+    def create_rgraph_branch(self, trunk, branch):
+        solution = branch.flatten()
+        for gen_literal in branch.gen_literals:
+            solution.reasons.add(Reason(None, gen_literal))     
+        for literal in solution.literals:
+            for reason in literal.imply_reasons:
+                if literal not in trunk.dead_branches and \
+                        literal in branch.gen_literals:
+                    solution.reasons.add(reason)
+        return Rgraph(solution, False)    
                                  
     def add_branch(self, branch):
         if self.trunk is not branch.trunk:
@@ -103,6 +114,7 @@ class Rgraph(object):
         
         cause_node.therefore[literal_node] = reason
         literal_node.becauseof[cause_node] = reason
+
         
     def update_containers(self, node):
         for literal in node.literals:
