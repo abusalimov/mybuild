@@ -57,7 +57,7 @@ def constructor_decorator(cls, **kwargs):
             @_functools.wraps(func)
             def __init__(self, *args, **kwargs):
                 super(ret_type, self).__init__(*args, **kwargs)
-                func(self, *args, **kwargs)
+                return func(self, *args, **kwargs)
             type_dict = dict(func.__dict__,
                              __init__   = __init__,
                              __module__ = __init__.__module__,
