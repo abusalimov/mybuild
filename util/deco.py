@@ -66,8 +66,26 @@ def constructor_decorator(cls, **kwargs):
     return ret_cls
 
 
+class defer_call(object):
+    """Decorator which remembers calls to a decorated func."""
+
+    def __init__(self, func):
+        super(defer_call, self).__init__()
+        self.func = func
+        self._calls = deque()
+
+    def __call__(self, *args, **kwargs):
+        self._calls.append((args, kwargs))
+
+    def call_on(self, target=None):
+        if target is None:
+            target = self
+        for args, kwargs in pop_iter(self._calls, pop_meth='popleft'):
+            self.func(target, *args, **kwargs)
+
+
 def no_reent(func, reent_manager=None):
-    """Decorator which defers recursive calls to 'func' to the outermost
+    """Decorator which defers recursive calls to func to the outermost
     invocation."""
     if reent_manager is None:
         reent_manager = ReentManager()
