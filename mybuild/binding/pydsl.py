@@ -16,7 +16,7 @@ from mybuild.core import ModuleType
 from mybuild.core import Module
 from mybuild.core import Optype
 
-from util.misc import constructor_decorator
+from util.deco import constructor_decorator
 
 
 class PyFileModuleType(ModuleType):

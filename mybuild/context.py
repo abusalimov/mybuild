@@ -24,7 +24,7 @@ from mybuild.core import *
 from mybuild.pgraph import *
 from mybuild.solver import solve
 
-from util.misc import no_reent
+from util.deco import no_reent
 
 import logging
 logger = logging.getLogger(__name__)
