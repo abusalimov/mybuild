@@ -31,8 +31,7 @@ def constructor_decorator(cls, **kwargs):
     # replaces itself with the original one and replaces the returned class
     # with 'cls' with the original __call__ method.
     #
-    # This magic is similar to the one used in compat_.with_meta
-    # function.
+    # This magic is similar to the one used in _compat.with_meta function.
     mcls = type(cls)
 
     class metaclass(mcls):
