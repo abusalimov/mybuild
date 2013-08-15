@@ -12,21 +12,21 @@ from _compat import *
 
 import inspect
 
-from mybuild.core import ModuleType
+from mybuild.core import ModuleMeta
 from mybuild.core import Module
 from mybuild.core import Optype
 
 from util.deco import constructor_decorator
 
 
-class PyFileModuleType(ModuleType):
+class PyFileModuleMeta(ModuleMeta):
     """
     Infers options from class constructor. To cancel such behavior, provide a
     keyword argument intermediate=True.
     """
 
     def __init__(cls, name, bases, attrs, intermediate=False):
-        super(PyFileModuleType, cls).__init__(name, bases, attrs,
+        super(PyFileModuleMeta, cls).__init__(name, bases, attrs,
                 optypes=cls._optypes_from_init() if not intermediate else None)
 
     def _optypes_from_init(cls):
@@ -66,7 +66,7 @@ class PyFileModuleType(ModuleType):
                 for optype, name in zip(head + tail, args)]
 
 
-class PyFileModule(with_meta(PyFileModuleType, intermediate=True), Module):
+class PyFileModule(with_meta(PyFileModuleMeta, intermediate=True), Module):
     """
     Example of a simple module without any options:
 

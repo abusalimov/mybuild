@@ -8,7 +8,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-09-15"
 
 __all__ = [
-    "ModuleType",
+    "ModuleMeta",
     "Module",
     "Optype",
     "Optuple",
@@ -30,7 +30,7 @@ from util.operator import instanceof
 from util.misc import InstanceBoundTypeMixin
 
 
-class ModuleType(type):
+class ModuleMeta(type):
     """Metaclass of Mybuild modules."""
 
     @property
@@ -49,13 +49,13 @@ class ModuleType(type):
 
     def __new__(mcls, name, bases, attrs, *args, **kwargs):
         """Suppresses any redundant arguments."""
-        return super(ModuleType, mcls).__new__(mcls, name, bases, attrs)
+        return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs, optypes=None):
         """Subclasses must provide an 'optypes' argument, otherwise a class
         being constructed is considered intermediate and behaves much like a
         regular Python class."""
-        super(ModuleType, cls).__init__(name, bases, attrs)
+        super(ModuleMeta, cls).__init__(name, bases, attrs)
 
         cls._fullname = cls._name = cls.__name__
         try:
@@ -94,7 +94,7 @@ class ModuleType(type):
 
     def __repr__(cls):
         if cls._intermediate:
-            return super(ModuleType, cls).__repr__()
+            return super(ModuleMeta, cls).__repr__()
 
         options_str = ', '.join(cls._options)
         if options_str:
@@ -103,11 +103,11 @@ class ModuleType(type):
         return cls._fullname + options_str
 
 
-class Module(with_meta(ModuleType)):
+class Module(with_meta(ModuleMeta)):
     """Base class for Mybuild modules."""
 
-    # ModuleType overloads __call__, but the default factory call is
-    # available through ModuleType._instantiate with the only exception
+    # ModuleMeta overloads __call__, but the default factory call is
+    # available through ModuleMeta._instantiate with the only exception
     # that __init__  is called with optuple unpacked into keyword arguments,
     # unlike __new__ which receives the sole optuple argument.
 

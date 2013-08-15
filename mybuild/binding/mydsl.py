@@ -10,14 +10,14 @@ __all__ = ['module', 'option']
 
 from _compat import *
 
-from mybuild.core import ModuleType
+from mybuild.core import ModuleMeta
 from mybuild.core import Module
 from mybuild.core import Optype
 
 from mylang.linkage import MyfileObjectProxy
 
 
-class MyFileModuleType(ModuleType):
+class MyFileModuleMeta(ModuleMeta):
 
     class Proxy(MyfileObjectProxy):
         slots = 'mcls'
@@ -62,7 +62,7 @@ class MyFileModuleType(ModuleType):
         return options
 
 
-class MyFileModule(with_meta(MyFileModuleType), Module):
+class MyFileModule(with_meta(MyFileModuleMeta), Module):
     """docstring for MyFileModule"""
 
     def __init__(_self, **kwargs):
@@ -71,5 +71,5 @@ class MyFileModule(with_meta(MyFileModuleType), Module):
         print type(_self), _self
 
 
-module = MyFileModuleType
+module = MyFileModuleMeta
 option = Optype
