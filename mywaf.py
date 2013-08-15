@@ -10,6 +10,7 @@ __all__ = ["MyWafModuleMixin"]  # the rest is bound as Waf Context methods.
 
 from _compat import *
 
+import functools
 from operator import attrgetter
 
 from glue import PyDslLoader
@@ -20,7 +21,8 @@ from nsimporter import loader_filename
 
 from mybuild.context import resolve
 
-from util.misc import is_mapping
+from util.collections import is_mapping
+from util.deco import defer_call
 
 from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
@@ -171,21 +173,25 @@ class MybuildInstanceAccessor(object):
 class MyWafModuleMixin(object):
     """docstring for MyWafModuleMixin"""
 
-    def __init__(self, *args, **kwargs):
-        super(MyWafModuleMixin, self).__init__(*args, **kwargs)
-        self._bld_calls = []  # list of (args, kwargs) tuples
+    @defer_call
+    def load(ctx, *args, **kwargs):
+        ctx.load(*args, **kwargs)
 
-    def bld(self, *args, **kwargs):
-        self._bld_calls.append((args, kwargs))
+    @defer_call
+    def bld(ctx, *args, **kwargs):
+        ctx(*args, **kwargs)
 
-    def build(self, bld):
-        print('mywaf build: %r' % self)
-
-        for args, kwargs in self._bld_calls:
-            bld(*args, **kwargs)
+    def options(self, ctx):
+        print('mywaf options: %r' % self)
+        self.load.call_on(ctx)
 
     def configure(self, ctx):
         print('mywaf configure: %r' % self)
+        self.load.call_on(ctx)
+
+    def build(self, bld):
+        print('mywaf build: %r' % self)
+        self.bld.call_on(bld)
 
 
 def init(ctx):
