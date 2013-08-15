@@ -27,9 +27,9 @@ class PyFileModuleType(ModuleType):
 
     def __init__(cls, name, bases, attrs, intermediate=False):
         super(PyFileModuleType, cls).__init__(name, bases, attrs,
-                optypes=cls._init_to_options() if not intermediate else None)
+                optypes=cls._optypes_from_init() if not intermediate else None)
 
-    def _init_to_options(cls):
+    def _optypes_from_init(cls):
         """Converts a constructor argspec into a list of Option objects."""
 
         try:
@@ -41,54 +41,32 @@ class PyFileModuleType(ModuleType):
             # wrapper descriptor, give up
             return []
 
-        args, va, kw, defaults = inspect.getargspec(inspect.unwrap(func))
-        defaults = defaults or ()
+        args, va, kw, dfls = inspect.getargspec(inspect.unwrap(func))
+        dfls = dfls or ()
 
-        if va is not None:
-            raise TypeError(
-                'Arbitrary arguments are not supported: *%s' % va)
-        if kw is not None:
-            raise TypeError(
-                'Arbitrary keyword arguments are not supported: **%s' % kw)
+        if not args and not va:
+            raise TypeError('Module must accept at least one argument')
 
-        if not args:
-            raise TypeError(
-                'Module function must accept at least one argument')
-        if len(args) == len(defaults):
-            raise TypeError(
-                'The first argument cannot have a default value: %s' % args[0])
-
-        option_args = args[1:]
-        for arg in option_args:
+        for arg in args:
             if not isinstance(arg, basestring):
-                raise TypeError(
-                    'Tuple parameter unpacking is not supported: %s' % arg)
+                raise TypeError('Tuple parameter unpacking '
+                                'is not supported: {arg}'.format(**locals()))
 
-        head = [Optype() for _ in range(len(option_args) - len(defaults))]
+        if args:
+            # forget about the first arg (which is usually 'self')
+            if len(args) == len(dfls):
+                del dfls[0]
+            del args[0]
+
+        head = [Optype() for _ in range(len(args) - len(dfls))]
         tail = [optype if isinstance(optype, Optype) else Optype(optype)
-                for optype in defaults]
+                for optype in dfls]
 
         return [optype.set(name=name)
-                for optype, name in zip(head + tail, option_args)]
+                for optype, name in zip(head + tail, args)]
 
 
 class PyFileModule(with_meta(PyFileModuleType, intermediate=True), Module):
-
-    def _consider(self, expr):
-        self._context.consider(expr, origin=self)
-
-    def _constrain(self, expr):
-        self._context.constrain(expr, origin=self)
-
-    def __repr__(self):
-        return repr(self._optuple)
-
-    # XXX
-    constrain = _constrain
-    consider  = _consider
-
-
-module = constructor_decorator(PyFileModule, __doc__=
     """
     Example of a simple module without any options:
 
@@ -110,8 +88,23 @@ module = constructor_decorator(PyFileModule, __doc__=
     ...     def __init__(self, opt = option.bool()):
     ...         pass
 
-    """)
+    """
 
+    def _consider(self, expr):
+        self._context.consider(expr, origin=self)
+
+    def _constrain(self, expr):
+        self._context.constrain(expr, origin=self)
+
+    def __repr__(self):
+        return repr(self._optuple)
+
+    # XXX
+    constrain = _constrain
+    consider  = _consider
+
+
+module = constructor_decorator(PyFileModule)
 option = Optype
 
 if __name__ == '__main__':
