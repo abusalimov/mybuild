@@ -62,7 +62,7 @@ class MyFileModuleMeta(ModuleMeta):
         return options
 
 
-class MyFileModule(with_meta(MyFileModuleMeta), Module):
+class MyFileModule(extend(Module, metaclass=MyFileModuleMeta)):
     """docstring for MyFileModule"""
 
     def __init__(_self, **kwargs):

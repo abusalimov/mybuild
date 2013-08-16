@@ -37,39 +37,59 @@ else:
 iterkeys = iter
 
 
-def with_meta(*meta_arg, **kwargs):
-    if meta_arg:
-        meta, = meta_arg
+def extend(*bases, **kwargs):
+    """Allows one to use some of Py3k metaclass features from PEP 3115.
+
+    Basically this function is used instead of a list of bases in a class
+    definition. It allows to specify a metaclass using **kwargs syntax as well
+    as passing arbitrary keyword arguments to the metaclass.
+
+    Note: extend(...) must be the sole base class in a class definition."""
+
+    base = bases[0] if bases else object
+    meta = kwargs.pop('metaclass', type(base))
+    if meta is type and len(bases)<=1 and not kwargs:
+        return base
+
+    if isinstance(meta, type):
+        # when meta is a type, we first determine the most-derived metaclass
+        # instead of invoking the initial candidate directly
+        meta_type = meta = _calculate_meta(meta, bases)
     else:
-        meta = None
-    # Derived from Jinja2.
-    #
-    # This requires a bit of explanation: the basic idea is to make a
-    # dummy metaclass for one level of class instantiation that replaces
-    # itself with the actual metaclass.  Because of internal type checks
-    # we also need to make sure that we downgrade the custom metaclass
-    # for one level to something closer to type (that's  __init__ comes
-    # back from type etc.).
-    #
-    # This has the advantage over six.with_metaclass in that it does not
-    # introduce dummy classes into the final MRO.
-    class metaclass(meta or type):
+        meta_type = type
+
+    class temp_metaclass(meta_type):
+        # Derived from Jinja2.
+        #
+        # This requires a bit of explanation: the basic idea is to make a
+        # dummy metaclass for one level of class instantiation that replaces
+        # itself with the actual metaclass.  Because of internal type checks
+        # we also need to make sure that we downgrade the custom metaclass
+        # for one level to something closer to type (that's why __init__ comes
+        # back from type etc.).
+        #
+        # This has the advantage over six.with_metaclass in that it does not
+        # introduce dummy classes into the final MRO.
         __init__ = type.__init__
         def __new__(mcls, name, this_bases, attrs):
-            if this_bases is None:
+            if this_bases is None:  # creating temp_class
                 return type.__new__(mcls, name, (), attrs)
-            bases = tuple(base for base in this_bases
-                          if base is not temp_class)
-            mcls = meta or compute_default_metaclass(bases)
-            return mcls(name, bases, attrs, **kwargs)
-    temp_class = metaclass('temp_class', None, {})
+            try:
+                _, = this_bases  # it must be a tuple of a single element
+            except ValueError:
+                # class C(extend(...), something_else): ...
+                # or bases is not a singlular tuple in a metaclass call
+                raise TypeError("'extend(..)' must be the sole base class "
+                                "in a class definition")
+            return meta(name, bases, attrs, **kwargs)
 
-    return temp_class
+    return temp_metaclass('temp_class', None, {})
+
 
 # derived from Py3k Lib/types.py
-def compute_default_metaclass(bases):
+def _calculate_meta(meta, bases):
     """Calculate the most derived metaclass."""
-    winner = type
+    winner = meta
     for base in bases:
         base_meta = type(base)
         if issubclass(winner, base_meta):
@@ -84,7 +104,7 @@ def compute_default_metaclass(bases):
                         "of the metaclasses of all its bases")
     return winner
 
-ABCBase = with_meta(_abc.ABCMeta)
+ABCBase = extend(metaclass=_abc.ABCMeta)
 
 
 import functools as _functools

@@ -76,7 +76,7 @@ class PgraphMeta(type):
                 yield node_type
 
 
-class Pgraph(with_meta(PgraphMeta)):
+class Pgraph(extend(metaclass=PgraphMeta)):
     """docstring for Pgraph"""
 
     nodes = property(lambda self: set(itervalues(self._node_map)))
@@ -148,7 +148,7 @@ class NodeMeta(type):
         return super(NodeMeta, cls).__call__(*args, **kwargs)
 
 
-class NodeBase(with_meta(NodeMeta)):
+class NodeBase(extend(metaclass=NodeMeta)):
     """
     Subclasses may want to overload NodeBase._new classmethod to customize
     instance creation instead of using __new__.

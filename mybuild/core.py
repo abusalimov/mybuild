@@ -106,7 +106,7 @@ class ModuleMeta(type):
         return cls._fullname + options_str
 
 
-class Module(with_meta(ModuleMeta)):
+class Module(extend(metaclass=ModuleMeta)):
     """Base class for Mybuild modules."""
 
     # These properties default to corresponding class ones,

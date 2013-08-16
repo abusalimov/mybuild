@@ -66,7 +66,8 @@ class PyFileModuleMeta(ModuleMeta):
                 for optype, name in zip(head + tail, args)]
 
 
-class PyFileModule(with_meta(PyFileModuleMeta, intermediate=True), Module):
+class PyFileModule(extend(Module,
+                          metaclass=PyFileModuleMeta, intermediate=True)):
     """
     Example of a simple module without any options:
 
