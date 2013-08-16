@@ -32,7 +32,6 @@ class default_property(object):
     >>> x.default
     42
     """
-    __slots__ = 'func'
 
     def __init__(self, func):
         super(default_property, self).__init__()
@@ -67,7 +66,6 @@ class cached_property(default_property):
     >>> x.cached
     42
     """
-    __slots__ = ()
 
     def __get__(self, obj, objtype=None):
         if obj is None:
@@ -79,6 +77,10 @@ class cached_property(default_property):
 
 class intercepting_property(property):
     """Data descriptor.
+
+    Allows one to set hooks on get/set/del operations and to modify an actual
+    value which is stored in a backing __dict__.
+
     Usage example:
 
     >>> class C(object):
