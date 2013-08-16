@@ -27,6 +27,7 @@ import sys
 from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
+from util.prop import default_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -47,6 +48,20 @@ class ModuleMeta(type):
     def _optype(cls):
         return cls._optypes._get
 
+    @property
+    def _name(cls):
+        return cls.__name__
+    @property
+    def _fullname(cls):
+        if cls.__module__:
+            return cls.__module__ + '.' + cls.__name__
+        else:
+            return cls.__name__
+
+    @property
+    def _file(cls):
+        return getattr(sys.modules.get(cls.__module__), '__file__', None)
+
     def __new__(mcls, name, bases, attrs, *args, **kwargs):
         """Suppresses any redundant arguments."""
         return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
@@ -56,18 +71,6 @@ class ModuleMeta(type):
         being constructed is considered intermediate and behaves much like a
         regular Python class."""
         super(ModuleMeta, cls).__init__(name, bases, attrs)
-
-        cls._fullname = cls._name = cls.__name__
-        try:
-            pymodule = sys.modules[cls.__module__]
-        except KeyError:
-            cls._file = None
-        else:
-            cls._file = getattr(pymodule, '__file__', None)
-
-            pymodule_name = pymodule.__name__
-            if pymodule_name:
-                cls._fullname = pymodule_name + '.' + cls.__name__
 
         if optypes is not None:
             cls._init_optypes(optypes)
@@ -105,6 +108,12 @@ class ModuleMeta(type):
 
 class Module(with_meta(ModuleMeta)):
     """Base class for Mybuild modules."""
+
+    # These properties default to corresponding class ones,
+    # however instance is allowed to override them by setting custom values.
+    _name     = default_property(attrgetter('__class__._name'))
+    _fullname = default_property(attrgetter('__class__._fullname'))
+    _file     = default_property(attrgetter('__class__._file'))
 
     # ModuleMeta overloads __call__, but the default factory call is
     # available through ModuleMeta._instantiate with the only exception
