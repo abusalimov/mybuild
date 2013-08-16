@@ -6,20 +6,29 @@ Property descriptors.
 from _compat import *
 
 
-class cached_property(object):
+class default_property(object):
     """Non-data descriptor."""
     __slots__ = 'func'
 
     def __init__(self, func):
-        super(cached_property, self).__init__()
+        super(default_property, self).__init__()
         self.func = func
 
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        func = self.func
-        ret = func(obj)
-        setattr(obj, func.__name__, ret)
+        return self.func(obj)
+
+
+class cached_property(default_property):
+    """Non-data descriptor."""
+    __slots__ = ()
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        ret = super(cached_property, self).__get__(obj, objtype)
+        setattr(obj, self.func.__name__, ret)
         return ret
 
 
