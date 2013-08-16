@@ -611,8 +611,6 @@ def solve(pgraph, initial_values={}):
     trunk = solve_trunk(pgraph, initial_values)
 
     rgraph = get_rgraph(trunk)
-    rgraph.find_shortest_ways()
-    rgraph.print_graph() #prints a rgraph to console
 
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
