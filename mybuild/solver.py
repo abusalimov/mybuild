@@ -30,6 +30,7 @@ import operator
 
 from mybuild.pgraph import *
 from mybuild.rgraph import *
+import mybuild.rgraph
 
 from util.itertools import pop_iter
 from util.operator import getter
@@ -553,8 +554,10 @@ def resolve_branches(trunk, branches=None):
 
         for branch in branches:
             logger.debug('\t+merge %r', branch)
-            # for gen_literal in branch.gen_literals:
-            #     branch.reasons  # TODO
+            for gen_literal in branch.gen_literals:
+                branch.reasons.add(Reason(why_violation, ~gen_literal,
+                                          gen_literal))
+                branch.reasons.add(Reason(None, gen_literal))
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
 
@@ -607,9 +610,9 @@ def solve(pgraph, initial_values={}):
 
     trunk = solve_trunk(pgraph, initial_values)
 
-    # rgraph = Rgraph(trunk)
-    # rgraph.find_shortest_ways()
-    # rgraph.print_graph() #prints a rgraph to console
+    rgraph = get_rgraph(trunk)
+    rgraph.find_shortest_ways()
+    rgraph.print_graph() #prints a rgraph to console
 
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
@@ -618,6 +621,9 @@ def solve(pgraph, initial_values={}):
         logger.debug('\t%s: %s', literal, ret[literal])
     return ret
 
+# TODO remove to other place after all types why function realization
+def why_violation(literal, *cause_literals):
+    return '%s because of violation %s' % (literal, cause_literals) 
 
 class SolveError(Exception):
     """docstring for SolveError"""
