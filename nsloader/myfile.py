@@ -28,7 +28,7 @@ class MyFileLoader(SourceFileLoader):
     MODULE = 'Myfile'
 
     @classmethod
-    def init_ctx(cls, ctx, initials):
+    def init_ctx(cls, importer, initials):
         return Linker(), dict(initials)
 
     @classmethod

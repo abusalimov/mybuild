@@ -7,19 +7,17 @@ __date__ = "2013-06-26"
 
 __all__ = [
     "NamespaceImportHook",
+    "NamespaceContextManager",
 ]
 
 
 from _compat import *
 
-import contextlib
 import sys
 import os.path
 
-from nsimporter.package import NamespacePackageLoader
-from nsimporter.package import SubPackageLoader
+from nsimporter.package import PackageLoader
 
-from util.collections import OrderedDict
 from util.importlib.abc import MetaPathFinder
 
 
@@ -41,23 +39,23 @@ class Loader(object):
     """
 
     @classmethod
-    def init_ctx(cls, ctx, initials):
-        """Accepts an importer context object and user-provided initials.
-        Return value then replaces the first argument to __init__ (ctx).
+    def init_ctx(cls, importer, initials):
+        """Accepts an importer object and user-provided initials.
+        Return value then replaces the first argument to __init__ (importer).
         """
-        return ctx
+        return importer
 
     @classmethod
-    def exit_ctx(cls, ctx):
-        """Called upon exiting a context with a single argument which is
-        the value returned by init_ctx (if any) or the importer context object.
+    def exit_ctx(cls, importer):
+        """Called upon exiting an importer context with a single argument which
+        is the value returned by init_ctx (if any) or the importer object.
         """
         pass
 
-    def __init__(self, ctx, fullname, path):
+    def __init__(self, importer, fullname, path):
         """
         Args:
-            ctx: associated context (see notes to init_ctx)
+            importer: an associated importer (see notes to init_ctx)
             fullname (str): fully.qualified.name of a module to load
             path (str): a file path
         """
@@ -82,92 +80,41 @@ class NamespaceImportHook(MetaPathFinder):
     PEP 302 meta path import hook.
     """
 
-    class Context(object):
-        """Context is an object associated with a namespace.
-
-        Do not instantiate directly, use NamespaceImportHook.using_namespace()
-        context manager instead.
-        """
-
-        def __init__(self, namespace):
-            super(NamespaceImportHook.Context, self).__init__()
-            self.namespace = namespace
-
-            self.path = self.loaders = None  # initialized manually
-
-        def import_namespace(self):
-            return __import__(self.namespace)
-
-        def import_all(self, rel_names=[], silent=False):
-            ns = self.namespace
-            ns_module = self.import_namespace()  # do it first
-
-            for rel_name in rel_names:
-                try:
-                    __import__(ns + '.' + rel_name)
-                except ImportError:
-                    if not silent:
-                        raise
-
-            return ns_module
-
-    def __init__(self):
+    def __init__(self, namespace, path=None):
         super(NamespaceImportHook, self).__init__()
-        self._namespaces = OrderedDict()
-
-    @contextlib.contextmanager
-    def using_namespace(self, namespace, path=None, loaders_init=None):
-        """
-        Three things to do here. Upon completion, everithing is restored in
-        a reversed order:
-          1. Tell registered loaders about a new context
-          2. Install ourselves into sys.meta_path, if needed
-          3. Adjust internal namespace mapping
-        """
 
         if '.' in namespace:
             raise NotImplementedError('To keep things simple')
 
-        ctx = self.Context(namespace)
+        self.namespace = namespace
+        self.path = list(path) if path is not None else []
 
-        ctx.path = list(path) if path is not None else []
-        ctx.loaders = loaders = dict()  # populated below
+    def _init_loaders(self, loaders_init={}):
+        """Prepares loaders by creating a context for each of them.
+
+        Must be called prior to installing self into sys.meta_path."""
+
+        loaders = dict()
 
         for loader_type, initials in iteritems(loaders_init):
             if hasattr(loader_type, 'init_ctx'):
-                loader_ctx = loader_type.init_ctx(ctx, initials)
+                loader_ctx = loader_type.init_ctx(self, initials)
             else:
-                loader_ctx = ctx
+                loader_ctx = self
+
             name = loader_module(loader_type)
-            try:
-                old_loader_type, _ = loaders[name]
-            except KeyError:
-                loaders[name] = loader_type, loader_ctx
-            else:
-                raise ValueError(
-                        "Conflicting name '%s' for loader types "
-                        "'%s' and '%s'" % (name, old_loader_type, loader_type))
+            if name in loaders:
+                raise ValueError("Conflicting name '{name}' for loader types "
+                                 "'{loaders[name][0]}' and '{loader_type}'"
+                                 .format(**locals()))
 
-        nsmap = self._namespaces
-        if not nsmap and self not in sys.meta_path:
-            sys.meta_path.insert(0, self)
+            loaders[name] = loader_type, loader_ctx
 
-        saved = nsmap.get(namespace)
-        nsmap[namespace] = ctx
+        self.loaders = loaders
 
-        try:
-            yield ctx  # import, import, import...
-
-        finally:
-            if saved is not None:
-                nsmap[namespace] = saved
-            else:
-                del nsmap[namespace]
-
-            if not nsmap and self in sys.meta_path:
-                sys.meta_path.remove(self)
-
-        for loader_type, loader_ctx in itervalues(ctx.loaders):
+    def _exit_loaders(self):
+        """Finalizes loader contexts."""
+        for loader_type, loader_ctx in itervalues(self.loaders):
             if hasattr(loader_type, 'exit_ctx'):
                 loader_type.exit_ctx(loader_ctx)
 
@@ -179,7 +126,7 @@ class NamespaceImportHook(MetaPathFinder):
             fullname (str): 'fully.qualified.name'
             path (list or None):
                 None - when importing namespace root package
-                ctx.path - importing anything within a namespace package
+                self.path - importing anything within a namespace package
                 pkg.__path__ - within a regular (sub-)package;
 
         Returns:
@@ -190,29 +137,26 @@ class NamespaceImportHook(MetaPathFinder):
 
             fullname           path           returns
             ----------------   ------------   ----------------------
-            'ns'               None           NamespacePackageLoader
-            'ns.pkg'           ctx.path       SubPackageLoader
+            'ns'               None           PackageLoader
+            'ns.pkg'           self.path      PackageLoader
             'ns.pkg.PYBUILD'   pkg.__path__   PyFileLoader
         """
-
         namespace, _, restname = fullname.partition('.')
-        try:
-            ctx = self._namespaces[namespace]
-        except KeyError:
-            return None
 
+        if namespace != self.namespace:
+            return None
         if not restname:
-            return NamespacePackageLoader(ctx)
+            return PackageLoader(self.path, self.loaders)
 
         tailname = restname.rpartition('.')[2]
         try:
-            loader_type, loader_ctx = ctx.loaders[tailname]
+            loader_type, loader_ctx = self.loaders[tailname]
 
         except KeyError:
             def find_loader_in(entry):
                 basepath = os.path.join(entry, tailname)
                 if os.path.isdir(basepath):
-                    return SubPackageLoader(ctx, [basepath])
+                    return PackageLoader([basepath], self.loaders)
         else:
             filename = loader_filename(loader_type)
             def find_loader_in(entry):
@@ -223,4 +167,26 @@ class NamespaceImportHook(MetaPathFinder):
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
                 return loader
+
+
+class NamespaceContextManager(NamespaceImportHook):
+    """
+    PEP 343 context manager.
+    """
+
+    def __init__(self, namespace, path=None, loaders_init=None):
+        super(NamespaceContextManager, self).__init__(namespace, path)
+        self.loaders_init = (dict(loaders_init)
+                             if loaders_init is not None else {})
+
+    def __enter__(self):
+        self._init_loaders(self.loaders_init)
+        sys.meta_path.insert(0, self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self in sys.meta_path:
+            sys.meta_path.remove(self)
+        if exc_type is None:
+            self._exit_loaders()
 

@@ -29,7 +29,7 @@ class YamlFileLoader(SourceFileLoader):
     MODULE = 'MyYaml'
 
     @classmethod
-    def init_ctx(cls, ctx, initials):
+    def init_ctx(cls, importer, initials):
         return initials  # defaults
 
     def __init__(self, defaults, fullname, path):
