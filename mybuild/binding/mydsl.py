@@ -61,8 +61,7 @@ class MyFileModuleMeta(ModuleMeta):
 
         return options
 
-
-class MyFileModule(extend(Module, metaclass=MyFileModuleMeta)):
+class MyFileModule(extend(Module, metaclass=MyFileModuleMeta, internal=True)):
     """docstring for MyFileModule"""
 
     def __init__(_self, **kwargs):
@@ -73,3 +72,4 @@ class MyFileModule(extend(Module, metaclass=MyFileModuleMeta)):
 
 module = MyFileModuleMeta
 option = Optype
+

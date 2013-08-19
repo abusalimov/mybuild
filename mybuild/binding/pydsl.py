@@ -20,18 +20,10 @@ from util.deco import constructor_decorator
 
 
 class PyFileModuleMeta(ModuleMeta):
-    """
-    Infers options from class constructor. To cancel such behavior, provide a
-    keyword argument intermediate=True.
-    """
+    """Infers options from class constructor."""
 
-    def __init__(cls, name, bases, attrs, intermediate=False):
-        super(PyFileModuleMeta, cls).__init__(name, bases, attrs,
-                optypes=cls._optypes_from_init() if not intermediate else None)
-
-    def _optypes_from_init(cls):
-        """Converts a constructor argspec into a list of Option objects."""
-
+    def _create_optypes(cls):
+        """Converts a constructor argspec into a list of Optype objects."""
         try:
             func = cls.__dict__['__init__']  # to avoid MRO lookup
         except KeyError:
@@ -42,7 +34,7 @@ class PyFileModuleMeta(ModuleMeta):
             return []
 
         args, va, kw, dfls = inspect.getargspec(inspect.unwrap(func))
-        dfls = dfls or ()
+        dfls = dfls or []
 
         if not args and not va:
             raise TypeError('Module must accept at least one argument')
@@ -52,8 +44,7 @@ class PyFileModuleMeta(ModuleMeta):
                 raise TypeError('Tuple parameter unpacking '
                                 'is not supported: {arg}'.format(**locals()))
 
-        if args:
-            # forget about the first arg (which is usually 'self')
+        if args:   # forget about the first arg (which is usually 'self')
             if len(args) == len(dfls):
                 del dfls[0]
             del args[0]
@@ -66,8 +57,7 @@ class PyFileModuleMeta(ModuleMeta):
                 for optype, name in zip(head + tail, args)]
 
 
-class PyFileModule(extend(Module,
-                          metaclass=PyFileModuleMeta, intermediate=True)):
+class PyFileModule(extend(Module, metaclass=PyFileModuleMeta, internal=True)):
     """
     Example of a simple module without any options:
 

@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 class Context(object):
     """docstring for Context"""
 
-    def __init__(self, module_mixin=object):
+    def __init__(self, module_meta=type):
         super(Context, self).__init__()
-        self.module_mixin = module_mixin
+        self.module_meta = module_meta
 
         self._mdata = dict()  # {module: mdata}
 
@@ -144,9 +144,16 @@ class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
                          __doc__    = module.__doc__,
                          _module    = module,
                          _context   = context)
-        bases = (module, context.module_mixin)
 
-        return type(module.__name__, bases, type_dict)
+        class ctxtype(extend(module,
+                             metaclass=context.module_meta, internal=True)):
+            __module__ = module.__module__
+            __doc__    = module.__doc__
+            _module    = module
+            _context   = context
+        ctxtype.__name__ = module.__name__
+
+        return ctxtype
 
     @classmethod
     def _create_domain(cls, module):
@@ -273,8 +280,8 @@ def why_inviable_instance_is_disabled(outcome, *_):
     return fmt.format(**locals())
 
 
-def resolve(initial_module, module_mixin=object):
-    return Context(module_mixin).resolve(initial_module)
+def resolve(initial_module, module_meta=type):
+    return Context(module_meta).resolve(initial_module)
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ import sys as _sys
 _py3k = (_sys.version_info[0] == 3)
 
 
+# builtins
 if _py3k:
     range  = range
     filter = filter
@@ -23,13 +24,17 @@ else:
     from itertools import izip    as zip
     next = _operator.methodcaller('next')
 
-from itertools import ifilterfalse as filternot
+
+if _py3k:
+    from itertools import filterfalse as filternot
+else:
+    from itertools import ifilterfalse as filternot
 
 
+# dict iterators
 if _py3k:
     itervalues = lambda d: iter(d.values())
     iteritems  = lambda d: iter(d.items())
-
 else:
     itervalues = _operator.methodcaller('itervalues')
     iteritems  = _operator.methodcaller('iteritems')
@@ -44,7 +49,9 @@ def extend(*bases, **kwargs):
     definition. It allows to specify a metaclass using **kwargs syntax as well
     as passing arbitrary keyword arguments to the metaclass.
 
-    Note: extend(...) must be the sole base class in a class definition."""
+    Note: extend(...) must be the sole base class in a class definition.
+    Also note that due to some interpreter bugs you should avoid using this
+    trick with dynamic type creation (type(name, bases, attrs))."""
 
     base = bases[0] if bases else object
     meta = kwargs.pop('metaclass', type(base))
@@ -79,7 +86,7 @@ def extend(*bases, **kwargs):
             except ValueError:
                 # class C(extend(...), something_else): ...
                 # or bases is not a singlular tuple in a metaclass call
-                raise TypeError("'extend(..)' must be the sole base class "
+                raise TypeError("'extend(...)' must be the sole base class "
                                 "in a class definition")
             return meta(name, bases, attrs, **kwargs)
 
@@ -103,6 +110,7 @@ def _calculate_meta(meta, bases):
                         "must be a (non-strict) subclass "
                         "of the metaclasses of all its bases")
     return winner
+
 
 ABCBase = extend(metaclass=_abc.ABCMeta)
 

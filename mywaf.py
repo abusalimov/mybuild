@@ -111,7 +111,7 @@ def my_resolve(ctx, conf_module):
     try:
         instance_map = cache[conf_module]
     except KeyError:
-        instances = resolve(conf_module, module_mixin=MyWafModuleMixin)
+        instances = resolve(conf_module, module_meta=mywaf_module_meta)
         instance_map = dict((instance._module, instance)
                             for instance in instances)
         cache[conf_module] = instance_map
@@ -168,6 +168,11 @@ class MybuildInstanceAccessor(object):
         except KeyError:
             cls = type(self)
             return cls(retobj, retmap)
+
+
+def mywaf_module_meta(name, bases, attrs, **kwargs):
+    bases += (MyWafModuleMixin,)
+    return type(name, (extend(*bases, **kwargs),), attrs)
 
 
 class MyWafModuleMixin(object):

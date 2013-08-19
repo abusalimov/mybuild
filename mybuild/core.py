@@ -34,23 +34,12 @@ from util.misc import InstanceBoundTypeMixin
 class ModuleMeta(type):
     """Metaclass of Mybuild modules."""
 
-    @property
-    def _intermediate(cls):
-        return not hasattr(cls, '_options')
+    _opmake  = property(attrgetter('_options._make'))
+    _optypes = property(attrgetter('_options._optypes'))
+    _optype  = property(attrgetter('_optypes._get'))
 
-    @property
-    def _opmake(cls):
-        return cls._options._make
-    @property
-    def _optypes(cls):
-        return cls._options._optypes
-    @property
-    def _optype(cls):
-        return cls._optypes._get
+    _name = property(getter.__name__)
 
-    @property
-    def _name(cls):
-        return cls.__name__
     @property
     def _fullname(cls):
         if cls.__module__:
@@ -62,31 +51,44 @@ class ModuleMeta(type):
     def _file(cls):
         return getattr(sys.modules.get(cls.__module__), '__file__', None)
 
-    def __new__(mcls, name, bases, attrs, *args, **kwargs):
+    @property
+    def _internal(cls):
+        return not hasattr(cls, '_options')
+
+    def __new__(mcls, name, bases, attrs, **kwargs):
         """Suppresses any redundant arguments."""
         return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, optypes=None):
-        """Subclasses must provide an 'optypes' argument, otherwise a class
-        being constructed is considered intermediate and behaves much like a
-        regular Python class."""
+    def __init__(cls, name, bases, attrs, internal=False):
+        """Auxiliary internal classes must be created with internal=True
+        keyword metaclass argument."""
         super(ModuleMeta, cls).__init__(name, bases, attrs)
 
-        if optypes is not None:
-            cls._init_optypes(optypes)
+        if not internal:
+            if hasattr(cls, '_options'):
+                raise TypeError("A non-internal class '{cls}' already has "
+                                "an '_options' attribute".format(**locals()))
+            cls._init_options(cls._create_optypes())
 
-    def _init_optypes(cls, optypes):
+    def _create_optypes(cls):
+        raise NotImplementedError("A non-internal class '{cls}' cannot be "
+                                  "created with {mcls} metaclass which "
+                                  "doesn't provide a valid _create_optypes() "
+                                  "method".format(mcls=type(cls), **locals()))
+
+    def _init_options(cls, optypes):
         optuple_type = Optuple if optypes else EmptyOptuple
         cls._options = options = optuple_type._new_type(cls, optypes)._options
 
         for option in options:
             # Every module has an _optuple attribute, see Module.__new__
-            getter = attrgetter('_optuple.%s' % option)
+            getter = attrgetter('_optuple.{0}'.format(option))
             setattr(cls, option, property(getter))
 
     def __call__(_cls, **kwargs):
-        if _cls._intermediate:
-            raise TypeError('Intermediate module class is not callable')
+        if _cls._internal:
+            raise TypeError("Internal class '{_cls}' is not callable"
+                            .format(**locals()))
         return _cls._options._ellipsis(**kwargs)
 
     def _instantiate(cls, optuple):
@@ -96,7 +98,7 @@ class ModuleMeta(type):
         return instance
 
     def __repr__(cls):
-        if cls._intermediate:
+        if cls._internal:
             return super(ModuleMeta, cls).__repr__()
 
         options_str = ', '.join(cls._options)
@@ -105,8 +107,7 @@ class ModuleMeta(type):
 
         return cls._fullname + options_str
 
-
-class Module(extend(metaclass=ModuleMeta)):
+class Module(extend(metaclass=ModuleMeta, internal=True)):
     """Base class for Mybuild modules."""
 
     # These properties default to corresponding class ones,
@@ -121,8 +122,8 @@ class Module(extend(metaclass=ModuleMeta)):
     # unlike __new__ which receives the sole optuple argument.
 
     def __new__(cls, optuple):
-        if cls._intermediate:
-            raise TypeError('Intermediate module class')
+        if cls._internal:
+            raise TypeError('Internal module class')
         if not issubclass(cls, optuple._module):
             raise TypeError('Optuple of incompatible module type')
         if not optuple._complete:
