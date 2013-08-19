@@ -8,8 +8,6 @@ __date__ = "2013-07-30"
 
 from _compat import *
 
-from mylang.linkage import Linker
-from mylang.errors import MyfileError
 try:
     from mylang.parse import parse
 except ImportError:
@@ -48,6 +46,11 @@ if __name__ == "__main__":
 
 
     '''
+
+    from mylang.linkage import Linker
+    from mylang.linkage import FileLinker
+    from mylang.errors import MyfileError
+
     from util.misc import singleton
 
     from pprint import pprint
@@ -77,7 +80,7 @@ if __name__ == "__main__":
 
     linker = Linker()
     try:
-        pprint(load(linker, source, builtins=get_builtins()))
+        pprint(load(FileLinker(linker), source, builtins=get_builtins()))
         linker.link_global()
 
     except MyfileError as e:
