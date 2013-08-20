@@ -13,6 +13,7 @@ import heapq
 from mybuild.pgraph import Reason
 
 from util.operator import getter
+from util.operator import invoker
 import util, logging
 logger = util.get_extended_logger(__name__)
 
@@ -55,7 +56,6 @@ class Rgraph(object):
     Rgraph or Reason graph
     """  
     def __init__(self, solution):
-        self.solution = solution
         self.initial = NodeContainer(set())  
         self.nodes = {}    
         self.nodes[frozenset(set())] = self.initial
@@ -134,12 +134,11 @@ class Rgraph(object):
                     push(cons)
                     for container in cons.containers:
                         push(container)
-     
-    def get_shortest_way(self, literal):
-        if self.nodes.length == float("+inf"):
-            raise Exception
         
-                        
+        logger.debug('Lengths for shortest ways to {0}'.format(self))                
+        for node in itervalues(self.nodes):
+            logger.debug('{0}: length {1}'.format(node, node.length))
+
     def print_graph(self):
         """
         Simple way to print reason graph. Nodes of more one reason are printed 
@@ -180,6 +179,10 @@ class Rgraph(object):
         print '  ' * depth, reason
 
 def way_to(source_graph, nodes):
+    """
+    Fills rgraph copy with reasons of shortest way to violation literals
+    or violation branch
+    """
     def fill(branch, node):
         if node.length == 0:
             if not node.members:
@@ -206,7 +209,8 @@ def way_to(source_graph, nodes):
 
 def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):                  
     min_length = float("+inf")   
-    min_node = None                   
+    min_node = None   
+    "try to find shortest way to violation nodes"                
     for node in violation_nodes:
         length = rgraph_branch.nodes[frozenset([node[True]])].length + \
                 rgraph_branch.nodes[frozenset([node[False]])].length
@@ -220,7 +224,8 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
         nodes.add(rgraph_branch.nodes[frozenset([min_node[False]])])
         return way_to(rgraph_branch, nodes)
     
-    min_literal = None                
+    min_literal = None
+    "try to find shortest way to violation branch"               
     for literal in iterkeys(trunk.dead_branches):
         if frozenset([literal]) in rgraph_branch.nodes and \
                 literal not in branch.gen_literals: 
@@ -234,13 +239,17 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
         nodes.add(rgraph_branch.nodes[frozenset([min_literal])])
         return way_to(rgraph_branch, nodes)
     
-    raise Exception
+    "Actually, it can't be, otherwise how we get violation?"
+    raise Exception('No ways to some violation branch or violation nodes {0} '
+                    'in branch {1}'.format(violation_nodes, branch))
 
 def branch_copy(branch):
+    """
+    Returns rgraph with same nodes but without any reason
+    """
     cls = type(branch)
     new = cls.__new__(cls)
 
-    new.solution = branch.solution
     new.nodes = {}
     for literals, node in iteritems(branch.nodes):
         new.nodes[literals.copy()] = NodeContainer(node.literals.copy())
@@ -273,24 +282,24 @@ def create_rgraph_branch(trunk, branch, parent_rgraph):
     rgraph = Rgraph(solution)
     return shorten_branch(trunk, branch, rgraph, get_violation_nodes(branch))  
 
-def get_rgraph(trunk):
+def get_rgraph(trunk):  
     rgraph = Rgraph(trunk)
-    
-    def add_violation_branch(literal, rgraph_branch):
-        rgraph.violation_graphs[literal] = rgraph_branch
-    
+    for literal in trunk.literals:
+        for reason in literal.imply_reasons:
+            rgraph.fill_data(reason)
+            
     branchmap = {}  
     for literal, branch in iteritems(trunk.dead_branches):
         if frozenset(branch.gen_literals) in branchmap:
             rgraph_branch = branchmap[frozenset(branch.gen_literals)]
-            add_violation_branch(literal, rgraph_branch)
+            rgraph.violation_graphs[literal] = rgraph_branch
             continue
         
         rgraph_branch = create_rgraph_branch(trunk, branch, rgraph) 
 #         rgraph_branch.print_graph()
 #         print '---'
         branchmap[frozenset(branch.gen_literals)] = rgraph_branch
-        add_violation_branch(literal, rgraph_branch)
+        rgraph.violation_graphs[literal] = rgraph_branch
     
     #rgraph.print_graph()
         
