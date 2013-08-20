@@ -210,7 +210,7 @@ def way_to(source_graph, nodes):
 def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):                  
     min_length = float("+inf")   
     min_node = None   
-    "try to find shortest way to violation nodes"                
+    #try to find shortest way to violation nodes                
     for node in violation_nodes:
         length = rgraph_branch.nodes[frozenset([node[True]])].length + \
                 rgraph_branch.nodes[frozenset([node[False]])].length
@@ -225,7 +225,7 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
         return way_to(rgraph_branch, nodes)
     
     min_literal = None
-    "try to find shortest way to violation branch"               
+    #try to find shortest way to violation branch               
     for literal in iterkeys(trunk.dead_branches):
         if frozenset([literal]) in rgraph_branch.nodes and \
                 literal not in branch.gen_literals: 
@@ -239,7 +239,7 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
         nodes.add(rgraph_branch.nodes[frozenset([min_literal])])
         return way_to(rgraph_branch, nodes)
     
-    "Actually, it can't be, otherwise how we get violation?"
+    #Actually, it can't be, otherwise how we get violation?
     raise Exception('No ways to some violation branch or violation nodes {0} '
                     'in branch {1}'.format(violation_nodes, branch))
 
@@ -280,13 +280,25 @@ def create_rgraph_branch(trunk, branch, parent_rgraph):
             if literal not in trunk.dead_branches or literal in branch.gen_literals:
                 solution.reasons.add(reason)
     rgraph = Rgraph(solution)
-    return shorten_branch(trunk, branch, rgraph, get_violation_nodes(branch))  
+    return shorten_branch(trunk, branch, rgraph, get_violation_nodes(branch)) 
 
-def get_rgraph(trunk):  
+def get_rgraph_way(rgraph, node):
+    if node.length == float("+inf"):
+        raise Exception('No way to {0}'.format(node))
+    nodes = set()
+    nodes.add(node)
+    rgraph_way = way_to(rgraph, nodes) 
+    rgraph_way.violation_graphs = rgraph.violation_graphs
+    return rgraph_way
+
+def get_rgraph(trunk): 
     rgraph = Rgraph(trunk)
     for literal in trunk.literals:
         for reason in literal.imply_reasons:
             rgraph.fill_data(reason)
+    #It will better if this function will run just one time, but adding reasons
+    #to trunk it ruins flatten()
+    rgraph.find_shortest_ways()
             
     branchmap = {}  
     for literal, branch in iteritems(trunk.dead_branches):
