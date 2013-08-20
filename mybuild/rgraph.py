@@ -37,7 +37,6 @@ class NodeContainer(object):
                                 #node.literals
         self.therefore = {} #key = node, value = reason
         self.becauseof = {} #key = node, value = reason
-        self.violation_rgraph = None
         self._length = float("+inf")
         self.parent = None
         
@@ -217,8 +216,8 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
     
     if min_node is not None:            
         nodes = set()
-        nodes.add(rgraph_branch.nodes[frozenset([node[True]])])
-        nodes.add(rgraph_branch.nodes[frozenset([node[False]])])
+        nodes.add(rgraph_branch.nodes[frozenset([min_node[True]])])
+        nodes.add(rgraph_branch.nodes[frozenset([min_node[False]])])
         return way_to(rgraph_branch, nodes)
     
     min_literal = None                
@@ -255,13 +254,13 @@ def branch_copy(branch):
     return new
 
 def get_violation_nodes(solution):
-        violation_nodes = set()
-        literals = solution.literals
-        nodes = solution.nodes
-        for node in nodes:
-            if node[False] in literals and node[True] in literals:
-                violation_nodes.add(node)
-        return violation_nodes
+    violation_nodes = set()
+    literals = solution.literals
+    nodes = solution.nodes
+    for node in nodes:
+        if node[False] in literals and node[True] in literals:
+            violation_nodes.add(node)
+    return violation_nodes
                 
 def create_rgraph_branch(trunk, branch, parent_rgraph):
     solution = branch.flatten()
@@ -279,8 +278,6 @@ def get_rgraph(trunk):
     
     def add_violation_branch(literal, rgraph_branch):
         rgraph.violation_graphs[literal] = rgraph_branch
-        rgraph.nodes[frozenset([literal])].violation_rgraph = \
-                (rgraph_branch, get_violation_nodes(branch))
     
     branchmap = {}  
     for literal, branch in iteritems(trunk.dead_branches):
