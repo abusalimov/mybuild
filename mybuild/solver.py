@@ -555,9 +555,9 @@ def resolve_branches(trunk, branches=None):
         for branch in branches:
             logger.debug('\t+merge %r', branch)
             for gen_literal in branch.gen_literals:
-                branch.reasons.add(Reason(why_violation, ~gen_literal,
-                                          gen_literal))
-                branch.reasons.add(Reason(None, gen_literal))
+                resolved.reasons.add(Reason(why_violation, gen_literal,
+                                          ~gen_literal))
+                resolved.reasons.add(Reason(None, ~gen_literal))
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
 
