@@ -30,24 +30,25 @@ class MyFileModuleMeta(ModuleMeta):
             type_dict = dict(__module__ = self.stub.linker.module,
                              __doc__    = self.stub.docstring)
             type_name = self.stub.name or '<noname>'
+
             return self.mcls(type_name, (MyFileModule,), type_dict,
-                             self.mcls._args_kwargs_to_options(args, kwargs))
+                             arg_options=args, kwarg_options=kwargs)
 
     @classmethod
     def my_proxy(mcls, stub):
         return mcls.Proxy(mcls, stub)
 
     @classmethod
-    def _args_kwargs_to_options(mcls, arg_options, kwarg_options):
+    def _create_optypes(cls, arg_options, kwarg_options):
         """Converts args/kwargs into a list of options."""
 
         for optype in arg_options:
             if not isinstance(optype, Optype):
-                raise TypeError(
-                    'Positional argument must be an option: %s' % optype)
+                raise TypeError("Positional argument must be an option: "
+                                "{optype}".format(**locals()))
             if not hasattr(optype, '_name'):
-                raise TypeError(
-                    'Positional option must provide a name explicitly')
+                raise TypeError('Positional option must provide a name '
+                                'explicitly')
 
         options = list(arg_options)
 
@@ -60,6 +61,7 @@ class MyFileModuleMeta(ModuleMeta):
             options.append(optype)
 
         return options
+
 
 class MyFileModule(extend(Module, metaclass=MyFileModuleMeta, internal=True)):
     """docstring for MyFileModule"""
