@@ -145,15 +145,8 @@ class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
                          _module    = module,
                          _context   = context)
 
-        class ctxtype(extend(module,
-                             metaclass=context.module_meta, internal=True)):
-            __module__ = module.__module__
-            __doc__    = module.__doc__
-            _module    = module
-            _context   = context
-        ctxtype.__name__ = module.__name__
-
-        return ctxtype
+        return new_type(module.__name__, (module,), type_dict,
+                        metaclass=context.module_meta, internal=True)
 
     @classmethod
     def _create_domain(cls, module):

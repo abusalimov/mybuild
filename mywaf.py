@@ -180,8 +180,7 @@ class MybuildInstanceAccessor(object):
 
 
 def mywaf_module_meta(name, bases, attrs, **kwargs):
-    bases += (MyWafModuleMixin,)
-    return type(name, (extend(*bases, **kwargs),), attrs)
+    return new_type(name, bases + (MyWafModuleMixin,), attrs, **kwargs)
 
 
 class MyWafModuleMixin(object):
