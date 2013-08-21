@@ -59,7 +59,7 @@ class ModuleMeta(type):
         """Suppresses any redundant arguments."""
         return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, internal=False):
+    def __init__(cls, name, bases, attrs, internal=False, *args, **kwargs):
         """Auxiliary internal classes must be created with internal=True
         keyword metaclass argument."""
         super(ModuleMeta, cls).__init__(name, bases, attrs)
@@ -68,9 +68,9 @@ class ModuleMeta(type):
             if hasattr(cls, '_options'):
                 raise TypeError("A non-internal class '{cls}' already has "
                                 "an '_options' attribute".format(**locals()))
-            cls._init_options(cls._create_optypes())
+            cls._init_options(cls._create_optypes(*args, **kwargs))
 
-    def _create_optypes(cls):
+    def _create_optypes(cls, *args, **kwargs):
         raise NotImplementedError("A non-internal class '{cls}' cannot be "
                                   "created with {mcls} metaclass which "
                                   "doesn't provide a valid _create_optypes() "
