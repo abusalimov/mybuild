@@ -115,6 +115,16 @@ def _calculate_meta(meta, bases):
 ABCBase = extend(metaclass=_abc.ABCMeta)
 
 
+def new_type(name, bases, attrs, **kwargs):
+    """Replacement for 3-arg form of type(...) builtin function.
+
+    Also accepts optional metaclass keyword arguments and contains
+    workarounds for known interpreter bugs."""
+
+    temp_class = extend(*bases, **kwargs)
+    return type(temp_class)(name, (temp_class,), attrs)
+
+
 import functools as _functools
 def _foo(): pass
 def _bar(): pass
