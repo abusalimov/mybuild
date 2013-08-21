@@ -20,6 +20,8 @@ from nsimporter import import_all
 from nsimporter import loader_filename
 
 from mybuild.context import resolve
+from mybuild.solver import SolveError
+from mybuild.rgraph import *
 
 from util.collections import is_mapping
 from util.deco import defer_call
@@ -111,7 +113,14 @@ def my_resolve(ctx, conf_module):
     try:
         instance_map = cache[conf_module]
     except KeyError:
-        instances = resolve(conf_module, module_meta=mywaf_module_meta)
+        try:
+            instances = resolve(conf_module, module_meta=mywaf_module_meta)
+        except SolveError as e:
+            e.rgraph = get_error_rgraph(e)
+            #TODO client code print
+            e.rgraph.print_graph()
+            raise e
+        
         instance_map = dict((instance._module, instance)
                             for instance in instances)
         cache[conf_module] = instance_map

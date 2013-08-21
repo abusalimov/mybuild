@@ -203,6 +203,8 @@ def way_to(source_graph, nodes):
         
     copy = branch_copy(source_graph)
     for node in nodes:
+        if node.length == float("+inf"):
+            raise Exception('No way to {0}'.format(node))
         fill(copy, node)
         
     return copy
@@ -277,16 +279,16 @@ def create_rgraph_branch(trunk, branch, parent_rgraph):
         solution.reasons.add(Reason(None, gen_literal))     
     for literal in solution.literals:
         for reason in literal.imply_reasons:
-            if literal not in trunk.dead_branches or literal in branch.gen_literals:
+            if (literal not in trunk.dead_branches or 
+                literal in branch.gen_literals):
                 solution.reasons.add(reason)
     rgraph = Rgraph(solution)
     return shorten_branch(trunk, branch, rgraph, get_violation_nodes(branch)) 
 
-def get_rgraph_way(rgraph, node):
-    if node.length == float("+inf"):
-        raise Exception('No way to {0}'.format(node))
+def get_rgraph_way(rgraph, literals):
     nodes = set()
-    nodes.add(node)
+    for literal in literals:
+        nodes.add(rgraph.nodes[frozenset([literal])])
     rgraph_way = way_to(rgraph, nodes) 
     rgraph_way.violation_graphs = rgraph.violation_graphs
     return rgraph_way
@@ -312,9 +314,20 @@ def get_rgraph(trunk):
 #         print '---'
         branchmap[frozenset(branch.gen_literals)] = rgraph_branch
         rgraph.violation_graphs[literal] = rgraph_branch
-    
-    #rgraph.print_graph()
-        
+     
     return rgraph
+
+def get_error_rgraph(solution_error):
+    solution = solution_error.context
+    rgraph = get_rgraph(solution)
+    
+    violation_nodes = get_violation_nodes(solution)
+    literals = set()
+    for node in violation_nodes:
+        literals.add(node[False])
+        literals.add(node[True])
+    print 'violation_nodes:', violation_nodes
+    return get_rgraph_way(rgraph, literals)
+
     
     

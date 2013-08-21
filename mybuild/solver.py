@@ -29,8 +29,6 @@ from collections import defaultdict
 import operator
 
 from mybuild.pgraph import *
-from mybuild.rgraph import *
-import mybuild.rgraph
 
 from util.itertools import pop_iter
 from util.operator import getter
@@ -131,13 +129,14 @@ class Trunk(Solution):
     def commit(self, diff):
         if self is not diff.trunk:
             raise ValueError('Diff must be created from this trunk')
-        if not (self.valid and diff.valid):
-            raise ValueError('Can only apply a valid diff')
 
         assert self.isdisjoint(diff), ("diff must not intersect the trunk "
                                        "(must be a strict diff)")
 
         for literal in diff.literals:
+            if literal not in self.branchmap:
+                continue
+            
             del self.branchmap[literal]  # just remove
 
             refused_literal = ~literal
@@ -433,7 +432,7 @@ def create_trunk(pgraph, initial_literals=[]):
         for node in filter(trunk.literals.issuperset, trunk.nodes):
             logger.info('\tviolated node: %r', node)
 
-        raise SolutionError(trunk)
+        raise SolveError(trunk)
 
     logger.info('created trunk with %d node(s)', len(trunk.nodes))
 
@@ -564,7 +563,9 @@ def resolve_branches(trunk, branches=None):
         logger.dump(resolved)
         if not resolved.valid:
             logger.info('resolved is not valid, giving up')
-            raise SolutionError(resolved)
+            #TODO chek this commit works correctly
+            trunk.commit(resolved)
+            raise SolveError(trunk)
 
         # Reintegrate into trunk. This also removes resolved branches and
         # their opposites (refused branches) from branchmap.
@@ -609,28 +610,20 @@ def solve(pgraph, initial_values={}):
     logger.info('solving %r with initials: %r', pgraph, initial_values)
 
     trunk = solve_trunk(pgraph, initial_values)
-
-    rgraph = get_rgraph(trunk)
-
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
     logger.debug('Solution:')
     for literal in ret:
         logger.debug('\t%s: %s', literal, ret[literal])
     return ret
-
+           
 # TODO remove to other place after all types why function realization
 def why_violation(literal, *cause_literals):
     return '%s because of violation %s' % (literal, cause_literals) 
 
 class SolveError(Exception):
     """docstring for SolveError"""
-
-class SolutionError(SolveError):
-    """docstring for SolutionError"""
-
-    def __init__(self, context, cause=None):
-        super(SolutionError, self).__init__()
-        self.context = context
-        self.cause = cause
-
+    
+    def __init__(self, trunk):
+        super(SolveError, self).__init__()
+        self.trunk = trunk
