@@ -5,8 +5,50 @@ Property descriptors.
 
 from _compat import *
 
+from functools import partial as _partial
 
-class default_property(object):
+
+class _func_deco(object):
+
+    def __init__(self, func):
+        super(_func_deco, self).__init__()
+        self.func = func
+
+
+class class_instance_method(_func_deco):
+    """Non-data descriptor.
+
+    Methods decorated by this class must accept two special arguments (go
+    first): cls and self: cls is the same as for classmethod, self is None
+    in case of invoking on the class and the instance otherwise.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @class_instance_method
+    ...     def meth(cls, self, arg):
+    ...         print("Invoking {cls.__name__}.meth on {self} with {arg}"
+    ...               .format(**locals()))
+    ...         return arg
+    ...     def __repr__(self):
+    ...         return "<{cls.__name__} object>".format(cls=type(self))
+    ...
+    >>> C.meth(17)
+    Invoking C.meth on None with 17
+    17
+    >>> x = C()
+    >>> x.meth(42)
+    Invoking C.meth on <C object> with 42
+    42
+    """
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+        return _partial(self.func, objtype, obj)
+
+
+class default_property(_func_deco):
     """Non-data descriptor.
 
     Delegates to func everytime a property is accessed unless someone
@@ -32,10 +74,6 @@ class default_property(object):
     >>> x.default
     42
     """
-
-    def __init__(self, func):
-        super(default_property, self).__init__()
-        self.func = func
 
     def __get__(self, obj, objtype=None):
         if obj is None:
