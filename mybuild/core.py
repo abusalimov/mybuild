@@ -59,22 +59,21 @@ class ModuleMeta(type):
         """Suppresses any redundant arguments."""
         return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, internal=False, *args, **kwargs):
+    def __init__(cls, name, bases, attrs, internal=False, **kwargs):
         """Auxiliary internal classes must be created with internal=True
-        keyword metaclass argument."""
+        keyword metaclass argument.
+
+        The rest keywords are passed to _prepare_optypes method."""
         super(ModuleMeta, cls).__init__(name, bases, attrs)
 
         if not internal:
             if hasattr(cls, '_options'):
                 raise TypeError("A non-internal class '{cls}' already has "
                                 "an '_options' attribute".format(**locals()))
-            cls._init_options(cls._create_optypes(*args, **kwargs))
+            cls._init_options(cls._prepare_optypes(**kwargs))
 
-    def _create_optypes(cls, *args, **kwargs):
-        raise NotImplementedError("A non-internal class '{cls}' cannot be "
-                                  "created with {mcls} metaclass which "
-                                  "doesn't provide a valid _create_optypes() "
-                                  "method".format(mcls=type(cls), **locals()))
+    def _prepare_optypes(cls, optypes):
+        return optypes
 
     def _init_options(cls, optypes):
         optuple_type = Optuple if optypes else EmptyOptuple
@@ -160,6 +159,11 @@ class OptupleBase(InstanceBoundTypeMixin):
 
         return self._module._fullname + options_str
 
+    @classmethod
+    def _create_type(cls, base_type, module):
+        return type('ModuleOptuple', (cls, base_type),
+                    dict(__slots__=(), _module=module))
+
 
 class Optuple(OptupleBase):
     """Option tuple mixin type."""
@@ -211,8 +215,7 @@ class Optuple(OptupleBase):
         for bogus_attr in cls._tuple_attrs.difference(base_type._fields):
             setattr(base_type, bogus_attr, property())
 
-        new_type = type('Optuple_M%s' % module._name, (cls, base_type),
-                      dict(__slots__=(), _module=module))
+        new_type = cls._create_type(base_type, module)
 
         make = new_type._make
         new_type._ellipsis = make(Ellipsis for _ in optypes)
@@ -257,10 +260,7 @@ class EmptyOptuple(OptupleBase):
     @classmethod
     def _new_type(cls, module, optypes):
         assert not optypes
-
-        new_type = type('Optuple_M%s' % module._name, (cls, cls.__empty_base),
-                        dict(__slots__=(), _module=module))
-
+        new_type = cls._create_type(cls.__empty_base, module)
         new_type._ellipsis = new_type._optypes = new_type._options = new_type()
         return new_type
 

@@ -22,7 +22,7 @@ from util.deco import constructor_decorator
 class PyFileModuleMeta(ModuleMeta):
     """Infers options from class constructor."""
 
-    def _create_optypes(cls):
+    def _prepare_optypes(cls):
         """Converts a constructor argspec into a list of Optype objects."""
         try:
             func = cls.__dict__['__init__']  # to avoid MRO lookup
