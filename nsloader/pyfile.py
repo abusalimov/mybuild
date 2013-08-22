@@ -16,7 +16,7 @@ class PyFileLoader(SourceFileLoader):
     pointing to a module corresponding to the namespace root.
     """
 
-    MODULE = 'PYFILE'
+    MODULE = 'Pyfile'
 
     @classmethod
     def init_ctx(cls, importer, initials):

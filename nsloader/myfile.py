@@ -8,63 +8,41 @@ __date__ = "2013-07-05"
 
 from _compat import *
 
-from mylang import load
-from mylang.errors import MyfileError
-from mylang.linkage import Linker
-from mylang.linkage import FileLinker
-
-from util.importlib.machinery import SourceFileLoader
+from mylang import my_compile
+from mylang import runtime
+from nsloader.pyfile import PyFileLoader
 
 
-class LoaderFileLinker(FileLinker):
-    def __init__(self, linker, module):
-        super(LoaderFileLinker, self).__init__(linker)
-        self.module = module
-
-
-class MyFileLoader(SourceFileLoader):
+class MyFileLoader(PyFileLoader):
     """Loads My-files using myfile parser/linker."""
 
     MODULE = 'Myfile'
 
     @classmethod
     def init_ctx(cls, importer, initials):
-        return Linker(), dict(initials)
+        exec_ctx = runtime.ProxifyingExecContext()
+        builtins = runtime.prepare_builtins(exec_ctx)
+        super_ctx = super(MyFileLoader, cls).init_ctx(importer, initials)
+
+        return exec_ctx, builtins, super_ctx
 
     @classmethod
     def exit_ctx(cls, loader_ctx):
-        linker, _ = loader_ctx
-        try:
-            linker.link_global()
-        except MyfileError as e:
-            e.print_error()  # TODO bad idea
-            raise e
+        exec_ctx, _, _ = loader_ctx
+        exec_ctx.resolve_all()
 
     def __init__(self, loader_ctx, fullname, path):
-        super(MyFileLoader, self).__init__(fullname, path)
-        self.linker, self.builtins = loader_ctx
-
-    def is_package(self, fullname):
-        return False
+        _, self.builtins, super_ctx = loader_ctx
+        super(MyFileLoader, self).__init__(super_ctx, fullname, path)
 
     def get_code(self, fullname):
-        return None
+        source_path = self.get_filename(fullname)
+        source_bytes = self.get_data(source_path)
 
-    def _exec_module(self, module):
-        fullname = module.__name__
+        return my_compile(source_bytes, source_path, 'exec')
 
-        try:
-            result = load(LoaderFileLinker(self.linker, fullname),
-                          source=self.get_source(fullname),
-                          filename=self.get_filename(fullname),
-                          builtins=self.builtins)
-
-        except IOError:
-            raise ImportError("IO error while reading a stream")
-        except MyfileError as e:
-            e.print_error()  # TODO bad idea
-            raise e
-        else:
-            module.__dict__.update(result)
+    def _init_module(self, module):
+        module.__dict__['__builtins__'] = self.builtins
+        super(MyFileLoader, self)._init_module(module)
 
 
