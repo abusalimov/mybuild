@@ -7,6 +7,7 @@ from __future__ import print_function
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-08-22"
 
+
 from _compat import *
 
 import inspect
@@ -119,7 +120,6 @@ class ProxifyingExecContext(ExecContext):
 
     def restore_and_resolve(self, cls, obj, func):
         cls.__setattr__(obj, '__class__', cls)
-        print('>>> resolved %r' % obj)
         self.exec_setter(obj, func)
 
     def resolve(self, obj):
@@ -133,3 +133,4 @@ class ProxifyingExecContext(ExecContext):
     def resolve_all(self):
         for _, (cls, obj, func) in pop_iter(self.todo, pop_meth='popitem'):
             self.restore_and_resolve(cls, obj, func)
+
