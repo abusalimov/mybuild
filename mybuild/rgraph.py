@@ -275,6 +275,7 @@ def get_violation_nodes(solution):
                 
 def create_rgraph_branch(trunk, branch, parent_rgraph):
     solution = branch.flatten()
+    #TODO move to solver
     for gen_literal in branch.gen_literals:
         solution.reasons.add(Reason(gen_literal))     
     for literal in solution.literals:
@@ -304,6 +305,9 @@ def get_rgraph(trunk):
             
     branchmap = {}  
     for literal, branch in iteritems(trunk.dead_branches):
+        if branch.valid:
+            continue
+        
         if frozenset(branch.gen_literals) in branchmap:
             rgraph_branch = branchmap[frozenset(branch.gen_literals)]
             rgraph.violation_graphs[literal] = rgraph_branch

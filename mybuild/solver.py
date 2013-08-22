@@ -508,6 +508,10 @@ def expand_branch(branch):
                 logger.debug('\t%s(implied is not valid: %r)', log_indent,
                              implied)
                 branch.add_literal(literal, add_node=False)
+                if implied is not None:
+                    branch.reasons.add(Reason(literal, 
+                                              why=why_implies_dead_branch,
+                                              follow=True))
 
             elif implied.ready:
                 branch.merge(implied)
@@ -542,8 +546,14 @@ def resolve_branches(trunk, branches=None):
     Merges given branches back into trunk updating its branchmap and rest
     branches.
     """
+   
+    why = why_default
+    follow = False
+    
     if branches is None:
         branches = branchset_to_resolve(trunk)
+        why=why_implied_by_dead_branch
+        follow = True
 
     while branches:
         logger.info('resolving %d branch(es)', len(branches))
@@ -554,8 +564,8 @@ def resolve_branches(trunk, branches=None):
         for branch in branches:
             logger.debug('\t+merge %r', branch)
             for gen_literal in branch.gen_literals:
-                resolved.reasons.add(Reason(gen_literal, why=why_violation, 
-                                            follow=True))
+                resolved.reasons.add(Reason(gen_literal, why=why, 
+                                            follow=follow))
 
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
@@ -607,9 +617,13 @@ def solve_trunk(pgraph, initial_values={}):
 
 
 def solve(pgraph, initial_values={}):
+    from mybuild.rgraph import *
     logger.info('solving %r with initials: %r', pgraph, initial_values)
 
     trunk = solve_trunk(pgraph, initial_values)
+    #TODO will be removed, just for preliminary test
+#     rgraph = get_rgraph(trunk)
+#     rgraph.print_graph()
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
     logger.debug('Solution:')
@@ -617,9 +631,14 @@ def solve(pgraph, initial_values={}):
         logger.debug('\t%s: %s', literal, ret[literal])
     return ret
            
-# TODO remove to other place after all types why function realization
-def why_violation(literal, *cause_literals):
-    return '%s because of violation %s' % (literal, cause_literals) 
+def why_implied_by_dead_branch(literal, *cause_literals):
+    return '%s because of dead branch %s' % (literal, ~literal)
+
+def why_implies_dead_branch(literal, *cause_literals):
+    return '%s implies dead branch' % (literal)
+
+def why_default(literal, *cause_literals):
+    return '%s by default' % (literal)  
 
 class SolveError(Exception):
     """docstring for SolveError"""
