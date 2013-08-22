@@ -228,6 +228,17 @@ class PdagDtreeTestCase(TestCase):
                      g.Or(a[False], b[True]),
                      g.Or(a[True], b[False]), **kwargs)
 
+    def test_resolve_braches_0(self):
+        g = self.pgraph
+        A, B = self.atoms('AB')
+ 
+        x = g.And(B[False], A[False], g.Or(A[True], B[True]))
+        y = B[True]
+        x.equivalent(y)
+        
+        with self.assertRaises(SolveError):
+            solve(g, {self.sneaky_pair_and(A, B): True})
+        
     def test_resolve_braches_1(self):
         g = self.pgraph
         A, B = self.atoms('AB')
