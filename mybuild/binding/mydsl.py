@@ -14,64 +14,56 @@ from mybuild.core import ModuleMeta
 from mybuild.core import Module
 from mybuild.core import Optype
 
-from mylang.linkage import MyfileObjectProxy
+from util.prop import class_instance_method
 
 
-class MyFileModuleMeta(ModuleMeta):
+class ModuleTypeStub(object):
+    """Stub for a Module type is converted into a real type upon a call to
+    __my_prepare_obj__."""
 
-    class Proxy(MyfileObjectProxy):
-        slots = 'mcls'
-
-        def __init__(self, mcls, stub):
-            super(MyFileModule.Proxy, self).__init__(stub)
-            self.mcls = mcls
-
-        def __call__(self, *args, **kwargs):
-            type_dict = dict(__module__ = self.stub.linker.module,
-                             __doc__    = self.stub.docstring)
-            type_name = self.stub.name or '<noname>'
-
-            return self.mcls(type_name, (MyFileModule,), type_dict,
-                             arg_options=args, kwarg_options=kwargs)
+    def __init__(self, *args, **kwargs):
+        super(ModuleTypeStub, self).__init__()
+        self.optypes = self._create_optypes(*args, **kwargs)
 
     @classmethod
-    def my_proxy(mcls, stub):
-        return mcls.Proxy(mcls, stub)
+    def _create_optypes(cls, *args, **kwargs):
+        """Args/kwargs are converted into a list of options."""
 
-    @classmethod
-    def _create_optypes(cls, arg_options, kwarg_options):
-        """Converts args/kwargs into a list of options."""
-
-        for optype in arg_options:
+        for optype in args:
             if not isinstance(optype, Optype):
-                raise TypeError("Positional argument must be an option: "
-                                "{optype}".format(**locals()))
+                raise TypeError('Positional argument must be an option: '
+                                '{optype}'.format(**locals()))
             if not hasattr(optype, '_name'):
                 raise TypeError('Positional option must provide a name '
                                 'explicitly')
 
-        options = list(arg_options)
+        optypes = list(args)
 
-        for name, optype in iteritems(kwarg_options):
+        for name, optype in iteritems(kwargs):
             if not isinstance(optype, Optype):
                 optype = Optype(optype)
             if not hasattr(optype, '_name'):
                 optype.set(name=name)
 
-            options.append(optype)
+            optypes.append(optype)
 
-        return options
+        return optypes
+
+    @class_instance_method
+    def __my_prepare_obj__(cls, self, py_module, name=None):
+        if self is None:
+            # to let 'module() {}' and 'module {}' behave the same.
+            return cls()._my_prepare_obj__(py_module, name)
+
+        if name is None:
+            name = '<unnamed>'
+        type_dict = dict(__module__=py_module)
+
+        return (new_type(name, (Module,), type_dict,
+                         metaclass=ModuleMeta, optypes=self.optypes),
+                True)  # and yes, proxify it
 
 
-class MyFileModule(extend(Module, metaclass=MyFileModuleMeta, internal=True)):
-    """docstring for MyFileModule"""
-
-    def __init__(_self, **kwargs):
-        super(Module, _self).__init__()
-        # TODO NIY
-        print type(_self), _self
-
-
-module = MyFileModuleMeta
+module = ModuleTypeStub
 option = Optype
 
