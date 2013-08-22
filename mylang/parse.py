@@ -10,12 +10,9 @@ from _compat import *
 
 import ast
 import functools
-import operator
 import ply.yacc
 
 from mylang import lex
-from mylang.errors import UnexpectedToken
-from mylang.errors import UnexpectedEOF
 from mylang.location import Fileinfo
 from mylang.location import Location
 
@@ -38,11 +35,6 @@ copy_loc = ast.copy_location
 def set_loc(ast_node, loc):
     return loc.init_ast_node(ast_node)
 
-noloc = operator.itemgetter(0)  # obj_wloc -> obj
-
-def nolocs(iterable_wlocs):
-    return map(noloc, iterable_wlocs)
-
 
 # Here go some utils.
 
@@ -54,8 +46,9 @@ class MySyntaxError(Exception):
     """Stub class for using instead of standard SyntaxError because the latter
     has the special meaning for PLY."""
 
-    def __init__(self, msg, loc):
-        super(MySyntaxError, self).__init__(msg, loc.to_syntax_error_tuple())
+    def __init__(self, msg, loc=None):
+        loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
+        super(MySyntaxError, self).__init__(msg, *loc_args)
 
 
 def fold_trailers(expr, trailers_wloc):
@@ -285,15 +278,18 @@ def p_empty(p):
     """empty : """
     pass
 
+
 def p_error(t):
     if t is not None:
-        raise UnexpectedToken(t.value, lex.loc(t))
+        raise MySyntaxError("Unexpected '{0}' token".format(t.value),
+                            lex.loc(t))
     else:
-        raise UnexpectedEOF()
+        raise MySyntaxError("Premature end of file")
 
 
 make_yacc = functools.partial(ply.yacc.yacc,
                               write_tables=False,
+                              debug=False,
                               errorlog=ply.yacc.NullLogger())
 
 parsermap = {

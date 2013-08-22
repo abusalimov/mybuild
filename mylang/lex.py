@@ -10,7 +10,6 @@ from _compat import *
 
 import ply.lex
 
-from mylang.errors import IllegalCharacter
 from mylang.location import Location
 
 
@@ -78,8 +77,10 @@ def t_comment(t):
     r'(/\*(.|\n)*?\*/)|(//.*\n)'
     t.lexer.lineno += t.value.count('\n')
 
+
 def t_error(t):
-    raise IllegalCharacter(t.value[0], loc(t))
+    raise SyntaxError("Illegal character {0}".format(t.value[0]),
+                      loc(t).to_syntax_error_tuple())
 
 
 lexer = ply.lex.lex(optimize=1, lextab=None)
