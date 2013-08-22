@@ -251,7 +251,7 @@ class Literal(object):
     @staticmethod
     def __imply(if_, then, why=None):
         if_.implies.add(then)
-        if_.imply_reasons.add(Reason(why, then, if_))
+        if_.imply_reasons.add(Reason(then, [if_], why))
 
     def therefore(self, other, why=None):
         """Implication: self => other"""
@@ -353,9 +353,9 @@ class Neglast(object):
 
         neg_literal = ~last_literal
 
-        reason = Reason(self.why, neg_literal,
-                        *(literal for literal in self.literals
-                          if literal is not last_literal))
+        reason = Reason(neg_literal, (literal for literal in self.literals
+                                      if literal is not last_literal),
+                        self.why)
 
         if len(reason.cause_literals) != len(self.literals)-1:
             raise ValueError('last_literal must belong to this neglast')
@@ -367,14 +367,15 @@ class Neglast(object):
                 .format(cls=type(self),
                         nr_literals=len(self.literals), default=self.default))
 
-class Reason(namedtuple('_Reason', 'why, literal, cause_literals')):
+class Reason(namedtuple('_Reason', 'literal, cause_literals, why, follow')):
     """docstring for Reason"""
 
-    def __new__(cls, why, literal, *cause_literals):
+    def __new__(cls, literal, cause_literals=[], why=None, follow=False):
         if why is None:
             why = cls.default_why_func
 
-        return super(Reason, cls).__new__(cls, why, literal, cause_literals)
+        return super(Reason, cls).__new__(cls, literal, tuple(cause_literals),
+                                          why, follow)
 
     @classmethod
     def default_why_func(cls, outcome, *causes):

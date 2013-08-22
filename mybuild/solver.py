@@ -388,7 +388,7 @@ def create_trunk(pgraph, initial_literals=[]):
     todo.update(pgraph.const_literals)
 
     for literal in todo:
-        reasons.add(Reason(None, literal))
+        reasons.add(Reason(literal))
 
     literals |= todo
 
@@ -554,9 +554,9 @@ def resolve_branches(trunk, branches=None):
         for branch in branches:
             logger.debug('\t+merge %r', branch)
             for gen_literal in branch.gen_literals:
-                resolved.reasons.add(Reason(why_violation, gen_literal,
-                                          ~gen_literal))
-                resolved.reasons.add(Reason(None, ~gen_literal))
+                resolved.reasons.add(Reason(gen_literal, why=why_violation, 
+                                            follow=True))
+
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
 

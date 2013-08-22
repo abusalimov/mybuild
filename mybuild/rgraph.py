@@ -276,7 +276,7 @@ def get_violation_nodes(solution):
 def create_rgraph_branch(trunk, branch, parent_rgraph):
     solution = branch.flatten()
     for gen_literal in branch.gen_literals:
-        solution.reasons.add(Reason(None, gen_literal))     
+        solution.reasons.add(Reason(gen_literal))     
     for literal in solution.literals:
         for reason in literal.imply_reasons:
             if (literal not in trunk.dead_branches or 
