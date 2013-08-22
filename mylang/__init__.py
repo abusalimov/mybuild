@@ -1,6 +1,8 @@
 """
-Parser/linker for My-files.
+Parser, compiler and runtime support for My-files.
 """
+from __future__ import absolute_import
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
@@ -11,27 +13,20 @@ from _compat import *
 try:
     from mylang.parse import parse
 except ImportError:
-    parse = None
-
-
-def load(linker, source, filename=None, builtins={}):
-    if parse is None:
+    def parse(*args, **kwargs):
         raise ImportError('PLY is not installed')
 
-    return parse(linker, source, filename, builtins)
+
+def my_compile(source, filename='<unknown>', mode='exec'):
+    ast_root = parse(source, filename, mode)
+    return compile(ast_root, filename, mode)
 
 
 if __name__ == "__main__":
-    source = '''//module Kernel,
+    source = '''
 
-    //obj obj,
-    foo bar,
-    module foo(xxx=bar),
-
-    module Kernel(debug = False) {
+    kernel :: module(debug = False) {
         "Docstring!"
-
-        x: xxx xname() {},
 
         source: "init.c",
 
@@ -42,27 +37,23 @@ if __name__ == "__main__":
         ],
         depends: embox.kernel.stack,
 
-    },
-
+    };
 
     '''
-
-    from mylang.linkage import Linker
-    from mylang.linkage import FileLinker
-    from mylang.errors import MyfileError
-
+    from mylang import runtime
     from util.misc import singleton
-
     from pprint import pprint
 
-    def get_builtins():
+    def get_globals():
         @singleton
         class embox(object):
+            __my_prepare_obj__ = None
             def __call__(self, *args, **kwargs):
                 print self, args, kwargs
                 return self
             def __getattr__(self, attr):
                 return self
+
         class module(object):
             def __init__(self, *args, **kwargs):
                 super(module, self).__init__()
@@ -70,21 +61,13 @@ if __name__ == "__main__":
             def __call__(self, *args, **kwargs):
                 print self, args, kwargs
                 return self
-        xxx = lambda: 42
 
-        return dict(locals(), **{
-                        'None':  lambda: None,
-                        'True':  lambda: True,
-                        'False': lambda: False,
-                    })
+        __builtins__ = runtime.prepare_builtins()
+        return locals()
 
-    linker = Linker()
     try:
-        pprint(load(FileLinker(linker), source, builtins=get_builtins()))
-        linker.link_global()
-
-    except MyfileError as e:
-        e.print_error()
+        code = my_compile(source)
+        exec(code, dict(globals(), **get_globals()))
 
     except:
         import sys, traceback, code

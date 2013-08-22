@@ -27,7 +27,7 @@ class LinkageError(MyfileError):
 class SyntaxErrorWloc(MyfileError, SyntaxError):
 
     def __init__(self, message, loc=None):
-        args = (loc.syntax_error_tuple,) if loc is not None else ()
+        args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
         super(SyntaxErrorWloc, self).__init__(message, *args)
         self.loc = loc
 

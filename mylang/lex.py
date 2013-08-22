@@ -29,11 +29,11 @@ tokens = (
     # Literals (identifier, number, string)
     'ID', 'NUMBER', 'STRING',
 
-    # Delimeters ( ) [ ] { } , . : =
+    # Delimeters ( ) [ ] { } , . : :: = ;
     'LPAREN',   'RPAREN',
     'LBRACKET', 'RBRACKET',
     'LBRACE',   'RBRACE',
-    'COMMA', 'PERIOD', 'COLON', 'EQUALS',
+    'COMMA', 'PERIOD', 'COLON', 'DOUBLECOLON', 'EQUALS', 'SEMI',
 )
 
 # Completely ignored characters
@@ -54,7 +54,9 @@ t_RBRACE           = r'\}'
 t_COMMA            = r','
 t_PERIOD           = r'\.'
 t_COLON            = r':'
+t_DOUBLECOLON      = r'::'
 t_EQUALS           = r'='
+t_SEMI             = r';'
 
 # Identifiers
 t_ID               = r'[A-Za-z_][\w_]*'

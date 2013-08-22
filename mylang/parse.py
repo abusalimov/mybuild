@@ -8,6 +8,7 @@ __date__ = "2013-07-05"
 
 from _compat import *
 
+import ast
 import functools
 import operator
 import ply.yacc
@@ -15,39 +16,27 @@ import ply.yacc
 from mylang import lex
 from mylang.errors import UnexpectedToken
 from mylang.errors import UnexpectedEOF
-from mylang.linkage import BuiltinScope
-from mylang.linkage import ObjectScope
-from mylang.linkage import Stub
 from mylang.location import Fileinfo
 from mylang.location import Location
 
-
-# Here go scoping-related stuff + some utils.
-
-def to_rlist(reversed_list):
-    return reversed_list[::-1]
-
-
-def this_scope(p): return p.parser.scope_stack[-1]
-def this_stub(p):  return p.parser.stub_stack[-1]
-
-def this_scope_stub(p):
-    return p.parser.stub_stack[len(p.parser.scope_stack)-1]
-
-def push_scope(p, scope): p.parser.scope_stack.append(scope); return scope
-def pop_scope(p):  return p.parser.scope_stack.pop()
-
-def push_stub(p, stub):  p.parser.stub_stack.append(stub); return stub
-def pop_stub(p):  return p.parser.stub_stack.pop()
+from util.itertools import send_next_iter
 
 
 # Location tracking.
 
-def loc(p, i):
+def node_loc(ast_node, p):
+    return Location.from_ast_node(ast_node, p.lexer.fileinfo)
+
+def ploc(p, i):
     return Location(p.lexer.fileinfo, p.lineno(i), p.lexpos(i))
 
-def wloc(p, i):
-    return p[i], loc(p, i)
+def pwloc(p, i):
+    return p[i], ploc(p, i)
+
+copy_loc = ast.copy_location
+
+def set_loc(ast_node, loc):
+    return loc.init_ast_node(ast_node)
 
 noloc = operator.itemgetter(0)  # obj_wloc -> obj
 
@@ -55,153 +44,241 @@ def nolocs(iterable_wlocs):
     return map(noloc, iterable_wlocs)
 
 
-def track_loc(func):
-    """
-    Decorator for rule functions. Copies location from the first RHS symbol.
-    """
-    @functools.wraps(func)
-    def decorated(p):
-        # XXX accessing PLY internals
-        s = p.slice
-        s[0].lineno = s[1].lineno
-        s[0].lexpos = s[1].lexpos
+# Here go some utils.
 
-        func(p)
+def to_rlist(reversed_list):
+    return reversed_list[::-1]
 
-    return decorated
+
+class MySyntaxError(Exception):
+    """Stub class for using instead of standard SyntaxError because the latter
+    has the special meaning for PLY."""
+
+    def __init__(self, msg, loc):
+        super(MySyntaxError, self).__init__(msg, loc.to_syntax_error_tuple())
+
+
+def fold_trailers(expr, trailers_wloc):
+    for trailer, loc in reversed(trailers_wloc):
+        expr = loc.init_ast_node(trailer(expr))
+
+    return expr
+
+def ast_self(ctx=None):
+    if ctx is None:
+        ctx = ast.Load()
+    return ast.Name('self', ctx)
 
 
 # Grammar definitions for PLY.
 
 tokens = lex.tokens
-start = 'translation_unit'
 
 
-def p_translation_unit(p):
-    """translation_unit : values"""
-    p[0] = to_rlist(p[1])
+def p_exec_start(p):
+    """exec_start : stmts"""
+    p[0] = ast.Module(body=to_rlist(p[1]))
+
+def p_eval_start(p):
+    """eval_start : test"""
+    p[0] = ast.Expression(body=p[1])
 
 
-def p_values_0(p):
-    """values :
-       values : value"""
-    p[0] = [p[1]] if len(p) > 1 else []
-def p_values_1(p):
-    """values : value COMMA values"""
-    l = p[0] = p[3]
+def p_stmt(p):
+    """stmt : bindings SEMI"""
+    bindings, value = p[1]
+    if bindings:
+        p[0] = ast.Assign(to_rlist(bindings), value)
+    else:
+        p[0] = ast.Expr(value)
+
+
+def p_bindings_value(p):
+    """bindings : test"""
+    p[0] = [], p[1]
+
+def p_bindings_targets(p):
+    """bindings : ID DOUBLECOLON bindings"""
+    l, _ = p[0] = p[3]
+    l.append(ast.Name(p[1], ast.Store()))
+
+
+def p_testlist_empty(p):
+    """testlist :"""
+    p[0] = [], None
+
+def p_testlist_single(p):
+    """testlist : test"""
+    el = p[1]
+    p[0] = [el], el
+
+def p_testlist_list(p):
+    """testlist : test COMMA testlist"""
+    l, _ = p[3]
     l.append(p[1])
+    p[0] = l, None
 
-def p_value(p):
-    """value : STRING
-       value : NUMBER
-       value : new_object init_object
-       value : array"""
+
+def p_test(p):
+    "test : atom trailers"""
+    p[0] = fold_trailers(p[1], p[2])
+
+
+def p_atom_name(p):
+    """atom : ID"""
+    p[0] = set_loc(ast.Name(p[1], ast.Load()), ploc(p, 1))
+
+def p_atom_num(p):
+    """atom : NUMBER"""
+    p[0] = set_loc(ast.Num(p[1]), ploc(p, 1))
+
+def p_atom_str(p):
+    """atom : STRING"""
+    p[0] = set_loc(ast.Str(p[1]), ploc(p, 1))
+
+def p_atom_list(p):
+    """atom : LBRACKET testlist RBRACKET"""
+    test_l, _ = p[2]
+    p[0] = set_loc(ast.List(to_rlist(test_l), ast.Load()), ploc(p, 1))
+
+def p_atom_tuple(p):
+    """atom : LPAREN testlist RPAREN"""
+    test_l, test_el = p[2]
+    if test_el is not None:
+        p[0] = test_el
+    else:
+        p[0] = ast.Tuple(to_rlist(test_l), ast.Load())
+
+# trailer: '(' [arglist] ')' | '[' subscriptlist ']' | '.' NAME
+def p_trailer_call(p):
+    """trailer : LPAREN arglist RPAREN"""
+    pair_it = send_next_iter(reversed(p[2]))
+
+    args = []   # positional arguments
+    for kw, arg in pair_it:
+        if kw:
+            pair_it.send((kw, arg))
+            break
+        args.append(arg)
+
+    keywords = []   # keyword arguments
+    seen = set()
+    for kw_wloc, arg in pair_it:
+        if not kw_wloc:
+            raise MySyntaxError('non-keyword arg after keyword arg',
+                                node_loc(arg, p))
+        kw, loc = kw_wloc
+        if kw in seen:
+            raise MySyntaxError('keyword argument repeated', loc)
+        else:
+            seen.add(kw)
+        keywords.append(set_loc(ast.keyword(kw, arg), loc))
+
+    p[0] = (lambda expr: ast.Call(expr, args, keywords, None, None),
+            ploc(p, 1))
+
+def p_argument_0(p):
+    """argument : ID EQUALS test"""
+    p[0] = (pwloc(p, 1), p[3])
+
+def p_argument_1(p):
+    """argument : test"""
+    p[0] = (None, p[1])
+
+
+def p_trailer_attr(p):
+    """trailer    : PERIOD ID
+       my_trailer : empty  ID"""
+    attr = p[2]
+    p[0] = (lambda expr: ast.Attribute(expr, attr, ast.Load()),
+            ploc(p, 1))
+
+
+def p_my_trailer(p):
+    """my_trailer : trailer"""
     p[0] = p[1]
 
 
-def p_new_object(p):
-    """new_object :"""
-    p[0] = push_stub(p, Stub(p.parser.linker,
-                             this_scope(p), this_scope_stub(p)))
+def p_trailer_my_setter_block(p):
+    """trailer : mb_period LBRACE docstring my_setters RBRACE"""
+    setters = p[4]
+    docstring = p[3]
+    if docstring is not None:
+        setters.append(docstring)
 
-def p_init_object(p):
-    """init_object : object_header
-       init_object : object_header object_body
-       init_object : object_body"""
-    p.parser.linker.stubs.append(pop_stub(p))
+    func_args = ast.arguments(args=[ast_self(ast.Param())],
+                              vararg=None, kwarg=None, defaults=[])
+    setters_func = ast.Lambda(args=func_args,
+                              body=ast.List(to_rlist(setters), ast.Load()))
 
-
-def p_object_header(p):
-    """object_header : qualname object_name object_args"""
-    this_stub(p).init_header(type_name_wlocs=to_rlist(p[1]),
-                             name_wloc=p[2],
-                             kwarg_pair_wlocs=p[3])
-
-def p_object_name(p):
-    """object_name : empty
-       object_name : ID"""
-    p[0] = wloc(p, 1)
-
-def p_object_args(p):
-    """object_args :
-       object_args : LPAREN arglist RPAREN"""
-    p[0] = to_rlist(p[2]) if len(p) > 1 else []
+    p[0] = (lambda expr: ast.Call(ast.Name('__my_setter__', ast.Load()),
+                                  [expr, setters_func], [], None, None),
+            ploc(p, 2))
 
 
-def p_arglist_0(p):
-    """arglist :
-       arglist : arg"""
-    p[0] = [p[1]] if len(p) > 1 else []
-def p_arglist_1(p):
-    """arglist : arg COMMA arglist"""
-    l = p[0] = p[3]
-    l.append(p[1])
+def p_mb_period(p):
+    """mb_period :
+       mb_period : PERIOD"""
+    p[0] = (len(p) > 1)
 
-def p_arg_0(p):
-    """arg : ID EQUALS value"""
-    p[0] = (p[1], p[3]), loc(p, 1)
-
-def p_arg_1(p):
-    """arg : value"""
-    p[0] = (None, p[1]), loc(p, 1)
-
-
-def p_object_body(p):
-    """object_body : LBRACE new_scope docstring object_members RBRACE"""
-    this_stub(p).init_body(attrs=to_rlist(p[4]), docstring=p[3])
-    p.parser.linker.scopes.append(pop_scope(p))
-
-def p_new_scope(p):
-    """new_scope :"""
-    push_scope(p, ObjectScope(this_scope(p)))
-
-
-def p_docstring_0(p):
-    """docstring : empty
-       docstring : STRING
+def p_docstring_empty(p):
+    """docstring :"""
+def p_docstring(p):
+    """docstring : STRING
        docstring : STRING COMMA"""
-    p[0] = p[1]
+    p[0] = set_loc(ast.Tuple([ast_self(),
+                             ast.Str('__doc__'),
+                             ast.Num(True),
+                             ast.Str(p[1])], ast.Load()),
+                   ploc(p, 1))
 
-def p_object_members_0(p):
-    """object_members :
-       object_members : object_member"""
-    p[0] = [p[1]] if len(p) > 1 else []
-def p_object_members_1(p):
-    """object_members : object_member COMMA object_members"""
-    l = p[0] = p[3]
+
+def p_my_setter(p):
+    """my_setter : my_trailers COLON test"""
+
+    expr = fold_trailers(ast_self(), p[1])
+    if isinstance(expr, ast.Call):
+        raise MySyntaxError("can't assign to function call", node_loc(expr, p))
+
+    obj = expr.value  # unfold the outermost trailer
+
+    if isinstance(expr, ast.Attribute):
+        target, is_attr = ast.Str(expr.attr), ast.Num(True)
+    else:  # ast.Subscript
+        target, is_attr = expr.slice.index, ast.Num(False)
+
+    p[0] = copy_loc(ast.Tuple([obj, target, is_attr, p[3]], ast.Load()),
+                    expr)
+
+
+# generic (possibly comma-separated, and with trailing comma) list parsing
+
+def p_list(p):
+    """
+    stmts :
+    trailers :
+    my_setters :
+    arglist :
+    """
+    p[0] = []
+
+def p_list_head(p):
+    """
+    arglist : argument
+    my_setters : my_setter
+    """
+    p[0] = [p[1]]
+
+def p_list_tail(p):
+    """
+    stmts : stmt stmts
+    trailers : trailer trailers
+    my_trailers : my_trailer trailers
+    my_setters : my_setter COMMA my_setters
+    arglist : argument COMMA arglist
+    """
+    l = p[0] = p[len(p)-1]
     l.append(p[1])
-
-def p_object_member(p):
-    """object_member : string_or_qualname COLON value"""
-    p[0] = (p[1], p[3])
-
-
-def p_array(p):
-    """array : LBRACKET values RBRACKET"""
-    p[0] = to_rlist(p[2])
-
-
-@track_loc
-def p_qualname_0(p):
-    """qualname : ID"""
-    p[0] = [wloc(p, 1)]
-
-@track_loc
-def p_qualname_1(p):
-    """qualname : ID PERIOD qualname"""
-    l = p[0] = p[3]
-    l.append(wloc(p, 1))
-
-
-@track_loc
-def p_string_or_qualname_0(p):
-    """string_or_qualname : STRING"""
-    p[0] = p[1]
-
-@track_loc
-def p_string_or_qualname_1(p):
-    """string_or_qualname : qualname"""
-    p[0] = '.'.join(nolocs(reversed(p[1])))
 
 
 def p_empty(p):
@@ -215,50 +292,65 @@ def p_error(t):
         raise UnexpectedEOF()
 
 
-parser = ply.yacc.yacc(method='LALR', write_tables=False, debug=0)
+make_yacc = functools.partial(ply.yacc.yacc,
+                              write_tables=False,
+                              errorlog=ply.yacc.NullLogger())
+
+parsermap = {
+    'exec': make_yacc(start='exec_start'),
+    'eval': make_yacc(start='eval_start'),
+}
 
 # The main entry point.
 
-def parse(file_linker, source, filename=None, builtins={}, **kwargs):
+def parse(source, filename='<unknown>', mode='exec', **kwargs):
     """
     Parses the given source and returns the result.
 
     Args:
-        file_linker (FileLinker) - local file linker object
-        source (str) - data to parse
-        filename (str) - file name to report in case of errors
-        builtins (dict) - builtin variables
+        source (str): data to parse
+        filename (str): file name to report in case of errors
+        mode (str): type of input to expect:
+            it can be 'exec' if source consists of a sequence of statements,
+            or 'eval' if it consists of a single expression
+
         **kwargs are passed directly to the underlying PLY parser
 
     Returns:
-        a global scope
+        ast.Module object
 
     Note:
         This function is NOT reentrant.
     """
-    global parser
-
-    p = parser
-    parser = None  # paranoia mode on
+    try:
+        p = parsermap[mode]
+    except KeyError:
+        raise ValueError("parse() mode arg must be 'exec' or 'eval'")
 
     l = lex.lexer.clone()
     l.fileinfo = Fileinfo(source, filename)
-
-    global_scope = ObjectScope(parent=BuiltinScope(builtins))
-
-    p.scope_stack = [global_scope]
-    p.stub_stack  = [None]
-
-    p.linker = file_linker
     try:
-        p.parse(source, lexer=l, **kwargs)
+        ast_root = p.parse(source, lexer=l, tracking=True, **kwargs)
+        return ast.fix_missing_locations(ast_root)
 
-        file_linker.scopes.append(global_scope)
-        file_linker.link_local()
+    except MySyntaxError as e:
+        raise SyntaxError(*e.args)
 
-        return dict((name, stub.resolved_object)
-                    for name, stub in iteritems(global_scope))
 
-    finally:
-        parser = p
+if __name__ == "__main__":
+    source = """
+    x::module {
+        .{}.foo: [cc],
+        files: ["foo.c"],
+    };
+    foo {"doc", bar: baz};
+    """
+    from mako._ast_util import SourceGenerator as SG
+
+    def p(node):
+        sg=SG('    ')
+        sg.visit(node)
+        return ''.join(sg.result)
+
+    print p(parse(source))
 
