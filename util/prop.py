@@ -81,6 +81,38 @@ class default_property(_func_deco):
         return self.func(obj)
 
 
+class class_default_property(_func_deco):
+    """Non-data descriptor.
+
+    Calls func on an instance type everytime a property is accessed.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @class_default_property
+    ...     def prop(cls):
+    ...         print("Accessing {cls.__name__}.prop"
+    ...               .format(**locals()))
+    ...         return 17
+    ...
+    >>> C.prop
+    Accessing C.prop
+    17
+    >>> x = C()
+    >>> x.prop
+    Accessing C.prop
+    17
+    >>> x.prop = 42
+    >>> x.prop
+    42
+    """
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+        return self.func(objtype)
+
+
 class cached_property(default_property):
     """Non-data descriptor.
 
