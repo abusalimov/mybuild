@@ -26,6 +26,8 @@ from mybuild.rgraph import *
 from util.collections import is_mapping
 from util.deco import defer_call
 
+from collections import deque
+
 from waflib import Context as wafcontext
 from waflib import Utils   as wafutils
 from waflib import Errors  as waferrors
@@ -117,8 +119,8 @@ def my_resolve(ctx, conf_module):
             instances = resolve(conf_module, module_meta=mywaf_module_meta)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
-            #TODO client code print
-            e.rgraph.print_graph()
+            #TODO test it
+            #print_graph(e.rgraph)
             raise e
         
         instance_map = dict((instance._module, instance)
@@ -129,6 +131,59 @@ def my_resolve(ctx, conf_module):
 
 wafcontext.Context._my_resolve_cache = {}  # {conf_module: instance_map}
 
+def print_graph(rgraph):
+    """
+    Simple way to print reason graph. Nodes of more one reason are printed 
+    in new line without offset.
+    """
+    node_deque = deque()
+    used = set()
+        
+    def dfs(node, reason, depth):
+        if node in used:
+            print_reason(reason,depth)
+            return
+        
+        used.add(node)
+        print_reason(reason,depth)
+        for cons in node.therefore:
+            dfs(cons, node.therefore[cons], depth + 1)
+            for container in cons.containers:
+                process_container(container)
+                            
+    def process_container(container):
+        if container in used:
+            return
+        used.add(container)
+        for ccons in container.therefore:
+            if ccons not in node_deque:
+                node_deque.appendleft((ccons, container.therefore[ccons]))
+                            
+    def print_reason(reason, depth):
+        print '  ' * depth, reason
+        if not reason.follow:
+            return
+            
+        literal = None 
+        if reason.literal is not None:
+            literal = ~reason.literal
+        else:
+            literal = reason.cause_literals[0]
+        
+        assert literal in rgraph.violation_graphs
+                
+        print '---dead branch {0}---------'.format(literal)
+        print_graph(rgraph.violation_graphs[literal])    
+        print '---------dead branch {0}---'.format(literal)        
+        
+    #node_deque contains touples (node, reason)
+    for node in rgraph.initial.therefore:
+        node_deque.append((node, rgraph.initial.therefore[node]))
+        process_container(node)
+        
+    while node_deque:
+        node, reason = node_deque.pop()        
+        dfs(node, reason, 0)
 
 @wafcontext_method
 def my_recurse(ctx, instances, name=None, mandatory=True):
