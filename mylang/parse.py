@@ -17,6 +17,7 @@ from mylang.location import Fileinfo
 from mylang.location import Location
 
 from util.itertools import send_next_iter
+from util.operator import getter
 
 
 # Location tracking.
@@ -145,8 +146,18 @@ def p_atom_str(p):
 
 def p_atom_list(p):
     """atom : LBRACKET testlist RBRACKET"""
-    test_l, _ = p[2]
-    p[0] = set_loc(ast.List(to_rlist(test_l), ast.Load()), ploc(p, 1))
+    p[0] = set_loc(ast.List(to_rlist(p[2][0]), ast.Load()), ploc(p, 1))
+
+def p_atom_dict(p):
+    """atom : LBRACE dictentlist RBRACE"""
+    keys   = list(map(getter[0], p[2]))
+    values = list(map(getter[1], p[2]))
+
+    p[0] = set_loc(ast.Dict(keys, values), ploc(p, 1))
+
+def p_dictent(p):
+    """dictent : test COLON test"""
+    p[0] = (p[1], p[3])
 
 def p_atom_tuple(p):
     """atom : LPAREN testlist RPAREN"""
@@ -273,6 +284,7 @@ def p_list(p):
     trailers :
     my_setters :
     arglist :
+    dictentlist :
     """
     p[0] = []
 
@@ -280,6 +292,7 @@ def p_list_head(p):
     """
     arglist : argument
     my_setters : my_setter
+    dictentlist : dictent
     """
     p[0] = [p[1]]
 
@@ -290,6 +303,7 @@ def p_list_tail(p):
     my_trailers : my_trailer trailers
     my_setters : my_setter COMMA my_setters
     arglist : argument COMMA arglist
+    dictentlist : dictent COMMA dictentlist
     """
     l = p[0] = p[len(p)-1]
     l.append(p[1])
