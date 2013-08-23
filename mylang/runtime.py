@@ -55,7 +55,7 @@ def prepare_builtins(ctx=None):
 class ExecContext(object):
     """Provides minimal runtime support."""
 
-    def prepare_obj(self, obj, func, name):
+    def prepare_obj(self, obj, func, names):
         func_globals = func.__globals__ if py3k else func.func_globals
 
         try:
@@ -67,7 +67,7 @@ class ExecContext(object):
         prepare_func = getattr(obj, '__my_prepare_obj__', None)
 
         if prepare_func is not None:
-            return prepare_func(module, name)
+            return prepare_func(module, names)
         else:
             return obj, False
 
@@ -83,8 +83,8 @@ class ExecContext(object):
         # Do not really proxify. Overloaded in subclasses.
         self.exec_setter(obj, func)
 
-    def setter(self, obj, func, name=None):
-        obj, can_proxify = self.prepare_obj(obj, func, name)
+    def setter(self, obj, func, *names):
+        obj, can_proxify = self.prepare_obj(obj, func, names)
 
         # sometimes real setting can be deferred
         if can_proxify:

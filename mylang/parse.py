@@ -92,8 +92,22 @@ def p_bindings_value(p):
 
 def p_bindings_targets(p):
     """bindings : ID DOUBLECOLON bindings"""
-    l, _ = p[0] = p[3]
+    l, value = p[0] = p[3]
     l.append(ast.Name(p[1], ast.Store()))
+
+    # the following dirty hack is to provide an access to binding names
+    # in runtime
+
+    call = value
+    if not isinstance(call, ast.Call):
+        return
+
+    name = call.func
+    if not (isinstance(name, ast.Name) and
+            name.id == '__my_setter__'):
+        return
+
+    call.args.append(ast.Str(p[1]))
 
 
 def p_testlist_empty(p):
