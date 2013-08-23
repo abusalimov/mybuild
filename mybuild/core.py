@@ -132,13 +132,13 @@ class ModuleBase(extend(metaclass=ModuleMeta, internal=True)):
         if not optuple._complete:
             raise ValueError('Incomplete optuple')
 
-        new = super(Module, cls).__new__(cls)
+        new = super(ModuleBase, cls).__new__(cls)
         new.__optuple  = optuple
         return new
 
     def __init__(_self, **kwargs):
         """Consumes keyword arguments."""
-        super(Module, _self).__init__()
+        super(ModuleBase, _self).__init__()
 
     def __repr__(self):
         return repr(self._optuple)
@@ -161,7 +161,7 @@ class Module(extend(ModuleBase, internal=True)):
             e.args = ("'{cls.__name__}' object has no attribute '{attr}', "
                       "nor has its '{dcls.__name__}' delegate"
                       .format(cls=type(self), dcls=type(self._delegate),
-                              **locals())),)
+                              **locals()),)
             raise e
 
 
