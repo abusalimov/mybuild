@@ -10,8 +10,6 @@ __date__ = "2013-08-22"
 
 from _compat import *
 
-import inspect
-
 from mylang import proxy
 from util.itertools import pop_iter
 
@@ -56,10 +54,8 @@ class ExecContext(object):
     """Provides minimal runtime support."""
 
     def prepare_obj(self, obj, func, names):
-        func_globals = func.__globals__ if py3k else func.func_globals
-
         try:
-            module = func_globals['__name__']
+            module = func.__globals__['__name__']
         except KeyError:
             raise NameError("name '__name__' is not defined")
 
@@ -96,7 +92,7 @@ class ExecContext(object):
 
 
 class ProxifyingExecContext(ExecContext):
-    """docstring for ProxifyingExecContext"""
+    """This is able to proxify objects in order to defer executing setters."""
 
     def __init__(self):
         super(ProxifyingExecContext, self).__init__()
