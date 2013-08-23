@@ -201,6 +201,13 @@ def p_trailer_attr(p):
             ploc(p, 1))
 
 
+def p_trailer_item(p):
+    """trailer    : LBRACKET test RBRACKET"""
+    item = ast.Index(p[2])
+    p[0] = (lambda expr: ast.Subscript(expr, item, ast.Load()),
+            ploc(p, 1))
+
+
 def p_my_trailer(p):
     """my_trailer : trailer"""
     p[0] = p[1]
@@ -252,7 +259,7 @@ def p_my_setter(p):
     if isinstance(expr, ast.Attribute):
         target, is_attr = ast.Str(expr.attr), ast.Num(True)
     else:  # ast.Subscript
-        target, is_attr = expr.slice.index, ast.Num(False)
+        target, is_attr = expr.slice.value, ast.Num(False)
 
     p[0] = copy_loc(ast.Tuple([obj, target, is_attr, p[3]], ast.Load()),
                     expr)
