@@ -49,7 +49,7 @@ class ModuleTypeStub(object):
     def __my_prepare_obj__(cls, self, py_module, names):
         if self is None:
             # let 'module() {...}' and 'module {...}' to behave the same way
-            return cls()._my_prepare_obj__(py_module, name)
+            return cls().__my_prepare_obj__(py_module, names)
 
         name = (names[0] if names else '<unnamed>')
         type_dict = dict(__module__=py_module)
