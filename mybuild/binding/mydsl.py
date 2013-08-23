@@ -50,12 +50,14 @@ class ModuleTypeStub(object):
         return optypes
 
     @class_instance_method
-    def __my_prepare_obj__(cls, self, py_module, name=None):
+    def __my_prepare_obj__(cls, self, py_module, names):
         if self is None:
             # to let 'module() {}' and 'module {}' behave the same.
             return cls()._my_prepare_obj__(py_module, name)
 
-        if name is None:
+        if names:
+            name = names[0]
+        else:
             name = '<unnamed>'
         type_dict = dict(__module__=py_module)
 
