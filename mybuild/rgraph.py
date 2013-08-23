@@ -140,46 +140,7 @@ class Rgraph(object):
         
         logger.debug('Lengths for shortest ways to {0}'.format(self))                
         for node in itervalues(self.nodes):
-            logger.debug('{0}: length {1}'.format(node, node.length))
-
-    def print_graph(self):
-        """
-        Simple way to print reason graph. Nodes of more one reason are printed 
-        in new line without offset.
-        """
-        queue = Queue.LifoQueue()
-        used = set()
-        
-        #queue contains touples (node, reason)
-        for node in self.initial.therefore:
-            queue.put((node, self.initial.therefore[node]))
-            self._process_containers_dfs(node, used, queue)
-        
-        while not queue.empty():
-            node, reason = queue.get()        
-            self.dfs(node, reason, used, queue, 0)
-                
-    def dfs(self, node, reason, used, queue, depth):
-        if node in used:
-            self.print_reason(reason,depth)
-            return
-        
-        used.add(node)
-        self.print_reason(reason,depth)
-        for cons in node.therefore:
-            self.dfs(cons, node.therefore[cons], used, queue, depth + 1)
-            self._process_containers_dfs(cons, used, queue)
-                            
-    def _process_containers_dfs(self, node, used, queue):
-        for container in node.containers:
-            if container not in used:
-                used.add(container)
-                for ccons in container.therefore:
-                    if node not in queue.queue:
-                        queue.put((ccons, container.therefore[ccons]))
-                            
-    def print_reason(self, reason, depth):
-        print '  ' * depth, reason
+            logger.debug('{0}: length {1}'.format(node, node.length))             
 
 def way_to(source_graph, nodes):
     """
@@ -304,9 +265,8 @@ def get_rgraph(trunk):
             rgraph.violation_graphs[literal] = rgraph_branch
             continue
         
-        rgraph_branch = create_rgraph_branch(trunk, branch, rgraph) 
-#         rgraph_branch.print_graph()
-#         print '---'
+        rgraph_branch = create_rgraph_branch(trunk, branch, rgraph)
+        rgraph_branch.violation_graphs = rgraph.violation_graphs
         branchmap[frozenset(branch.gen_literals)] = rgraph_branch
         rgraph.violation_graphs[literal] = rgraph_branch
      

@@ -617,13 +617,9 @@ def solve_trunk(pgraph, initial_values={}):
 
 
 def solve(pgraph, initial_values={}):
-    from mybuild.rgraph import *
     logger.info('solving %r with initials: %r', pgraph, initial_values)
 
     trunk = solve_trunk(pgraph, initial_values)
-    #TODO will be removed, just for preliminary test
-#     rgraph = get_rgraph(trunk)
-#     rgraph.print_graph()
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
     logger.debug('Solution:')
@@ -635,7 +631,7 @@ def why_implied_by_dead_branch(literal, *cause_literals):
     return '%s because of dead branch %s' % (literal, ~literal)
 
 def why_implies_dead_branch(literal, *cause_literals):
-    return '%s implies dead branch' % (literal)
+    return '%s implies dead branch' % (cause_literals)
 
 def why_default(literal, *cause_literals):
     return '%s by default' % (literal)  
