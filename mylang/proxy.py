@@ -70,10 +70,6 @@ magic_methods["delattr"] = delattr
 magic_methods["getattribute"] = getattr
 
 
-# not including __prepare__, __instancecheck__, __subclasscheck__
-# (as they are metaclass methods)
-# __del__ is not supported at all as it causes problems if it exists
-
 reinvoke_magics = (
     "init new "
 
@@ -92,12 +88,13 @@ reinvoke_magics = (
     "prepare "
 ).split()
 
-
 def _invoke(name):
     return lambda self, *args, **kwargs: getattr(self, name)(*args, **kwargs)
 
 for name in reinvoke_magics:
     magic_methods[name] = _invoke(to_magic(name))
+
+# __del__ is not supported at all as it causes problems if it exists
 
 
 def niy_resolve(*args, **kwargs):
