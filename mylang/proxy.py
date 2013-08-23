@@ -63,13 +63,19 @@ for name in math_magics:
     magic_methods[name] = getattr(math, name)
 
 
+magic_methods["getattr"] = getattr
+magic_methods["setattr"] = setattr
+magic_methods["delattr"] = delattr
+
+magic_methods["getattribute"] = getattr
+
+
 # not including __prepare__, __instancecheck__, __subclasscheck__
 # (as they are metaclass methods)
 # __del__ is not supported at all as it causes problems if it exists
 
 reinvoke_magics = (
     "init new "
-    "getattr setattr "
 
     # non defaults
     "cmp getslice setslice coerce subclasses "
@@ -115,5 +121,3 @@ def magic_entry(name, func):
 
 type_dict = dict(magic_entry(name, func)
                  for name, func in iteritems(magic_methods))
-
-
