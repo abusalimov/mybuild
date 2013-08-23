@@ -79,8 +79,11 @@ class ExecContext(object):
         # Do not really proxify. Overloaded in subclasses.
         self.exec_setter(obj, func)
 
-    def setter(self, obj, func, *names):
-        obj, can_proxify = self.prepare_obj(obj, func, names)
+    def setter(self, dont_prepare, obj, func, *names):
+        if dont_prepare:
+            can_proxify = False
+        else:
+            obj, can_proxify = self.prepare_obj(obj, func, names)
 
         # sometimes real setting can be deferred
         if can_proxify:

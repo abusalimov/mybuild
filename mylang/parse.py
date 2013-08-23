@@ -226,18 +226,18 @@ def p_my_trailer(p):
 
 def p_trailer_my_setter_block(p):
     """trailer : mb_period LBRACE docstring my_setters RBRACE"""
+    period = ast.Num(p[1])
+
     setters = p[4]
     docstring = p[3]
     if docstring is not None:
         setters.append(docstring)
 
-    func_args = ast.arguments(args=[ast_self(ast.Param())],
-                              vararg=None, kwarg=None, defaults=[])
-    setters_func = ast.Lambda(args=func_args,
-                              body=ast.List(to_rlist(setters), ast.Load()))
+    func = ast.Lambda(ast.arguments([ast_self(ast.Param())], None, None, []),
+                      ast.List(to_rlist(setters), ast.Load()))
 
     p[0] = (lambda expr: ast.Call(ast.Name('__my_setter__', ast.Load()),
-                                  [expr, setters_func], [], None, None),
+                                  [period, expr, func], [], None, None),
             ploc(p, 2))
 
 
