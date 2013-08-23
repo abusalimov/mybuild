@@ -509,7 +509,7 @@ def expand_branch(branch):
                              implied)
                 branch.add_literal(literal, add_node=False)
                 if implied is not None:
-                    branch.reasons.add(Reason(literal, 
+                    branch.reasons.add(Reason(None, [literal], 
                                               why=why_implies_dead_branch,
                                               follow=True))
 

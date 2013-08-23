@@ -56,9 +56,10 @@ class Rgraph(object):
     Rgraph or Reason graph
     """  
     def __init__(self, solution):
-        self.initial = NodeContainer(set())  
+        self.initial = NodeContainer(set()) 
         self.nodes = {}    
-        self.nodes[frozenset(set())] = self.initial
+        self.nodes[frozenset()] = self.initial
+        self.nodes[frozenset([None])] = self.initial
         self.violation_graphs = {}
         
         logger.dump(solution)
@@ -118,6 +119,8 @@ class Rgraph(object):
             node.length = 0
             node.parent = node 
             push(node)
+            for container in node.containers:
+                push(container)
          
         heapq.heapify(queue)     
             
@@ -226,20 +229,8 @@ def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
         nodes.add(rgraph_branch.nodes[frozenset([min_node[False]])])
         return way_to(rgraph_branch, nodes)
     
-    min_literal = None
-    #try to find shortest way to violation branch               
-    for literal in iterkeys(trunk.dead_branches):
-        if frozenset([literal]) in rgraph_branch.nodes and \
-                literal not in branch.gen_literals: 
-            length = rgraph_branch.nodes[frozenset([literal])].length
-            if length < min_length:
-                min_length = length
-                min_literal = literal
-            
-    if min_literal is not None:
-        nodes = set()
-        nodes.add(rgraph_branch.nodes[frozenset([min_literal])])
-        return way_to(rgraph_branch, nodes)
+    if rgraph_branch.initial.length != float("+inf"):
+        return way_to(rgraph_branch, set([rgraph_branch.initial]))
     
     #Actually, it can't be, otherwise how we get violation?
     raise Exception('No ways to some violation branch or violation nodes {0} '
