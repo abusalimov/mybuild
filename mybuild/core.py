@@ -27,7 +27,7 @@ import sys
 from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
-from util.prop import default_property
+from util.prop import class_default_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -106,14 +106,18 @@ class ModuleMeta(type):
 
         return cls._fullname + options_str
 
-class Module(extend(metaclass=ModuleMeta, internal=True)):
+
+class ModuleBase(extend(metaclass=ModuleMeta, internal=True)):
     """Base class for Mybuild modules."""
+
+    # This is read-only even for subtypes.
+    _optuple  = property(getter.__optuple)
 
     # These properties default to corresponding class ones,
     # however instance is allowed to override them by setting custom values.
-    _name     = default_property(attrgetter('__class__._name'))
-    _fullname = default_property(attrgetter('__class__._fullname'))
-    _file     = default_property(attrgetter('__class__._file'))
+    _name     = class_default_property(getter._name)
+    _fullname = class_default_property(getter._fullname)
+    _file     = class_default_property(getter._file)
 
     # ModuleMeta overloads __call__, but the default factory call is
     # available through ModuleMeta._instantiate with the only exception
@@ -129,7 +133,7 @@ class Module(extend(metaclass=ModuleMeta, internal=True)):
             raise ValueError('Incomplete optuple')
 
         new = super(Module, cls).__new__(cls)
-        new._optuple = optuple
+        new.__optuple  = optuple
         return new
 
     def __init__(_self, **kwargs):
@@ -138,6 +142,27 @@ class Module(extend(metaclass=ModuleMeta, internal=True)):
 
     def __repr__(self):
         return repr(self._optuple)
+
+
+class Module(extend(ModuleBase, internal=True)):
+    """Delegates requests to any unknown attributes to another object."""
+
+    _delegate = property(getter.__delegate)
+
+    def __new__(cls, optuple, delegate=None):
+        new = super(Module, cls).__new__(cls, optuple)
+        new.__delegate = delegate
+        return new
+
+    def __getattr__(self, attr):
+        try:
+            return getattr(self._delegate, attr)
+        except AttributeError as e:
+            e.args = ("'{cls.__name__}' object has no attribute '{attr}', "
+                      "nor has its '{dcls.__name__}' delegate"
+                      .format(cls=type(self), dcls=type(self._delegate),
+                              **locals())),)
+            raise e
 
 
 class OptupleBase(InstanceBoundTypeMixin):
