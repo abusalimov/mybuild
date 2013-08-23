@@ -22,12 +22,8 @@ class ModuleTypeStub(object):
     __my_prepare_obj__."""
 
     def __init__(self, *args, **kwargs):
-        super(ModuleTypeStub, self).__init__()
-        self.optypes = self._create_optypes(*args, **kwargs)
-
-    @classmethod
-    def _create_optypes(cls, *args, **kwargs):
         """Args/kwargs are converted into a list of options."""
+        super(ModuleTypeStub, self).__init__()
 
         for optype in args:
             if not isinstance(optype, Optype):
@@ -47,18 +43,15 @@ class ModuleTypeStub(object):
 
             optypes.append(optype)
 
-        return optypes
+        self.optypes = optypes
 
     @class_instance_method
     def __my_prepare_obj__(cls, self, py_module, names):
         if self is None:
-            # to let 'module() {}' and 'module {}' behave the same.
+            # let 'module() {...}' and 'module {...}' to behave the same way
             return cls()._my_prepare_obj__(py_module, name)
 
-        if names:
-            name = names[0]
-        else:
-            name = '<unnamed>'
+        name = (names[0] if names else '<unnamed>')
         type_dict = dict(__module__=py_module)
 
         return (new_type(name, (Module,), type_dict,
