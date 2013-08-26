@@ -273,7 +273,7 @@ def get_rgraph(trunk):
     return rgraph
 
 def get_error_rgraph(solution_error):
-    solution = solution_error.context
+    solution = solution_error.trunk
     rgraph = get_rgraph(solution)
     
     violation_nodes = get_violation_nodes(solution)
