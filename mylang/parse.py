@@ -93,22 +93,18 @@ def p_bindings_value(p):
 
 def p_bindings_targets(p):
     """bindings : ID DOUBLECOLON bindings"""
-    l, value = p[0] = p[3]
+    l, call = p[0] = p[3]
     l.append(ast.Name(p[1], ast.Store()))
 
     # the following dirty hack is to provide an access to binding names
     # in runtime
 
-    call = value
-    if not isinstance(call, ast.Call):
-        return
+    if (isinstance(call, ast.Call) and
+        isinstance(call.func, ast.Name) and
+        call.func.id == '__my_new_block__' and
+        '__name__' not in map(getter.arg, call.keywords)):
 
-    name = call.func
-    if not (isinstance(name, ast.Name) and
-            name.id == '__my_setter__'):
-        return
-
-    call.args.append(ast.Str(p[1]))
+        call.keywords.append(ast.keyword('__name__', ast.Str(p[1])))
 
 
 def p_testlist_empty(p):
@@ -224,20 +220,26 @@ def p_my_trailer(p):
     p[0] = p[1]
 
 
-def p_trailer_my_setter_block(p):
+def p_trailer_my_block(p):
     """trailer : mb_period LBRACE docstring my_setters RBRACE"""
-    period = ast.Num(p[1])
+    func = ast.Lambda(ast.arguments([ast.Name('__my_self__', ast.Param()),
+                                     ast.Name('self', ast.Param())],
+                                    None, None, []),
+                      ast.List(to_rlist(p[4]), ast.Load()))
+    keywords = []
+    if not p[1]:
+        keywords.append(ast.keyword('__module__',
+                                    ast.Name('__name__', ast.Load())))
+        doc_node = p[3]
+        if doc_node is not None:
+            keywords.append(ast.keyword('__doc__', doc_node))
 
-    setters = p[4]
-    docstring = p[3]
-    if docstring is not None:
-        setters.append(docstring)
+        runtime_func_name = '__my_new_block__'
+    else:  # seen a period
+        runtime_func_name = '__my_set_block__'
 
-    func = ast.Lambda(ast.arguments([ast_self(ast.Param())], None, None, []),
-                      ast.List(to_rlist(setters), ast.Load()))
-
-    p[0] = (lambda expr: ast.Call(ast.Name('__my_setter__', ast.Load()),
-                                  [period, expr, func], [], None, None),
+    p[0] = (lambda expr: ast.Call(ast.Name(runtime_func_name, ast.Load()),
+                                  [expr, func], keywords, None, None),
             ploc(p, 2))
 
 
@@ -251,11 +253,7 @@ def p_docstring_empty(p):
 def p_docstring(p):
     """docstring : STRING
        docstring : STRING COMMA"""
-    p[0] = set_loc(ast.Tuple([ast_self(),
-                             ast.Str('__doc__'),
-                             ast.Num(True),
-                             ast.Str(p[1])], ast.Load()),
-                   ploc(p, 1))
+    p[0] = set_loc(ast.Str(p[1]), ploc(p, 1))
 
 
 def p_my_setter(p):
