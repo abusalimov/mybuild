@@ -10,23 +10,23 @@ __all__ = ['module', 'option']
 
 from _compat import *
 
-from mybuild.core import ModuleMeta
-from mybuild.core import Module
-from mybuild.core import Optype
+import functools
 
+from mybuild import core
+from util.deco import constructor_decorator
 from util.prop import class_instance_method
 
 
-class ModuleTypeStub(object):
-    """Stub for a Module type is converted into a real type upon a call to
-    __my_prepare_obj__."""
+class MyDslModuleTypeStub(object):
+    """Stub for a Module type which is converted into a real type upon
+    a call to __my_new__."""
 
     def __init__(self, *args, **kwargs):
         """Args/kwargs are converted into a list of options."""
-        super(ModuleTypeStub, self).__init__()
+        super(MyDslModuleTypeStub, self).__init__()
 
         for optype in args:
-            if not isinstance(optype, Optype):
+            if not isinstance(optype, core.Optype):
                 raise TypeError('Positional argument must be an option: '
                                 '{optype}'.format(**locals()))
             if not hasattr(optype, '_name'):
@@ -36,8 +36,8 @@ class ModuleTypeStub(object):
         optypes = list(args)
 
         for name, optype in iteritems(kwargs):
-            if not isinstance(optype, Optype):
-                optype = Optype(optype)
+            if not isinstance(optype, core.Optype):
+                optype = core.Optype(optype)
             if not hasattr(optype, '_name'):
                 optype.set(name=name)
 
@@ -46,19 +46,19 @@ class ModuleTypeStub(object):
         self.optypes = optypes
 
     @class_instance_method
-    def __my_prepare_obj__(cls, self, py_module, names):
+    def __my_new__(cls, self, init_func):
         if self is None:
             # let 'module() {...}' and 'module {...}' to behave the same way
-            return cls().__my_prepare_obj__(py_module, names)
+            return cls().__my_new__(init_func)
 
-        name = (names[0] if names else '<unnamed>')
-        type_dict = dict(__module__=py_module)
+        @constructor_decorator(core.Module, optypes=self.optypes)
+        @functools.wraps(init_func)
+        def module(self, *args, **kwargs):
+            init_func(self)
 
-        return (new_type(name, (Module,), type_dict,
-                         metaclass=ModuleMeta, optypes=self.optypes),
-                True)  # and yes, proxify it
+        return module
 
 
-module = ModuleTypeStub
-option = Optype
+module = MyDslModuleTypeStub
+option = core.Optype
 

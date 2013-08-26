@@ -59,42 +59,34 @@ class ModuleMeta(type):
         """Suppresses any redundant arguments."""
         return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, internal=False, **kwargs):
-        """Auxiliary internal classes must be created with internal=True
-        keyword metaclass argument.
-
-        The rest keywords are passed to _prepare_optypes method."""
+    def __init__(cls, name, bases, attrs, optypes=None):
+        """Real module classes must be created with 'optypes' keyword
+        argument."""
         super(ModuleMeta, cls).__init__(name, bases, attrs)
 
-        if not internal:
-            if hasattr(cls, '_options'):
+        if optypes is not None:
+            if not cls._internal:
                 raise TypeError("A non-internal class '{cls}' already has "
-                                "an '_options' attribute".format(**locals()))
-            cls._init_options(cls._prepare_optypes(**kwargs))
-
-    def _prepare_optypes(cls, optypes):
-        return optypes
+                                "its options initialized".format(**locals()))
+            cls._init_options(optypes)
 
     def _init_options(cls, optypes):
         optuple_type = Optuple if optypes else EmptyOptuple
         cls._options = options = optuple_type._new_type(cls, optypes)._options
 
         for option in options:
-            # Every module has an _optuple attribute, see Module.__new__
+            # Every module has an _optuple attribute, see ModuleBase.__init__
             getter = attrgetter('_optuple.{0}'.format(option))
             setattr(cls, option, property(getter))
+
+    def _instantiate(cls, *args, **kwargs):
+        return super(ModuleMeta, cls).__call__(*args, **kwargs)
 
     def __call__(_cls, **kwargs):
         if _cls._internal:
             raise TypeError("Internal class '{_cls}' is not callable"
                             .format(**locals()))
         return _cls._options._ellipsis(**kwargs)
-
-    def _instantiate(cls, optuple):
-        instance = cls.__new__(cls, optuple)
-        if isinstance(instance, cls):
-            instance.__init__(**optuple._asdict())
-        return instance
 
     def __repr__(cls):
         if cls._internal:
@@ -107,52 +99,55 @@ class ModuleMeta(type):
         return cls._fullname + options_str
 
 
-class ModuleBase(extend(metaclass=ModuleMeta, internal=True)):
+class ModuleBase(extend(metaclass=ModuleMeta)):
     """Base class for Mybuild modules."""
 
-    # This is read-only even for subtypes.
-    _optuple  = property(getter.__optuple)
+    _optuple = property(getter.__optuple)  # read-only even for subtypes
 
-    # These properties default to corresponding class ones,
-    # however instance is allowed to override them by setting custom values.
+    # These properties default to corresponding class attributes,
+    # however instance can override them by setting custom values.
     _name     = class_default_property(getter._name)
     _fullname = class_default_property(getter._fullname)
     _file     = class_default_property(getter._file)
 
-    # ModuleMeta overloads __call__, but the default factory call is
-    # available through ModuleMeta._instantiate with the only exception
-    # that __init__  is called with optuple unpacked into keyword arguments,
-    # unlike __new__ which receives the sole optuple argument.
+    # ModuleMeta overloads __call__, but the default factory call is still
+    # available through ModuleMeta._instantiate.
+    # Note that only non-internal classes can be intantiated.
 
-    def __new__(cls, optuple):
+    def __new__(cls, *args, **kwargs):
         if cls._internal:
-            raise TypeError('Internal module class')
-        if not issubclass(cls, optuple._module):
+            raise TypeError("Can not instantiate internal class '{cls}'"
+                            .format(**locals()))
+        return super(ModuleBase, cls).__new__(cls)
+
+    def __init__(self, optuple):
+        super(ModuleBase, self).__init__()
+
+        if not isinstance(self, optuple._module):
             raise TypeError('Optuple of incompatible module type')
         if not optuple._complete:
             raise ValueError('Incomplete optuple')
 
-        new = super(ModuleBase, cls).__new__(cls)
-        new.__optuple  = optuple
-        return new
-
-    def __init__(_self, **kwargs):
-        """Consumes keyword arguments."""
-        super(ModuleBase, _self).__init__()
+        self.__optuple  = optuple
 
     def __repr__(self):
         return repr(self._optuple)
 
 
-class Module(extend(ModuleBase, internal=True)):
+class Module(ModuleBase):
     """Delegates requests to any unknown attributes to another object."""
 
-    _delegate = property(getter.__delegate)
+    def __init__(self, optuple, delegate=None):
+        super(Module, self).__init__(optuple)
+        self._delegate = delegate
 
-    def __new__(cls, optuple, delegate=None):
-        new = super(Module, cls).__new__(cls, optuple)
-        new.__delegate = delegate
-        return new
+        self._constraints = []  # [(optuple, condition)]
+
+    def _constrain(self, mslice, condition=True):
+        self._constraints.append((mslice(), condition))
+
+    def _discover(self, mslice):
+        self._constrain(mslice, condition=False)
 
     def __getattr__(self, attr):
         try:
