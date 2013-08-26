@@ -155,12 +155,10 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 
 
 class Module(extend(ModuleBase, metaclass=ModuleMeta, internal=True)):
-    """Delegates requests to any unknown attributes to another object."""
+    """Provides a data necessary for Context."""
 
-    def __init__(self, optuple, delegate=None):
+    def __init__(self, optuple):
         super(Module, self).__init__(optuple)
-        self._delegate = delegate
-
         self._constraints = []  # [(optuple, condition)]
 
     def _constrain(self, mslice, condition=True):
@@ -169,20 +167,13 @@ class Module(extend(ModuleBase, metaclass=ModuleMeta, internal=True)):
     def _discover(self, mslice):
         self._constrain(mslice, condition=False)
 
-    def __getattr__(self, attr):
-        try:
-            return getattr(self._delegate, attr)
-        except AttributeError as e:
-            e.args = ("'{cls.__name__}' object has no attribute '{attr}', "
-                      "nor has its '{dcls.__name__}' delegate"
-                      .format(cls=type(self), dcls=type(self._delegate),
-                              **locals()),)
-            raise e
-
 
 class OptupleBase(InstanceBoundTypeMixin):
 
     _tuple_attrs = frozenset(filternot(invoker.startswith('_'), dir(tuple())))
+
+    def _instantiate_module(self, *args, **kwargs):
+        return self._module._instantiate(self, *args, **kwargs)
 
     def __call__(_self, **kwargs):
         return _self._replace(**kwargs) if kwargs else _self
