@@ -55,13 +55,17 @@ class Context(object):
         else:
             self._instances_alive[optuple] = instance
 
+            for constraint, condition in instance._constraints:
+                self.discover(constraint, instance)
+                if condition:
+                    self._constraints[instance].add(constraint)
+
     def _instantiate_product(self, mdata, iterables_optuple, origin=None):
         for optuple in map(iterables_optuple._make,
                            product(*iterables_optuple)):
             self._instantiate(mdata, optuple, origin)
 
-    def consider(self, mslice, origin=None):
-        optuple = mslice()
+    def discover(self, optuple, origin=None):
         mdata = self.mdata_for(optuple._module)
 
         for value, domain_to_extend in optuple._zipwith(mdata.domain):
@@ -73,12 +77,6 @@ class Context(object):
             self._instantiate_product(mdata, optuple._make(option_domain
                     if option_domain is not domain_to_extend else (value,)
                     for option_domain in mdata.domain), origin)
-
-    def constrain(self, mslice, origin=None):
-        optuple = mslice()
-        self.consider(optuple, origin)
-
-        self._constraints[origin].add(optuple)
 
     def mdata_for(self, module):
         try:
@@ -116,7 +114,9 @@ class Context(object):
         return g
 
     def resolve(self, initial_module):
-        self.constrain(initial_module)
+        optuple = initial_module()
+        self.discover(optuple)
+        self._constraints[None].add(optuple)
 
         pgraph = self.create_pgraph()
         solution = solve(pgraph)
