@@ -10,14 +10,13 @@ __date__ = "2013-07-30"
 
 from _compat import *
 
-try:
-    from mylang.parse import parse
-except ImportError:
-    def parse(*args, **kwargs):
-        raise ImportError('PLY is not installed')
-
 
 def my_compile(source, filename='<unknown>', mode='exec'):
+    try:
+        from mylang.parse import parse
+    except ImportError:
+        raise ImportError('PLY is not installed')
+
     ast_root = parse(source, filename, mode)
     return compile(ast_root, filename, mode)
 
@@ -31,7 +30,7 @@ if __name__ == "__main__":
         source: "init.c",
 
         depends: [
-            embox.arch.cpu(endian="be"){runtime: False},
+            embox.arch.cpu(endian="be").{runtime: False},
 
             embox.driver.diag.diag_api,
         ],
@@ -47,7 +46,6 @@ if __name__ == "__main__":
     def get_globals():
         @singleton
         class embox(object):
-            __my_prepare_obj__ = None
             def __call__(self, *args, **kwargs):
                 print self, args, kwargs
                 return self
@@ -61,13 +59,19 @@ if __name__ == "__main__":
             def __call__(self, *args, **kwargs):
                 print self, args, kwargs
                 return self
+            def __my_new__(self, init_func):
+                print self, init_func
+                return init_func(self)
 
-        __builtins__ = runtime.prepare_builtins()
+        __builtins__ = runtime.builtins
         return locals()
 
     try:
         code = my_compile(source)
-        exec(code, dict(globals(), **get_globals()))
+        ns = dict(globals(), **get_globals())
+        exec(code, ns)
+
+        print ns['kernel'].source
 
     except:
         import sys, traceback, code
