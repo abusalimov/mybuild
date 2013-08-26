@@ -13,18 +13,17 @@ __all__ = [
 
 from _compat import *
 
-from collections import namedtuple
 from collections import defaultdict
+from collections import deque
 from functools import partial
 from itertools import product
 from itertools import starmap
-from operator import attrgetter
 
 from mybuild.core import *
 from mybuild.pgraph import *
 from mybuild.solver import solve
 
-from util.deco import no_reent
+from util.itertools import pop_iter
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,144 +32,113 @@ logger = logging.getLogger(__name__)
 class Context(object):
     """docstring for Context"""
 
-    def __init__(self, module_meta=type):
+    def __init__(self):
         super(Context, self).__init__()
-        self.module_meta = module_meta
+        self._domains = dict()  # {module: domain}, domain is optuple of sets
+        self._instantiation_queue = deque()
 
-        self._mdata = dict()  # {module: mdata}
+        self.pgraph = ContextPgraph(self)
+        self.instance_nodes = list()
 
-        self._instances_alive = dict()   # {optuple: instance}
-        self._instance_errors = dict()   # {optuple: error}
-
-        self._constraints = defaultdict(set)  # {instance: optuples...}
-
-    @no_reent
-    def _instantiate(self, mdata, optuple, origin=None):
-        logger.debug("new %s (posted by %s)", optuple, origin)
+    def domain_for(self, module):
         try:
-            instance = mdata.ctxtype._instantiate(optuple)
-        except InstanceError as error:
-            logger.debug("    %s inviable: %s", optuple, error)
-            self._instance_errors[optuple] = error
-        else:
-            self._instances_alive[optuple] = instance
+            domain = self._domains[module]
+        except KeyError:
+            domain = self._domains[module] = \
+                    module._opmake(set(optype._values)
+                                   for optype in module._optypes)
+            self.post_product(domain)
 
-            for constraint, condition in instance._constraints:
-                self.discover(constraint, instance)
-                if condition:
-                    self._constraints[instance].add(constraint)
+        return domain
 
-    def _instantiate_product(self, mdata, iterables_optuple, origin=None):
+    def post(self, optuple, origin=None):
+        self._instantiation_queue.append((optuple, origin))
+
+    def post_product(self, iterables_optuple, origin=None):
         for optuple in map(iterables_optuple._make,
                            product(*iterables_optuple)):
-            self._instantiate(mdata, optuple, origin)
+            self.post(optuple, origin)
 
-    def discover(self, optuple, origin=None):
-        mdata = self.mdata_for(optuple._module)
+    def post_discover(self, optuple, origin=None):
+        domain = self.domain_for(optuple._module)
 
-        for value, domain_to_extend in optuple._zipwith(mdata.domain):
+        for value, domain_to_extend in optuple._zipwith(domain):
             if value in domain_to_extend:
                 continue
 
             domain_to_extend.add(value)
 
-            self._instantiate_product(mdata, optuple._make(option_domain
+            self.post_product(optuple._make(option_domain
                     if option_domain is not domain_to_extend else (value,)
-                    for option_domain in mdata.domain), origin)
+                    for option_domain in domain), origin)
 
-    def mdata_for(self, module):
+    def instantiate(self, optuple, origin=None):
+        g = self.pgraph
+        node = g.node_for(optuple)
+
+        logger.debug("new %s (posted by %s)", optuple, origin)
         try:
-            mdata = self._mdata[module]
-        except KeyError:
-            mdata = self._mdata[module] = ModuleData(self, module)
-            self._instantiate_product(mdata, mdata.domain)
+            instance = optuple._instantiate_module()
 
-        return mdata
+        except InstanceError as error:
+            logger.debug("    %s inviable: %s", optuple, error)
 
-    def create_pgraph(self):
-        g = ContextPgraph(self)
-
-        for mdata in itervalues(self._mdata):
-            mdata.init_pgraph(g)
-
-        for optuple, instance in iteritems(self._instances_alive):
-            g.node_for(optuple).instance = instance
-
-        for optuple, error in iteritems(self._instance_errors):
-            optuple_node = g.node_for(optuple)
-            optuple_node.error = error
-            g.new_const(False, optuple_node,
+            node.error = error
+            g.new_const(False, node,
                         why=why_inviable_instance_is_disabled)
 
-        for origin, constraints in iteritems(self._constraints):
-            if origin is not None:
-                origin_node = g.node_for(origin._optuple)
-            else:
-                origin_node = g.new_const(True)
+        else:
+            node.instance = instance
 
-            origin_node.implies_all(map(g.node_for, constraints),
-                                    why=why_instance_implies_its_constraints)
+            for constraint, condition in instance._constraints:
+                self.post_discover(constraint, instance)
+                if condition:
+                    node.implies(g.node_for(constraint),
+                                 why=why_instance_implies_its_constraints)
 
-        return g
+        self.instance_nodes.append(node)
+
+        return node
+
+    def discover_all(self, initial_optuple):
+        self.post_discover(initial_optuple)
+
+        for optuple, origin in pop_iter(self._instantiation_queue,
+                                        pop_meth='popleft'):
+            self.instantiate(optuple, origin)
+
+    def init_pgraph_domains(self):
+        g = self.pgraph
+
+        for module, domain in iteritems(self._domains):
+            atom_for_module = partial(g.atom_for, module)
+            module_atom = atom_for_module()
+
+            for option, values in domain._iterpairs():
+                atom_for_option = partial(atom_for_module, option)
+
+                option_node = AtMostOne(g, map(atom_for_option, values),
+                        why_one_operand_zero_implies_others_identity=
+                            why_option_can_have_at_most_one_value,
+                        why_identity_implies_all_operands_identity=
+                            why_disabled_option_cannot_have_a_value,
+                        why_all_operands_identity_implies_identity=
+                            why_option_with_no_value_must_be_disabled)
+
+                module_atom.equivalent(option_node,
+                        why_becauseof=why_option_implies_module,
+                        why_therefore=why_module_implies_option)
 
     def resolve(self, initial_module):
         optuple = initial_module()
-        self.discover(optuple)
-        self._constraints[None].add(optuple)
 
-        pgraph = self.create_pgraph()
-        solution = solve(pgraph)
+        self.discover_all(optuple)
+        self.init_pgraph_domains()
 
-        return [instance
-                for optuple, instance in iteritems(self._instances_alive)
-                if solution[pgraph.node_for(optuple)]]
+        solution = solve(self.pgraph, {self.pgraph.node_for(optuple): True})
 
-
-class ModuleData(namedtuple('ModuleData', 'ctxtype, domain')):
-    __slots__ = ()
-
-    context = property(attrgetter('ctxtype._context'))
-    module  = property(attrgetter('ctxtype._module'))
-
-    def __new__(cls, context, module):
-        return super(ModuleData, cls).__new__(cls,
-                ctxtype=cls._create_ctxtype(context, module),
-                domain=cls._create_domain(module))
-
-    @classmethod
-    def _create_ctxtype(cls, context, module):
-        # Mix context specific instance type into a module class.
-        type_dict = dict(__module__ = module.__module__,
-                         __doc__    = module.__doc__,
-                         _module    = module,
-                         _context   = context)
-
-        return new_type(module.__name__, (module,), type_dict,
-                        metaclass=context.module_meta, internal=True)
-
-    @classmethod
-    def _create_domain(cls, module):
-        return module._opmake(set(optype._values)
-                              for optype in module._optypes)
-
-    def init_pgraph(self, g):
-        atom_for_module = partial(g.atom_for, self.module)
-        module_atom = atom_for_module()
-
-        for option, values in self.domain._iterpairs():
-            atom_for_option = partial(atom_for_module, option)
-
-            option_node = AtMostOne(g, map(atom_for_option, values),
-                    why_one_operand_zero_implies_others_identity=
-                        why_option_can_have_at_most_one_value,
-                    why_identity_implies_all_operands_identity=
-                        why_disabled_option_cannot_have_a_value,
-                    why_all_operands_identity_implies_identity=
-                        why_option_with_no_value_must_be_disabled)
-
-            module_atom.equivalent(option_node,
-                    why_becauseof=why_option_implies_module,
-                    why_therefore=why_module_implies_option)
+        return [node.instance
+                for node in self.instance_nodes if solution[node]]
 
 
 class ContextPgraph(Pgraph):
@@ -273,8 +241,8 @@ def why_inviable_instance_is_disabled(outcome, *_):
     return fmt.format(**locals())
 
 
-def resolve(initial_module, module_meta=type):
-    return Context(module_meta).resolve(initial_module)
+def resolve(initial_module):
+    return Context().resolve(initial_module)
 
 
 if __name__ == '__main__':
