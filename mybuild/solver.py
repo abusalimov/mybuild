@@ -537,7 +537,7 @@ def branchset_to_resolve(trunk):
     dead_literals = set()
     for branch in filternot(getter.valid, trunk.branchset()):
         dead_literals |= branch.gen_literals
-    return set(trunk.branchmap[~literal] for literal in dead_literals)
+    return dead_literals, set(trunk.branchmap[~literal] for literal in dead_literals)
 
 
 @logger.wrap
@@ -547,13 +547,10 @@ def resolve_branches(trunk, branches=None):
     branches.
     """
    
-    why = why_default
-    follow = False
-    
+    dead_literals = set()
     if branches is None:
-        branches = branchset_to_resolve(trunk)
-        why=why_implied_by_dead_branch
-        follow = True
+        dead_literals, branches = branchset_to_resolve(trunk)
+
 
     while branches:
         logger.info('resolving %d branch(es)', len(branches))
@@ -564,8 +561,13 @@ def resolve_branches(trunk, branches=None):
         for branch in branches:
             logger.debug('\t+merge %r', branch)
             for gen_literal in branch.gen_literals:
-                resolved.reasons.add(Reason(gen_literal, why=why, 
-                                            follow=follow))
+                if ~gen_literal in dead_literals:
+                    resolved.reasons.add(Reason(gen_literal, 
+                                                why=why_implied_by_dead_branch, 
+                                                follow=True))
+                else:
+                    resolved.reasons.add(Reason(gen_literal, why=why_default, 
+                                                follow=False))
 
             resolved.merge(branch)
         expand_branch(resolved)  # handle todos, if any
@@ -589,7 +591,7 @@ def resolve_branches(trunk, branches=None):
             branch.reverse_merge(resolved)
         expand_branchset(trunk)
 
-        branches = branchset_to_resolve(trunk)
+        dead_literals, branches = branchset_to_resolve(trunk)
 
     logger.dump(trunk)
 

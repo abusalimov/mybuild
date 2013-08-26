@@ -119,8 +119,7 @@ def my_resolve(ctx, conf_module):
             instances = resolve(conf_module, module_meta=mywaf_module_meta)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
-            #TODO test it
-            #print_graph(e.rgraph)
+            print_graph(e.rgraph)
             raise e
         
         instance_map = dict((instance._module, instance)
