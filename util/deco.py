@@ -13,7 +13,7 @@ from functools import partial
 from util.itertools import pop_iter
 
 
-def constructor_decorator(cls, **kwargs):
+def constructor_decorator(*bases, **kwargs):
     """
     Lets using a decorated class as a function decorator, which converts the
     function into a constructor.
@@ -22,7 +22,7 @@ def constructor_decorator(cls, **kwargs):
     one upon subclassing, thus it doesn't appear in MRO of subclasses. This
     means that the class returned must not be used in super().
 
-    Keyword arguments are used to alter attributes of the returned class.
+    Keyword arguments are passed to a metaclass.
     """
 
     # For 'cls' itself we define a fake metaclass, which overrides a default
@@ -31,19 +31,11 @@ def constructor_decorator(cls, **kwargs):
     # replaces itself with the original one and replaces the returned class
     # with 'cls' with the original __call__ method.
     #
-    # This magic is similar to the one used in _compat.with_meta function.
-    mcls = type(cls)
+    # This magic is similar to the one used in _compat.extend function.
 
-    class metaclass(mcls):
-        __init__ = type.__init__
-        def __new__(xmcls, name, this_bases, attrs):
-            if this_bases is None:
-                return type.__new__(xmcls, name, (cls,), attrs)
-            bases = tuple(base if base is not ret_cls else cls
-                          for base in this_bases)
-            return mcls(name, bases, attrs)
+    class temp_metaclass(type(extend(*bases, **kwargs))):
 
-        def __call__(xcls, func):
+        def __call__(cls, func):
             # For unknown reasons __doc__ attribute of type objects is
             # read-only, and update_wrapper is unable to set it. The same is
             # about __dict__  attribute which becomes a dictproxy upon class
@@ -54,15 +46,15 @@ def constructor_decorator(cls, **kwargs):
             def __init__(self, *args, **kwargs):
                 super(ret_type, self).__init__(*args, **kwargs)
                 return func(self, *args, **kwargs)
+
             type_dict = dict(func.__dict__,
-                             __init__   = __init__,
-                             __module__ = __init__.__module__,
-                             __doc__    = __init__.__doc__)
-            ret_type = mcls(func.__name__, (cls,), type_dict)
+                             __module__ = func.__module__,
+                             __doc__    = func.__doc__,
+                             __init__   = __init__)
+            ret_type = type(cls)(func.__name__, (cls,), type_dict)
             return ret_type
 
-    ret_cls = metaclass(cls.__name__, None, dict(cls.__dict__, **kwargs))
-    return ret_cls
+    return temp_metaclass('temp_class', None, {})
 
 
 class defer_call(object):
