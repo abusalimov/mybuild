@@ -8,7 +8,9 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-09-15"
 
 __all__ = [
+    "ModuleMetaBase",
     "ModuleMeta",
+    "ModuleBase",
     "Module",
     "Optype",
     "Optuple",
@@ -31,7 +33,7 @@ from util.prop import class_default_property
 from util.misc import InstanceBoundTypeMixin
 
 
-class ModuleMeta(type):
+class ModuleMetaBase(type):
     """Metaclass of Mybuild modules."""
 
     _opmake  = property(attrgetter('_options._make'))
@@ -57,12 +59,12 @@ class ModuleMeta(type):
 
     def __new__(mcls, name, bases, attrs, **kwargs):
         """Suppresses any redundant arguments."""
-        return super(ModuleMeta, mcls).__new__(mcls, name, bases, attrs)
+        return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs, optypes=None):
         """Real module classes must be created with 'optypes' keyword
-        argument."""
-        super(ModuleMeta, cls).__init__(name, bases, attrs)
+        argument. By default produces internal classes."""
+        super(ModuleMetaBase, cls).__init__(name, bases, attrs)
 
         if optypes is not None:
             if not cls._internal:
@@ -80,7 +82,7 @@ class ModuleMeta(type):
             setattr(cls, option, property(getter))
 
     def _instantiate(cls, *args, **kwargs):
-        return super(ModuleMeta, cls).__call__(*args, **kwargs)
+        return super(ModuleMetaBase, cls).__call__(*args, **kwargs)
 
     def __call__(_cls, **kwargs):
         if _cls._internal:
@@ -90,7 +92,7 @@ class ModuleMeta(type):
 
     def __repr__(cls):
         if cls._internal:
-            return super(ModuleMeta, cls).__repr__()
+            return super(ModuleMetaBase, cls).__repr__()
 
         options_str = ', '.join(cls._options)
         if options_str:
@@ -99,7 +101,25 @@ class ModuleMeta(type):
         return cls._fullname + options_str
 
 
-class ModuleBase(extend(metaclass=ModuleMeta)):
+class ModuleMeta(ModuleMetaBase):
+    """Adds an optional 'internal' keyword argument.
+
+    Produces real modules by default, however subclasses must still pass
+    an 'optype' keyword argument or provide a resonable implementation
+    of '_prepare_optypes' method."""
+
+    def __init__(cls, name, bases, attrs, internal=False, **kwargs):
+        """Keyword arguments are passed to '_prepare_optypes' method."""
+        super(ModuleMeta, cls).__init__(name, bases, attrs,
+                optypes=(None if internal else
+                         cls._prepare_optypes(**kwargs)))
+
+    def _prepare_optypes(cls, optypes):
+        """Always called with keyword arguments passed to the constructor."""
+        return optypes
+
+
+class ModuleBase(extend(metaclass=ModuleMetaBase)):
     """Base class for Mybuild modules."""
 
     _optuple = property(getter.__optuple)  # read-only even for subtypes
@@ -110,8 +130,8 @@ class ModuleBase(extend(metaclass=ModuleMeta)):
     _fullname = class_default_property(getter._fullname)
     _file     = class_default_property(getter._file)
 
-    # ModuleMeta overloads __call__, but the default factory call is still
-    # available through ModuleMeta._instantiate.
+    # ModuleMetaBase overloads __call__, but the default factory call is still
+    # available through ModuleMetaBase._instantiate.
     # Note that only non-internal classes can be intantiated.
 
     def __new__(cls, *args, **kwargs):
@@ -134,7 +154,7 @@ class ModuleBase(extend(metaclass=ModuleMeta)):
         return repr(self._optuple)
 
 
-class Module(ModuleBase):
+class Module(extend(ModuleBase, metaclass=ModuleMeta, internal=True)):
     """Delegates requests to any unknown attributes to another object."""
 
     def __init__(self, optuple, delegate=None):

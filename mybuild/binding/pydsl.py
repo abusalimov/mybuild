@@ -19,12 +19,7 @@ from util.deco import constructor_decorator
 class PyDslModuleMeta(core.ModuleMeta):
     """Infers options from class constructor."""
 
-    def __init__(cls, name, bases, attrs, internal=False):
-        super(PyDslModuleMeta, cls).__init__(name, bases, attrs,
-                optypes=(None if internal else
-                         cls._optypes_from_constructor()))
-
-    def _optypes_from_constructor(cls):
+    def _prepare_optypes(cls):
         """Converts a constructor argspec into a list of Optype objects."""
         func = cls.__dict__.get('__init__')  # to avoid MRO lookup
 
