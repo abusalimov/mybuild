@@ -38,6 +38,7 @@ from waflib import Utils   as wafutils
 
 import unittest
 from test import module_tests_solver
+from mybuild.test import test_solver
 
 
 namespace_importer = NamespaceImportHook(loaders={
@@ -233,6 +234,7 @@ def configure(ctx):
 def selftest(ctx):
     suite = unittest.TestSuite()
     suite.addTests([
+        test_solver.suite(),
         module_tests_solver.suite(ctx),
     ])
 
