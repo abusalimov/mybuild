@@ -1,17 +1,13 @@
-import unittest
-from unittest import TestCase
+from _compat import *
 
-from functools import partial
-from itertools import izip_longest
+import unittest
+import functools
 
 from mybuild import pgraph
-from mybuild.pgraph import *
 from mybuild.solver import *
 
-from util.operator import getter
 
-
-class TestPgraph(Pgraph):
+class TestPgraph(pgraph.Pgraph):
 
     def __init__(self):
         super(TestPgraph, self).__init__()
@@ -19,7 +15,7 @@ class TestPgraph(Pgraph):
         for node_type in type(self)._iter_all_node_types():
             if not hasattr(self, node_type.__name__):
                 setattr(self, node_type.__name__,
-                        partial(self.new_node, node_type))
+                        functools.partial(self.new_node, node_type))
 
 
 class Named(object):
@@ -38,7 +34,7 @@ class Named(object):
 
 
 @TestPgraph.node_type
-class NamedAtom(Named, Atom):
+class NamedAtom(Named, pgraph.Atom):
     pass
 
 
@@ -64,7 +60,7 @@ class AllEqual(Named, StarArgsToArg, pgraph.AllEqual):
     pass
 
 
-class PdagDtreeTestCase(TestCase):
+class PdagDtreeTestCase(unittest.TestCase):
 
     def setUp(self):
         self.pgraph = TestPgraph()
@@ -231,14 +227,14 @@ class PdagDtreeTestCase(TestCase):
     def test_resolve_braches_0(self):
         g = self.pgraph
         A, B = self.atoms('AB')
- 
+
         x = g.And(B[False], A[False], g.Or(A[True], B[True]))
         y = B[True]
         x.equivalent(y)
-        
+
         with self.assertRaises(SolveError):
             solve(g, {self.sneaky_pair_and(A, B): True})
-        
+
     def test_resolve_braches_1(self):
         g = self.pgraph
         A, B = self.atoms('AB')
@@ -305,8 +301,7 @@ if __name__ == '__main__':
     import util, sys, logging
     # util.init_logging(filename='%s.log' % __name__)
     util.init_logging(sys.stderr,
-                      # level=logging.INFO
-                      )
+                      level=logging.INFO)
 
-    unittest.main()
+    unittest.main(verbosity=2)
 
