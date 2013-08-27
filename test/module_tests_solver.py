@@ -5,6 +5,7 @@ from mybuild.binding.pydsl import module
 from mybuild.context import Context
 from mybuild.solver import solve
 from mybuild.solver import SolveError
+import mywaf
 
 class SolverTestCase(TestCase):
 
@@ -24,15 +25,12 @@ class SolverTestCase(TestCase):
         def m2(self):
             pass
 
-        context.consider(conf)
-
-        g = context.create_pgraph()
-
-        solution = solve(g, {g.atom_for(conf):True})
-
-        self.assertIs(True,  solution[g.atom_for(conf)])
-        self.assertIs(True,  solution[g.atom_for(m1)])
-        self.assertIs(True,  solution[g.atom_for(m2)])
+        instances = context.resolve(conf)
+        modules = set(map(type, instances))
+        
+        self.assertIn(conf, modules)
+        self.assertIn(m1, modules)
+        self.assertIn(m2, modules)
 
     def test_unused_module(self):
         context = Context()
@@ -59,19 +57,14 @@ class SolverTestCase(TestCase):
         def m4(self):
             pass
 
-        context.consider(conf)
-        context.consider(m3)
-        context.consider(m4)
-
-        g = context.create_pgraph()
-
-        solution = solve(g, {g.atom_for(conf):True})
-
-        self.assertIs(True,  solution[g.atom_for(conf)])
-        self.assertIs(True,  solution[g.atom_for(m1)])
-        self.assertIs(True,  solution[g.atom_for(m2)])
-        self.assertIs(False,  solution[g.atom_for(m3)])
-        self.assertIs(False,  solution[g.atom_for(m4)])
+        instances = context.resolve(conf)
+        modules = set(map(type, instances))
+        
+        self.assertIn(conf, modules)
+        self.assertIn(m1, modules)
+        self.assertIn(m2, modules)
+        self.assertNotIn(m3, modules)
+        self.assertNotIn(m4, modules)
 
     def test_cyclic_dependence(self):
         context = Context()
@@ -88,17 +81,14 @@ class SolverTestCase(TestCase):
         def m2(self):
             self._constrain(m1)
 
-        context.consider(conf)
-
-        g = context.create_pgraph()
-
-        solution = solve(g, {g.atom_for(conf):True})
-
-        self.assertIs(True,  solution[g.atom_for(conf)])
-        self.assertIs(True,  solution[g.atom_for(m1)])
-        self.assertIs(True,  solution[g.atom_for(m2)])
+        instances = context.resolve(conf)
+        modules = set(map(type, instances))
         
-    def parameter_violation_error(self):
+        self.assertIn(conf, modules)
+        self.assertIn(m1, modules)
+        self.assertIn(m2, modules)
+        
+    def test_parameter_violation_error(self):
         context = Context()
         
         @module
@@ -114,9 +104,9 @@ class SolverTestCase(TestCase):
         g = context.create_pgraph()
         
         with self.assertRaises(SolveError):
-            solve(g, {g.atom_for(conf):True})
+            mywaf.my_resolve(context, conf)
 
-    def seolve_test(self):
+    def test_solve(self):
         #(~A | A&~A)
         context = Context()
         
@@ -140,19 +130,10 @@ class SolverTestCase(TestCase):
         def m3(self, a = False):
             pass
             
-        context.consider(conf)
-        g = context.create_pgraph()
+        instances = context.resolve(conf)
+        modules = set(map(type, instances))
         
-        solution = solve(g, {g.atom_for(conf):True})
-        
-        self.assertIs(True,  solution[g.atom_for(conf)])
-        self.assertIs(True,  solution[g.atom_for(m1)])
-        self.assertIs(True,  solution[g.atom_for(m2)])
-
-
-if __name__ == '__main__':
-    import util
-    util.init_logging('%s.log' % __name__)
-
-    unittest.main()
-
+        self.assertIn(conf, modules)
+        self.assertIn(m1, modules)
+        self.assertNotIn(m2, modules)
+        self.assertIn(m3, modules)

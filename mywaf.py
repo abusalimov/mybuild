@@ -33,6 +33,9 @@ from waflib import Errors  as waferrors
 from waflib import Node    as wafnode
 from waflib import Utils   as wafutils
 
+from test.module_tests_solver import SolverTestCase 
+
+import unittest
 
 def ctx_method(func):
     setattr(wafcontext.Context, func.__name__, func)
@@ -222,6 +225,11 @@ def options(ctx):
 def configure(ctx):
     print('mywaf: configure %r' % ctx)
 
+def moduletest(ctx):
+    loader = unittest.TestLoader()
+    res = unittest.TestResult()
+    loader.loadTestsFromTestCase(SolverTestCase).run(res)
+    print 'result', res
 
 # try:
 #     from waflib.Task import Task
