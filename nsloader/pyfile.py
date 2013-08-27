@@ -18,7 +18,7 @@ class PyFileLoader(SourceFileLoader):
 
     @property
     def defaults(self):
-        namespace = self.importer.namespace
+        namespace = self.name.partition('.')[0]
         return {namespace: __import__(namespace)}
 
     def __init__(self, importer, fullname, path):

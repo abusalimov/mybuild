@@ -34,9 +34,11 @@ class PackageLoader(GenericLoader):
 
         for sub_name in self.sub_modules:
             try:
-                sub_module = getattr(module, sub_name)
-            except AttributeError:
+                __import__(fullname + '.' + sub_name)
+            except ImportError:
                 continue
+            else:
+                sub_module = getattr(module, sub_name)
 
             try:
                 attrs = sub_module.__all__

@@ -45,15 +45,11 @@ class NamespaceImportHook(MetaPathFinder):
     PEP 302 meta path import hook.
     """
 
-    def __init__(self, namespace, path=[], loaders=[]):
+    def __init__(self, loaders={}, namespace_path={}):
         super(NamespaceImportHook, self).__init__()
 
-        if '.' in namespace:
-            raise NotImplementedError('To keep things simple')
-
-        self.namespace = namespace
-        self.path      = list(path)
-        self.loaders   = dict(loaders)  # {module_name: loader_type}
+        self.loaders        = dict(loaders)         # {module_name: loader}
+        self.namespace_path = dict(namespace_path)  # {namespace: [path]}
 
     def find_module(self, fullname, path=None):
         """
@@ -76,25 +72,28 @@ class NamespaceImportHook(MetaPathFinder):
             ----------------   ------------   ----------------------
             'ns'               None           PackageLoader
             'ns.pkg'           self.path      PackageLoader
-            'ns.pkg.PYBUILD'   pkg.__path__   PyFileLoader
+            'ns.pkg.Pybuild'   pkg.__path__   PyFileLoader
         """
         namespace, _, restname = fullname.partition('.')
 
-        if namespace != self.namespace:
+        try:
+            ns_path = self.namespace_path[namespace]
+        except KeyError:
             return None
-        if not restname:
-            return PackageLoader(self.path, self.loaders)
+        if not restname:  # namespace root package
+            return PackageLoader(ns_path, self.loaders)
 
         tailname = restname.rpartition('.')[2]
         try:
             loader_type = self.loaders[tailname]
 
-        except KeyError:
+        except KeyError:  # is it a sub-package?
             def find_loader_in(entry):
                 basepath = os.path.join(entry, tailname)
                 if os.path.isdir(basepath):
                     return PackageLoader([basepath], self.loaders)
-        else:
+
+        else:  # found a module loader, is there a corresponding file?
             filename = getattr(loader_type, 'FILENAME', tailname)
             def find_loader_in(entry):
                 filepath = os.path.join(entry, filename)

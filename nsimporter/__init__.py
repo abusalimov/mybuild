@@ -6,6 +6,8 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
 
 __all__ = [
+    "NamespaceImportHook",
+    "SingleNamespaceImporter",
     "import_all",
 ]
 
@@ -15,13 +17,18 @@ from _compat import *
 import sys
 import os.path
 
-from nsimporter import hook
+from nsimporter.hook import NamespaceImportHook
 
 
-class NamespaceImporter(hook.NamespaceImportHook):
+class SingleNamespaceImporter(NamespaceImportHook):
     """
     PEP 343 context manager.
     """
+
+    def __init__(self, loaders, namespace, path=[]):
+        super(SingleNamespaceImporter, self).__init__(loaders,
+                                                      {namespace: path})
+        self.namespace = namespace
 
     def register(self):
         if self not in sys.meta_path:
@@ -55,13 +62,13 @@ class NamespaceImporter(hook.NamespaceImportHook):
         return ns_module
 
 
-def import_all(relative_dirnames, namespace, path=None, loaders=None):
+def import_all(relative_dirnames, loaders, namespace, path=[]):
     """
     Goes through relative_dirnames converting them into module names within
     the specified namespace and importing by using NamespaceImporter.
     """
 
-    with NamespaceImporter(namespace, path, loaders) as importer:
+    with SingleNamespaceImporter(loaders, namespace, path) as importer:
         return importer.import_all(dirname.replace(os.path.sep, '.')
                                    for dirname in relative_dirnames
                                    if '.' not in dirname)

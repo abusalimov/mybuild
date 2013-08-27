@@ -5,71 +5,75 @@ Mybuild tool for Waf.
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-02"
 
-__all__ = ["MyWafModuleMixin"]  # the rest is bound as Waf Context methods.
+__all__ = [
+    "namespace_importer",
+    "register_namespace",
+    "unregister_namespace",
+]  # the rest is bound as Waf Context methods.
 
 
 from _compat import *
 
-import functools
+import sys
 import os.path
+
+from collections import deque
+import functools
 from operator import attrgetter
 
 from glue import PyDslLoader
 from glue import MyDslLoader
 
-from nsimporter import NamespaceImporter
+from nsimporter.hook import NamespaceImportHook
 
 from mybuild.context import resolve
 from mybuild.solver import SolveError
 from mybuild.rgraph import *
-
-from util.collections import is_mapping
-from util.deco import defer_call
-
-from collections import deque
 
 from waflib import Context as wafcontext
 from waflib import Errors  as waferrors
 from waflib import Node    as wafnode
 from waflib import Utils   as wafutils
 
-from test.module_tests_solver import SolverTestCase 
-
 import unittest
+from test.module_tests_solver import SolverTestCase
+
+
+namespace_importer = NamespaceImportHook(loaders={
+        'Mybuild': MyDslLoader,
+        'Pybuild': PyDslLoader,
+    })
+sys.meta_path.insert(0, namespace_importer)
+
+
+def register_namespace(namespace, path='.'):
+    """Registers a new namespace recognized by a namespace importer.
+
+    Args:
+        namespace (str): namespace root name.
+        path (list/str): a list of strings (or a string of space-separated
+            entries) denoting directories to search when loading files.
+    """
+
+    if '.' in namespace:
+        raise NotImplementedError('To keep things simple')
+
+    # normalize path
+    path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
+            for path_entry in wafutils.to_list(path)]
+
+    namespace_importer.namespace_path[namespace] = path
+
+
+def unregister_namespace(namespace):
+    """Unregisters and returns a previously registered namespace (if any)."""
+    return namespace_importer.namespace_path.pop(namespace, None)
+
 
 def ctx_method(func):
     setattr(wafcontext.Context, func.__name__, func)
     return func
 wafcontext.ctx_method = ctx_method
-
-
-NAMESPACE_LOADERS = {
-    'Mybuild': MyDslLoader,
-    'Pybuild': PyDslLoader,
-}
-
-def register_namespace(namespace, path=None, loaders=NAMESPACE_LOADERS):
-    """Loads all Mybuild files found in path using given loaders into the
-    specified namespace.
-
-    Args:
-        namespace (str)
-        path (list/str): a list of strings (or a string of space-separated
-            entries) denoting directories to search for Mybuild files.
-        loaders (mapping): a name-to-loader_type mapping used to recognize and
-            load Mybuild files.
-
-    Returns:
-        The namespace root module.
-    """
-
-    if path is not None:
-        path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
-                for path_entry in wafutils.to_list(path)]
-    else:
-        path = [wafcontext.run_dir]
-
-    return NamespaceImporter(namespace, path, loaders).register()
 
 
 @wafcontext.ctx_method
@@ -225,7 +229,7 @@ def options(ctx):
 def configure(ctx):
     print('mywaf: configure %r' % ctx)
 
-def moduletest(ctx):
+def selftest(ctx):
     loader = unittest.TestLoader()
     res = unittest.TestResult()
     loader.loadTestsFromTestCase(SolverTestCase).run(res)
