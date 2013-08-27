@@ -10,64 +10,30 @@ from _compat import *
 
 from nsloader import myfile
 from nsloader import pyfile
-from nsloader import yamlfile
 
 from mybuild.binding import mydsl
 from mybuild.binding import pydsl
 
 
-class DslLoaderMixin(object):
+class MyDslLoader(myfile.MyFileLoader):
 
-    @classmethod
-    def init_ctx(cls, ctx, initials=None):
-        new_initials = dict(cls.default_initials())
-        if initials is not None:
-            new_initials.update(initials)
+    FILENAME = 'Mybuild'
 
-        return super(DslLoaderMixin, cls).init_ctx(ctx, new_initials)
-
-    @classmethod
-    def default_initials(cls):
-        return {}
+    @property
+    def defaults(self):
+        return dict(super(MyDslLoader, self).defaults,
+                    module=mydsl.module,
+                    option=mydsl.option)
 
 
-class MyDslLoader(DslLoaderMixin, myfile.MyFileLoader):
+class PyDslLoader(pyfile.PyFileLoader):
 
-    MODULE = 'Mybuild'
+    FILENAME = 'Pybuild'
 
-    @classmethod
-    def default_initials(cls):
-        return {'module': mydsl.module,
-                'option': mydsl.option}
+    @property
+    def defaults(self):
+        return dict(super(PyDslLoader, self).defaults,
+                    module=pydsl.module,
+                    option=pydsl.option)
 
-
-class PyDslLoader(DslLoaderMixin, pyfile.PyFileLoader):
-
-    MODULE = 'Pybuild'
-
-    @classmethod
-    def default_initials(cls):
-        return {'module': pydsl.module,
-                'option': pydsl.option}
-
-
-class YamlDslLoader(DslLoaderMixin, yamlfile.YamlFileLoader):
-
-    MODULE = 'MyYaml'
-
-    @classmethod
-    def default_initials(cls):
-
-        def module(pymodule_name, dictionary):
-            dictionary = dict(dictionary)
-
-            def module_func(self):
-                for key, value in dictionary:
-                    setattr(self, key, value)
-            module_func.__module__ = pymodule_name
-            module_func.__name__ = dictionary.pop('id')
-
-            return pydsl.module(module_func)
-
-        return {'!module': module}
 

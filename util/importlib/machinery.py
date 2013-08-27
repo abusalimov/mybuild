@@ -24,7 +24,7 @@ class GenericLoader(abc_.Loader):
 
         is_reload = bool(module)
         if not is_reload:
-            module = imp.new_module(fullname)
+            module = self._new_module(fullname)
             sys.modules[fullname] = module
 
         try:
@@ -35,6 +35,9 @@ class GenericLoader(abc_.Loader):
             raise
 
         return module
+
+    def _new_module(self, fullname):
+        return imp.new_module(fullname)
 
     @abc.abstractmethod
     def _init_module(self, module):

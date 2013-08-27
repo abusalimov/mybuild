@@ -16,15 +16,14 @@ from nsloader import pyfile
 class MyFileLoader(pyfile.PyFileLoader):
     """Loads My-files using myfile parser/linker."""
 
-    MODULE = 'Myfile'
+    @property
+    def defaults(self):
+        return dict(super(MyFileLoader, self).defaults,
+                    __builtins__=runtime.builtins)
 
     def get_code(self, fullname):
         source_path = self.get_filename(fullname)
         source_bytes = self.get_data(source_path)
 
         return my_compile(source_bytes, source_path, 'exec')
-
-    def _init_module(self, module):
-        module.__dict__['__builtins__'] = runtime.builtins
-        super(MyFileLoader, self)._init_module(module)
 

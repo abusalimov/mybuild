@@ -11,13 +11,13 @@ __all__ = ["MyWafModuleMixin"]  # the rest is bound as Waf Context methods.
 from _compat import *
 
 import functools
+import os.path
 from operator import attrgetter
 
 from glue import PyDslLoader
 from glue import MyDslLoader
 
-from nsimporter import import_all
-from nsimporter import loader_filename
+from nsimporter import NamespaceImporter
 
 from mybuild.context import resolve
 from mybuild.solver import SolveError
@@ -40,10 +40,12 @@ def ctx_method(func):
 wafcontext.ctx_method = ctx_method
 
 
-DEFAULT_LOADERS = [MyDslLoader, PyDslLoader]
-RUN_PATH_NODE   = wafnode.Node('', None).find_dir(wafcontext.run_dir)
+NAMESPACE_LOADERS = {
+    'Mybuild': MyDslLoader,
+    'Pybuild': PyDslLoader,
+}
 
-def load_namespace(namespace, path=None, loaders=DEFAULT_LOADERS):
+def register_namespace(namespace, path=None, loaders=NAMESPACE_LOADERS):
     """Loads all Mybuild files found in path using given loaders into the
     specified namespace.
 
@@ -51,38 +53,20 @@ def load_namespace(namespace, path=None, loaders=DEFAULT_LOADERS):
         namespace (str)
         path (list/str): a list of strings (or a string of space-separated
             entries) denoting directories to search for Mybuild files.
-            If not specified, RUN_PATH_NODE is used instead.
-        loaders (iterable/mapping): a list of loaders used to recognize and
-            load Mybuild files, or a dictionary mapping such loaders to
-            their initializing values (loader-specific).
+        loaders (mapping): a name-to-loader_type mapping used to recognize and
+            load Mybuild files.
 
     Returns:
         The namespace root module.
     """
-    loaders_init = (dict if is_mapping(loaders) else dict.fromkeys)(loaders)
 
     if path is not None:
-        path = wafutils.to_list(path)
-        path_nodes = [RUN_PATH_NODE.find_node(entry) for entry in path]
+        path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
+                for path_entry in wafutils.to_list(path)]
     else:
-        path_nodes = [RUN_PATH_NODE]
-    path = [node.abspath() for node in path_nodes]
+        path = [wafcontext.run_dir]
 
-    loader_files_glob = ['**/' + loader_filename(l) for l in loaders_init]
-    found_rel_dirs = sorted(set(found.parent.path_from(node)
-                             for node in path_nodes
-                             for found in node.ant_glob(loader_files_glob)))
-
-    def no_dots(dirname):
-        has_dot = ('.' in dirname)
-        if has_dot:
-            if dirname != '.':
-                Logs.warn("A dot in '{dirname}' path, skipping"
-                          .format(**locals()))
-        return not has_dot
-
-    return import_all(filter(no_dots, found_rel_dirs), namespace, path,
-                      loaders_init)
+    return NamespaceImporter(namespace, path, loaders).register()
 
 
 @wafcontext.ctx_method
