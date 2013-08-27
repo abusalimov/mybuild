@@ -32,11 +32,12 @@ from mybuild.rgraph import *
 
 from waflib import Context as wafcontext
 from waflib import Errors  as waferrors
+from waflib import Logs    as waflogs
 from waflib import Node    as wafnode
 from waflib import Utils   as wafutils
 
 import unittest
-from test.module_tests_solver import SolverTestCase
+from test import module_tests_solver
 
 
 namespace_importer = NamespaceImportHook(loaders={
@@ -92,28 +93,28 @@ def mybuild(ctx, conf_module, recurse_name=None):
         The namespace root wrapped by a module instance accessor
         (see MybuildInstanceAccessor).
     """
-    instances = ctx.my_resolve(conf_module)
-    return ctx.my_recurse(sorted(instances, key=str))
+    instance_map = ctx.my_resolve(conf_module)
+    return ctx.my_recurse(sorted(itervalues(instance_map), key=str))
 
 
 @wafcontext.ctx_method
 def my_resolve(ctx, conf_module):
     cache = ctx._my_resolve_cache
     try:
-        instances = cache[conf_module]
+        instance_map = cache[conf_module]
     except KeyError:
         try:
-            instances = resolve(conf_module)
+            instance_map = resolve(conf_module)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
             print_graph(e.rgraph)
             raise e
 
-        cache[conf_module] = instances
+        cache[conf_module] = instance_map
 
-    return instances
+    return instance_map
 
-wafcontext.Context._my_resolve_cache = {}  # {conf_module: instances}
+wafcontext.Context._my_resolve_cache = {}  # {conf_module: instance_map}
 
 
 def print_graph(rgraph):
@@ -230,10 +231,13 @@ def configure(ctx):
     print('mywaf: configure %r' % ctx)
 
 def selftest(ctx):
-    loader = unittest.TestLoader()
-    res = unittest.TestResult()
-    loader.loadTestsFromTestCase(SolverTestCase).run(res)
-    print 'result', res
+    suite = unittest.TestSuite()
+    suite.addTests([
+        module_tests_solver.suite(ctx),
+    ])
+
+    unittest.TextTestRunner(verbosity=waflogs.verbose).run(suite)
+
 
 # try:
 #     from waflib.Task import Task
