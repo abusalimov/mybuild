@@ -60,7 +60,7 @@ class AllEqual(Named, StarArgsToArg, pgraph.AllEqual):
     pass
 
 
-class PdagDtreeTestCase(unittest.TestCase):
+class SolverTestCaseBase(unittest.TestCase):
 
     def setUp(self):
         self.pgraph = TestPgraph()
@@ -68,149 +68,117 @@ class PdagDtreeTestCase(unittest.TestCase):
     def atoms(self, names):
         return [self.pgraph.NamedAtom(name=name) for name in names]
 
-    def test_00(self):
+
+class TrunkTestCase(SolverTestCaseBase):
+    """Test cases which do not involve branching."""
+
+    def test_initial_const(self):
         g = self.pgraph
         A, = self.atoms('A')
 
-        pnode = g.Not(A)
-        solution = solve(g, {pnode:True})
+        N = g.new_const(True, A)
+        solution = solve(g, {})
 
-        self.assertIs(True,  solution[pnode])
+        self.assertIs(True, solution[A])
+
+    def test_implication_1(self):
+        g = self.pgraph
+        A, = self.atoms('A')
+
+        N = g.Not(A)
+        solution = solve(g, {N: True})
+
+        self.assertIs(True,  solution[N])
         self.assertIs(False, solution[A])
 
-    def test_01(self):
+    def test_implication_2(self):
+        g = self.pgraph
+        A,B,C = self.atoms('ABC')
+
+        N = g.AtMostOne(A,B,C)
+        solution = solve(g, {N: False})
+
+        self.assertIs(False, solution[A])
+        self.assertIs(False, solution[B])
+        self.assertIs(False, solution[C])
+
+    def test_implication_3(self):
+        g = self.pgraph
+        A,B,C = self.atoms('ABC')
+
+        N = g.AtMostOne(A,B,C)
+        solution = solve(g, {N: True, A: True})
+
+        self.assertIs(False, solution[B])
+        self.assertIs(False, solution[C])
+
+    def test_neglast_1(self):
         g = self.pgraph
         A,B,C,D = self.atoms('ABCD')
 
         # (A|B) & (C|D) & (B|~C) & ~B
-        pnode = g.And(g.Or(A,B), g.Or(C,D), g.Or(B, g.Not(C)), g.Not(B))
-        solution = solve(g, {pnode:True})
+        N = g.And(g.Or(A,B), g.Or(C,D), g.Or(B, g.Not(C)), g.Not(B))
+        solution = solve(g, {N: True})
 
-        self.assertIs(True,  solution[pnode])
+        self.assertIs(True,  solution[N])
         self.assertIs(True,  solution[A])
         self.assertIs(False, solution[B])
         self.assertIs(False, solution[C])
         self.assertIs(True,  solution[D])
 
-    def test_03(self):
-        g = self.pgraph
-        A, = self.atoms('A')
-
-        # A & ~A
-        pnode = g.And(A, g.Not(A))
-
-        with self.assertRaises(SolveError):
-            solve(g, {pnode:True})
-
-    def test_04(self):
-        g = self.pgraph
-        A,B = self.atoms('AB')
-
-        # (A|B) & (~A | A&~A)
-        pnode = g.And(g.Or(A, B), g.Or(g.Not(A), g.And(A, g.Not(A))))
-        solution = solve(g, {pnode:True})
-
-        self.assertIs(False, solution[A])
-        self.assertIs(True,  solution[B])
-
-    def test_05(self):
-        g = self.pgraph
-        A,B = self.atoms('AB')
-        nA,nB = map(g.Not, (A,B))
-
-        # (A + ~A&~B + ~B) & (B + B&~A)
-        # solution = solve(g, {pnode:True})
-        solution = solve(g, {
-                g.Or(A, g.And(nA, nB), nB): True,
-                g.Or(B, g.And(nA, B)): True
-            })
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-
-    def test_08(self):
+    def test_neglast_2(self):
         g = self.pgraph
         A,B = self.atoms('AB')
 
         # (A=>B) & A
-        pnode = g.And(g.Implies(A,B), A)
-        solution = solve(g, {pnode:True})
+        N = g.And(g.Implies(A,B), A)
+        solution = solve(g, {N: True})
 
-        self.assertIs(True,  solution[pnode])
+        self.assertIs(True,  solution[N])
         self.assertIs(True,  solution[A])
         self.assertIs(True,  solution[B])
 
-    def test_09(self):
+    def test_neglast_3(self):
         g = self.pgraph
         A,B = self.atoms('AB')
 
         # (A=>B) & ~B
-        pnode = g.And(g.Implies(A,B), g.Not(B))
-        solution = solve(g, {pnode:True})
+        N = g.And(g.Implies(A,B), g.Not(B))
+        solution = solve(g, {N: True})
 
-        self.assertIs(True,  solution[pnode])
+        self.assertIs(True,  solution[N])
         self.assertIs(False, solution[A])
         self.assertIs(False, solution[B])
 
-    def test_10(self):
+    def test_neglast_4(self):
         g = self.pgraph
         A,B,C = self.atoms('ABC')
 
-        pnode = g.AtMostOne(A,B,C)
-        solution = solve(g, {pnode:True, A:True})
-
-        self.assertIs(False, solution[B])
-        self.assertIs(False, solution[C])
-
-    def test_11(self):
-        g = self.pgraph
-        A,B,C = self.atoms('ABC')
-
-        pnode = g.AtMostOne(A,B,C)
-        solution = solve(g, {pnode:True, A:False, B:False})
+        N = g.AtMostOne(A,B,C)
+        solution = solve(g, {N: True, A: False, B: False})
 
         self.assertIs(True, solution[C])
 
-    def test_12(self):
-        g = self.pgraph
-        A,B,C = self.atoms('ABC')
-
-        pnode = g.AtMostOne(A,B,C)
-        solution = solve(g, {pnode:False})
-
-        self.assertIs(False, solution[A])
-        self.assertIs(False, solution[B])
-        self.assertIs(False, solution[C])
-
-    def test_13(self):
-        g = self.pgraph
-        A,B,C = self.atoms('ABC')
-
-        pnode = g.AtMostOne(A,B,C)
-        with self.assertRaises(SolveError):
-            solve(g, {A:True, B:True})
-
-    def test_14(self):
+    def test_violation_1(self):
         g = self.pgraph
         A, = self.atoms('A')
 
-        pnode = g.new_const(True, A)
-        solution = solve(g, {})
+        # A & ~A
+        N = g.And(A, g.Not(A))
 
-        self.assertIs(True, solution[A])
+        with self.assertRaises(SolveError):
+            solve(g, {N: True})
 
-    def test_15(self):
+    def test_violation_2(self):
         g = self.pgraph
         A,B,C = self.atoms('ABC')
 
-        # (A | A&~A) & (A=>B) & (B=>C) & (C=>A)
-        A[True] >> B[True] >> C[True] >> A[True]
-        pnode = g.Or(A, g.And(A, g.Not(A)))
-        solution = solve(g, {pnode:True})
+        N = g.AtMostOne(A,B,C)
+        with self.assertRaises(SolveError):
+            solve(g, {A: True, B: True})
 
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
+
+class BranchTestCase(SolverTestCaseBase):
 
     def sneaky_pair_and(self, a, b, **kwargs):
         """(A | B) & (~A | B) & (A | ~B)"""
@@ -223,42 +191,6 @@ class PdagDtreeTestCase(unittest.TestCase):
         return g.And(g.Or(a[True],  b[True]),
                      g.Or(a[False], b[True]),
                      g.Or(a[True], b[False]), **kwargs)
-
-    def test_resolve_braches_0(self):
-        g = self.pgraph
-        A, B = self.atoms('AB')
-
-        x = g.And(B[False], A[False], g.Or(A[True], B[True]))
-        y = B[True]
-        x.equivalent(y)
-
-        with self.assertRaises(SolveError):
-            solve(g, {self.sneaky_pair_and(A, B): True})
-
-    def test_resolve_braches_1(self):
-        g = self.pgraph
-        A, B = self.atoms('AB')
-
-        solution = solve(g, {self.sneaky_pair_and(A, B): True})
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-
-    def test_resolve_braches_2(self):
-        g = self.pgraph
-        A, B, C = self.atoms('ABC')
-
-        #     (C | X) & (~C | X) & (C | ~X), where
-        # X = (A | B) & (~A | B) & (A | ~B)
-        X = self.sneaky_pair_and(A, B, name='X')
-        P = self.sneaky_pair_and(C, X)
-
-        solution = solve(g, {P: True})
-
-        self.assertIs(True, solution[A])
-        self.assertIs(True, solution[B])
-        self.assertIs(True, solution[C])
-        self.assertIs(True, solution[X])
 
     def sneaky_chain(self):
         g = self.pgraph
@@ -275,7 +207,82 @@ class PdagDtreeTestCase(unittest.TestCase):
 
         return P, (X, Y, Z), (A, B, C, D, E)
 
-    def test_resolve_braches_4(self):
+    def test_contradiction_1(self):
+        g = self.pgraph
+        A,B = self.atoms('AB')
+
+        # (A|B) & (~A | A&~A)
+        N = g.And(g.Or(A, B), g.Or(g.Not(A), g.And(A, g.Not(A))))
+        solution = solve(g, {N: True})
+
+        self.assertIs(False, solution[A])
+        self.assertIs(True,  solution[B])
+
+    def test_contradiction_2(self):
+        g = self.pgraph
+        A,B = self.atoms('AB')
+        nA,nB = map(g.Not, (A,B))
+
+        # (A + ~A&~B + ~B) & (B + B&~A)
+        # solution = solve(g, {N: True})
+        solution = solve(g, {
+                g.Or(A, g.And(nA, nB), nB): True,
+                g.Or(B, g.And(nA, B)): True
+            })
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+
+    def test_15(self):
+        g = self.pgraph
+        A,B,C = self.atoms('ABC')
+
+        # (A | A&~A) & (A=>B) & (B=>C) & (C=>A)
+        A[True] >> B[True] >> C[True] >> A[True]
+        N = g.Or(A, g.And(A, g.Not(A)))
+        solution = solve(g, {N: True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+
+    def test_resolve_0(self):
+        g = self.pgraph
+        A, B = self.atoms('AB')
+
+        x = g.And(B[False], A[False], g.Or(A[True], B[True]))
+        y = B[True]
+        x.equivalent(y)
+
+        with self.assertRaises(SolveError):
+            solve(g, {self.sneaky_pair_and(A, B): True})
+
+    def test_resolve_1(self):
+        g = self.pgraph
+        A, B = self.atoms('AB')
+
+        solution = solve(g, {self.sneaky_pair_and(A, B): True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+
+    def test_resolve_2(self):
+        g = self.pgraph
+        A, B, C = self.atoms('ABC')
+
+        #     (C | X) & (~C | X) & (C | ~X), where
+        # X = (A | B) & (~A | B) & (A | ~B)
+        X = self.sneaky_pair_and(A, B, name='X')
+        P = self.sneaky_pair_and(C, X)
+
+        solution = solve(g, {P: True})
+
+        self.assertIs(True, solution[A])
+        self.assertIs(True, solution[B])
+        self.assertIs(True, solution[C])
+        self.assertIs(True, solution[X])
+
+    def test_resolve_4(self):
         g = self.pgraph
 
         P, pair_ands, atoms = self.sneaky_chain()
