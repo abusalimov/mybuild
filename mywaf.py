@@ -239,27 +239,23 @@ def selftest(ctx):
     unittest.TextTestRunner(verbosity=waflogs.verbose).run(suite)
 
 
-# try:
-#     from waflib.Task import Task
-#     from waflib.TaskGen import feature, extension, after_method
-#     from waflib.Tools import ccroot
+# from waflib.Task import Task
+# from waflib.TaskGen import feature, extension, after_method
+# from waflib.Tools import ccroot
 
-#     @after_method('process_source')
-#     @feature('mylink')
-#     def call_apply_link(self):
-#         print('linking' + str(self))
+# @after_method('process_source')
+# @feature('mylink')
+# def call_apply_link(self):
+#     print('linking' + str(self))
 
-#     class mylink(ccroot.link_task):
-#         run_str = 'cat ${SRC} > ${TGT}'
+# class mylink(ccroot.link_task):
+#     run_str = 'cat ${SRC} > ${TGT}'
 
-#     class ext2o(Task):
-#         run_str = 'cp ${SRC} ${TGT}'
+# class ext2o(Task):
+#     run_str = 'cp ${SRC} ${TGT}'
 
-#     @extension('.c')
-#     def process_ext(self, node):
-#         self.create_compiled_task('ext2o', node)
-
-# except ImportError:
-#     pass  # XXX move Waf-related stuff from here
+# @extension('.c')
+# def process_ext(self, node):
+#     self.create_compiled_task('ext2o', node)
 
 
