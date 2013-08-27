@@ -4,7 +4,7 @@ from unittest import TestCase
 from mybuild.binding.pydsl import module
 from mybuild.context import Context
 from mybuild.solver import solve
-
+from mybuild.solver import SolveError
 
 class SolverTestCase(TestCase):
 
@@ -94,6 +94,57 @@ class SolverTestCase(TestCase):
 
         solution = solve(g, {g.atom_for(conf):True})
 
+        self.assertIs(True,  solution[g.atom_for(conf)])
+        self.assertIs(True,  solution[g.atom_for(m1)])
+        self.assertIs(True,  solution[g.atom_for(m2)])
+        
+    def parameter_violation_error(self):
+        context = Context()
+        
+        @module
+        def conf(self):
+            self._constrain(m1(a = True))
+            self._constrain(m1(a = False))
+
+        @module
+        def m1(self, a = False):
+            pass
+        
+        context.consider(conf)
+        g = context.create_pgraph()
+        
+        with self.assertRaises(SolveError):
+            solve(g, {g.atom_for(conf):True})
+
+    def seolve_test(self):
+        #(~A | A&~A)
+        context = Context()
+        
+        @module
+        def conf(self):
+            self._constrain(m1)
+
+        @module
+        def m1(self, a = False):
+            if a:
+                self._constrain(m2)
+            else:
+                self._constrain(m3(a=False))
+    
+        @module
+        def m2(self):
+            self._constrain(m3(a=True))
+            self._constrain(m3(a=False))
+        
+        @module
+        def m3(self, a = False):
+            pass
+            
+        context.consider(conf)
+        g = context.create_pgraph()
+        
+        solution = solve(g, {g.atom_for(conf):True})
+        
         self.assertIs(True,  solution[g.atom_for(conf)])
         self.assertIs(True,  solution[g.atom_for(m1)])
         self.assertIs(True,  solution[g.atom_for(m2)])
