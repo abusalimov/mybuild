@@ -137,8 +137,11 @@ class Context(object):
 
         solution = solve(self.pgraph, {self.pgraph.node_for(optuple): True})
 
-        return [node.instance
-                for node in self.instance_nodes if solution[node]]
+        instances = [node.instance
+                     for node in self.instance_nodes if solution[node]]
+        instance_map = dict((type(instance), instance)
+                            for instance in instances)
+        return instance_map
 
 
 class ContextPgraph(Pgraph):
