@@ -7,6 +7,7 @@ __date__ = "2012-11-30"
 
 __all__ = [
     "Solution",
+    "ComparableSolution",
     "Trunk",
     "Diff",
     "Branch",
@@ -88,6 +89,10 @@ class Solution(object):
                 self.literals .isdisjoint(other.literals) and
                 self.reasons  .isdisjoint(other.reasons))
 
+
+class ComparableSolution(Solution):
+
+    __hash__ = None
     def __eq__(self, other):
         if not isinstance(other, Solution):
             return NotImplemented
@@ -136,7 +141,7 @@ class Trunk(Solution):
         for literal in diff.literals:
             if literal not in self.branchmap:
                 continue
-            
+
             del self.branchmap[literal]  # just remove
 
             refused_literal = ~literal
@@ -509,7 +514,7 @@ def expand_branch(branch):
                              implied)
                 branch.add_literal(literal, add_node=False)
                 if implied is not None:
-                    branch.reasons.add(Reason(None, [literal], 
+                    branch.reasons.add(Reason(None, [literal],
                                               why=why_implies_dead_branch,
                                               follow=True))
 
@@ -546,7 +551,7 @@ def resolve_branches(trunk, branches=None):
     Merges given branches back into trunk updating its branchmap and rest
     branches.
     """
-   
+
     dead_literals = set()
     if branches is None:
         dead_literals, branches = branchset_to_resolve(trunk)
@@ -562,11 +567,11 @@ def resolve_branches(trunk, branches=None):
             logger.debug('\t+merge %r', branch)
             for gen_literal in branch.gen_literals:
                 if ~gen_literal in dead_literals:
-                    resolved.reasons.add(Reason(gen_literal, 
-                                                why=why_implied_by_dead_branch, 
+                    resolved.reasons.add(Reason(gen_literal,
+                                                why=why_implied_by_dead_branch,
                                                 follow=True))
                 else:
-                    resolved.reasons.add(Reason(gen_literal, why=why_default, 
+                    resolved.reasons.add(Reason(gen_literal, why=why_default,
                                                 follow=False))
 
             resolved.merge(branch)
@@ -628,7 +633,7 @@ def solve(pgraph, initial_values={}):
     for literal in ret:
         logger.debug('\t%s: %s', literal, ret[literal])
     return ret
-           
+
 def why_implied_by_dead_branch(literal, *cause_literals):
     return '%s because of dead branch %s' % (literal, ~literal)
 
@@ -636,11 +641,11 @@ def why_implies_dead_branch(literal, *cause_literals):
     return '%s implies dead branch' % (cause_literals)
 
 def why_default(literal, *cause_literals):
-    return '%s by default' % (literal)  
+    return '%s by default' % (literal)
 
 class SolveError(Exception):
     """docstring for SolveError"""
-    
+
     def __init__(self, trunk):
         super(SolveError, self).__init__()
         self.trunk = trunk

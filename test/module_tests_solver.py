@@ -1,9 +1,12 @@
+from _compat import *
+
 import unittest
 
 from mybuild.binding.pydsl import module
 from mybuild.context import resolve
 from mybuild.solver import solve
 from mybuild.solver import SolveError
+
 
 class SolverTestCase(unittest.TestCase):
 

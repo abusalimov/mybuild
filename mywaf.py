@@ -147,7 +147,7 @@ def print_graph(rgraph):
                 node_deque.appendleft((ccons, container.therefore[ccons]))
 
     def print_reason(reason, depth):
-        print '  ' * depth, reason
+        print('  ' * depth, reason)
         if not reason.follow:
             return
 
@@ -159,9 +159,9 @@ def print_graph(rgraph):
 
         assert literal in rgraph.violation_graphs
 
-        print '---dead branch {0}---------'.format(literal)
+        print('---dead branch {0}---------'.format(literal))
         print_graph(rgraph.violation_graphs[literal])
-        print '---------dead branch {0}---'.format(literal)
+        print('---------dead branch {0}---'.format(literal))
 
     #node_deque contains touples (node, reason)
     for node in rgraph.initial.therefore:

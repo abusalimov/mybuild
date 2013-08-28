@@ -47,7 +47,7 @@ if __name__ == "__main__":
         @singleton
         class embox(object):
             def __call__(self, *args, **kwargs):
-                print self, args, kwargs
+                print(self, args, kwargs)
                 return self
             def __getattr__(self, attr):
                 return self
@@ -55,12 +55,12 @@ if __name__ == "__main__":
         class module(object):
             def __init__(self, *args, **kwargs):
                 super(module, self).__init__()
-                print self, args, kwargs
+                print(self, args, kwargs)
             def __call__(self, *args, **kwargs):
-                print self, args, kwargs
+                print(self, args, kwargs)
                 return self
             def __my_new__(self, init_func):
-                print self, init_func
+                print(self, init_func)
                 return init_func(self)
 
         __builtins__ = runtime.builtins
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         ns = dict(globals(), **get_globals())
         exec(code, ns)
 
-        print ns['kernel'].source
+        print(ns['kernel'].source)
 
     except:
         import sys, traceback, code

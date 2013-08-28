@@ -14,15 +14,14 @@ from _compat import *
 builtin_names = [
     # Functions
     'abs',        'all',        'any',        'bin',
-    'bool',       'cmp',        'dict',       'filter',
-    'float',      'format',     'getattr',    'hasattr',
-    'hex',        'id',         'int',        'isinstance',
-    'issubclass', 'iter',       'len',        'list',
-    'map',        'max',        'min',        'object',
-    'pow',        'print',      'range',      'repr',
-    'reversed',   'set',        'slice',      'sorted',
-    'str',        'sum',        'tuple',      'type',
-    'zip',
+    'bool',       'dict',       'filter',     'float',
+    'format',     'getattr',    'hasattr',    'hex',
+    'id',         'int',        'isinstance', 'issubclass',
+    'iter',       'len',        'list',       'map',
+    'max',        'min',        'object',     'pow',
+    'print',      'range',      'repr',       'reversed',
+    'set',        'slice',      'sorted',     'str',
+    'sum',        'tuple',      'type',       'zip',
 
     # Constants
     'False', 'True', 'None',

@@ -381,5 +381,5 @@ if __name__ == "__main__":
         sg.visit(node)
         return ''.join(sg.result)
 
-    print p(parse(source))
+    print(p(parse(source)))
 

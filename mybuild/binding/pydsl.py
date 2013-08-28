@@ -34,7 +34,7 @@ class PyDslModuleMeta(core.ModuleMeta):
             raise TypeError('Module must accept at least one argument')
 
         for arg in args:
-            if not isinstance(arg, basestring):
+            if not isinstance(arg, str):
                 raise TypeError('Tuple parameter unpacking '
                                 'is not supported: {arg}'.format(**locals()))
 

@@ -300,8 +300,11 @@ class BranchTestCase(SolverTestCaseBase):
         initial_trunk = create_trunk(g, {P: True})
         solved_trunk  = solve_trunk(g, {P: True})
 
-        self.assertEqual(Solution(initial_trunk), solved_trunk.base)
-        self.assertEqual(initial_trunk.base, solved_trunk.base)
+        self.assertEqual(ComparableSolution(initial_trunk),
+                         ComparableSolution(solved_trunk.base))
+
+        self.assertEqual(ComparableSolution(initial_trunk.base),
+                         ComparableSolution(solved_trunk.base))
 
 
 def suite():

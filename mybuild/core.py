@@ -377,7 +377,7 @@ class MybuildError(Exception):
     """Base class for errors providing a logging-like constructor."""
 
     def __init__(self, msg='', *args, **kwargs):
-        if not isinstance(msg, basestring):
+        if not isinstance(msg, str):
             raise TypeError("'msg' argument must be a string")
         if args and kwargs:
             raise TypeError('At most one of args or kwargs can be specified '
