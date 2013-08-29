@@ -223,10 +223,17 @@ def p_x_trailer(p):
 
 def p_py_trailer_my_block(p):
     """py_trailer : mb_name LBRACE docstring my_setters RBRACE"""
-    func = ast.Lambda(ast.arguments([ast.Name('__my_self__', ast.Param()),
-                                     ast.Name('self', ast.Param())],
-                                    None, None, []),
-                      ast.List(to_rlist(p[4]), ast.Load()))
+    arguments = ast.arguments()
+    arguments.defaults = []
+    arg_names = ['__my_self__', 'self']
+    if py3k:
+        arguments.args = [ast.arg(name, None) for name in arg_names]
+        arguments.kwonlyargs = []
+        arguments.kw_defaults = []
+    else:
+        arguments.args = [ast.Name(name, ast.Param()) for name in arg_names]
+
+    func = ast.Lambda(arguments, ast.List(to_rlist(p[4]), ast.Load()))
 
     name_node = p[1]
     doc_node = p[3]
