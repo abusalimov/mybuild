@@ -100,7 +100,24 @@ class SourceLoader(ResourceLoader, ExecutionLoader):
             source_bytes = self.get_data(path)
         except IOError:
             raise ImportError("source not available through get_data()")
-        return source_bytes  # XXX proper encoding
+
+        if py3k:
+            import io, tokenize
+
+            readsource = io.BytesIO(source_bytes).readline
+            try:
+                encoding = tokenize.detect_encoding(readsource)
+            except SyntaxError as exc:
+                raise ImportError("Failed to detect encoding")
+
+            newline_decoder = io.IncrementalNewlineDecoder(None, True)
+            try:
+                return newline_decoder.decode(source_bytes.decode(encoding[0]))
+            except UnicodeDecodeError as exc:
+                raise ImportError("Failed to decode source file")
+
+        else:
+            return source_bytes  # XXX proper encoding
 
     def get_code(self, fullname):
         """Reads a source using Loader.get_data and returns complied code. """

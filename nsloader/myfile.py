@@ -23,7 +23,7 @@ class MyFileLoader(pyfile.PyFileLoader):
 
     def get_code(self, fullname):
         source_path = self.get_filename(fullname)
-        source_bytes = self.get_data(source_path)
+        source_string = self.get_source(fullname)
 
-        return my_compile(source_bytes, source_path, 'exec')
+        return my_compile(source_string, source_path, 'exec')
 
