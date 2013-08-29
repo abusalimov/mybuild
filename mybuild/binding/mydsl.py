@@ -21,6 +21,8 @@ class MyDslModuleTypeStub(object):
     """Stub for a Module type which is converted into a real type upon
     a call to __my_new__."""
 
+    _module_bases = [core.Module]
+
     def __init__(self, *args, **kwargs):
         """Args/kwargs are converted into a list of options."""
         super(MyDslModuleTypeStub, self).__init__()
@@ -51,12 +53,15 @@ class MyDslModuleTypeStub(object):
             # let 'module() {...}' and 'module {...}' to behave the same way
             return cls().__my_new__(init_func)
 
-        @constructor_decorator(core.Module, optypes=self.optypes)
         @functools.wraps(init_func)
         def module(self, *args, **kwargs):
             init_func(self)
 
-        return module
+        return self._module_from_constructor(module)
+
+    @property
+    def _module_from_constructor(self):
+        return constructor_decorator(*self._module_bases, optypes=self.optypes)
 
 
 module = MyDslModuleTypeStub
