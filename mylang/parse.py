@@ -124,7 +124,7 @@ def p_testlist_list(p):
 
 
 def p_test(p):
-    "test : atom trailers"""
+    "test : atom py_trailers"""
     p[0] = fold_trailers(p[1], p[2])
 
 
@@ -209,50 +209,60 @@ def p_trailer_attr(p):
 
 
 def p_trailer_item(p):
-    """trailer    : LBRACKET test RBRACKET"""
+    """trailer : LBRACKET test RBRACKET"""
     item = ast.Index(p[2])
     p[0] = (lambda expr: ast.Subscript(expr, item, ast.Load()),
             ploc(p, 1))
 
 
-def p_my_trailer(p):
-    """my_trailer : trailer"""
+def p_x_trailer(p):
+    """my_trailer : trailer
+       py_trailer : trailer"""
     p[0] = p[1]
 
 
-def p_trailer_my_block(p):
-    """trailer : mb_period LBRACE docstring my_setters RBRACE"""
+def p_py_trailer_my_block(p):
+    """py_trailer : mb_name LBRACE docstring my_setters RBRACE"""
     func = ast.Lambda(ast.arguments([ast.Name('__my_self__', ast.Param()),
                                      ast.Name('self', ast.Param())],
                                     None, None, []),
                       ast.List(to_rlist(p[4]), ast.Load()))
+
+    name_node = p[1]
+    doc_node = p[3]
+
     keywords = []
-    if not p[1]:
-        keywords.append(ast.keyword('__module__',
-                                    ast.Name('__name__', ast.Load())))
-        doc_node = p[3]
+    if name_node == '.':
+        runtime_func_name = '__my_set_block__'
+
+    else:
+        runtime_func_name = '__my_new_block__'
+
         if doc_node is not None:
             keywords.append(ast.keyword('__doc__', doc_node))
 
-        runtime_func_name = '__my_new_block__'
-    else:  # seen a period
-        runtime_func_name = '__my_set_block__'
+        if name_node is not None:
+            keywords.append(ast.keyword('__name__', name_node))
+
+        keywords.append(ast.keyword('__module__',
+                                    ast.Name('__name__', ast.Load())))
 
     p[0] = (lambda expr: ast.Call(ast.Name(runtime_func_name, ast.Load()),
                                   [expr, func], keywords, None, None),
             ploc(p, 2))
 
 
-def p_mb_period(p):
-    """mb_period :
-       mb_period : PERIOD"""
-    p[0] = (len(p) > 1)
+def p_mb_name_period(p):
+    """mb_name : empty
+       mb_name : PERIOD"""
+    p[0] = p[1]
 
 def p_docstring_empty(p):
     """docstring :"""
-def p_docstring(p):
+def p_str_node(p):
     """docstring : STRING
-       docstring : STRING COMMA"""
+       docstring : STRING COMMA
+       mb_name   : ID"""
     p[0] = set_loc(ast.Str(p[1]), ploc(p, 1))
 
 
@@ -280,6 +290,7 @@ def p_list(p):
     """
     stmts :
     trailers :
+    py_trailers :
     my_setters :
     arglist :
     dictentlist :
@@ -299,6 +310,7 @@ def p_list_tail(p):
     stmts : stmt stmts
     trailers : trailer trailers
     my_trailers : my_trailer trailers
+    py_trailers : py_trailer py_trailers
     my_setters : my_setter COMMA my_setters
     arglist : argument COMMA arglist
     dictentlist : dictent COMMA dictentlist
@@ -368,10 +380,11 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 
 if __name__ == "__main__":
     source = """
-    x::module {
-        .{}.foo: [cc],
+    module() foo {
+        .foo: [cc],
         files: ["foo.c"],
     };
+
     foo {"doc", bar: baz};
     """
     from mako._ast_util import SourceGenerator as SG
