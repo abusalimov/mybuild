@@ -40,10 +40,38 @@ import unittest
 from test import module_tests_solver
 from mybuild.test import test_solver
 
+from util.deco import constructor_decorator
+
+
+def bypass_return(func):
+    @functools.wraps(func)
+    def decorated(*args, **kwargs):
+        func(*args, **kwargs)
+    return decorated
+
+
+def class_from_constructor(cls, constructor):
+    return constructor_decorator(cls)(bypass_return(constructor))
+
+
+class project(object):
+    __my_new__ = classmethod(class_from_constructor)
+
+
+class WafLoaderMixin(object):
+
+    @property
+    def defaults(self):
+        return dict(super(WafLoaderMixin, self).defaults,
+                    project=project)
+
+
+class MyDslWafLoader(WafLoaderMixin, MyDslLoader): pass
+class PyDslWafLoader(WafLoaderMixin, PyDslLoader): pass
 
 namespace_importer = NamespaceImportHook(loaders={
-        'Mybuild': MyDslLoader,
-        'Pybuild': PyDslLoader,
+        'Mybuild': MyDslWafLoader,
+        'Pybuild': PyDslWafLoader,
     })
 sys.meta_path.insert(0, namespace_importer)
 
