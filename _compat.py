@@ -54,9 +54,17 @@ def extend(*bases, **kwargs):
     trick with dynamic type creation (type(name, bases, attrs))."""
 
     base = bases[0] if bases else object
-    meta = kwargs.pop('metaclass', type(base))
+    meta = kwargs.get('metaclass', type(base))
     if meta is type and len(bases)<=1 and not kwargs:
         return base
+
+    temp_metaclass = _create_temp_meta(*bases, **kwargs)
+    return temp_metaclass('temp_class', None, {})
+
+
+def _create_temp_meta(*bases, **kwargs):
+    base = bases[0] if bases else object
+    meta = kwargs.pop('metaclass', type(base))
 
     if isinstance(meta, type):
         # when meta is a type, we first determine the most-derived metaclass
@@ -65,7 +73,7 @@ def extend(*bases, **kwargs):
     else:
         meta_type = type
 
-    class temp_metaclass(meta_type):
+    class temp_meta(meta_type):
         # Derived from Jinja2.
         #
         # This requires a bit of explanation: the basic idea is to make a
@@ -90,7 +98,7 @@ def extend(*bases, **kwargs):
                                 "in a class definition")
             return meta(name, bases, attrs, **kwargs)
 
-    return temp_metaclass('temp_class', None, {})
+    return temp_meta
 
 
 # derived from Py3k Lib/types.py

@@ -32,8 +32,9 @@ def constructor_decorator(*bases, **kwargs):
     # with 'cls' with the original __call__ method.
     #
     # This magic is similar to the one used in _compat.extend function.
+    import _compat
 
-    class temp_metaclass(type(extend(*bases, **kwargs))):
+    class deco_metaclass(_compat._create_temp_meta(*bases, **kwargs)):
 
         def __call__(cls, func):
             # For unknown reasons __doc__ attribute of type objects is
@@ -54,7 +55,7 @@ def constructor_decorator(*bases, **kwargs):
             ret_type = type(cls)(func.__name__, (cls,), type_dict)
             return ret_type
 
-    return temp_metaclass('temp_class', None, {})
+    return deco_metaclass('deco_class', None, {})
 
 
 class defer_call(object):
