@@ -47,7 +47,7 @@ def __objtype_new_meth(objtype):
         raise TypeError("'{cls}' objects cannot be used in "
                         "'object {{...}}' expression "
                         "(missing '__my_new__' method)"
-                        .format(cls=type(obj)))
+                        .format(cls=type(objtype)))
 
 def __fixup_name(closure, name):
     closure.__name__ = name
