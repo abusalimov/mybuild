@@ -34,28 +34,34 @@ def constructor_decorator(*bases, **kwargs):
     # This magic is similar to the one used in _compat.extend function.
     import _compat
 
-    class deco_metaclass(_compat._create_temp_meta(*bases, **kwargs)):
-
-        def __call__(cls, func):
-            # For unknown reasons __doc__ attribute of type objects is
-            # read-only, and update_wrapper is unable to set it. The same is
-            # about __dict__  attribute which becomes a dictproxy upon class
-            # definition, not a dict.
-            #
-            # So instead we create a new type manually.
-            @functools.wraps(func)
-            def __init__(self, *args, **kwargs):
-                super(ret_type, self).__init__(*args, **kwargs)
-                return func(self, *args, **kwargs)
-
-            type_dict = dict(func.__dict__,
-                             __module__ = func.__module__,
-                             __doc__    = func.__doc__,
-                             __init__   = __init__)
-            ret_type = type(cls)(func.__name__, (cls,), type_dict)
-            return ret_type
-
+    deco_metaclass = _compat._create_temp_meta(*bases, **kwargs)
+    deco_metaclass.__call__ = class_from_constructor
     return deco_metaclass('deco_class', None, {})
+
+
+def class_from_constructor(cls, func, **kwargs):
+    """Creates a new class by extending the given one and using func as a
+    constructor of the new class.
+
+    Keyword arguments are passed to a metaclass."""
+
+    # For unknown reasons __doc__ attribute of type objects is
+    # read-only, and update_wrapper is unable to set it. The same is
+    # about __dict__  attribute which becomes a dictproxy upon class
+    # definition, not a dict.
+    #
+    # So instead we create a new type manually.
+    @functools.wraps(func)
+    def __init__(self, *args, **kwargs):
+        super(ret_type, self).__init__(*args, **kwargs)
+        return func(self, *args, **kwargs)
+
+    type_dict = dict(func.__dict__,
+                     __module__ = func.__module__,
+                     __doc__    = func.__doc__,
+                     __init__   = __init__)
+    ret_type = new_type(func.__name__, (cls,), type_dict, **kwargs)
+    return ret_type
 
 
 class defer_call(object):
