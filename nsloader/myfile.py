@@ -16,11 +16,10 @@ from nsloader import pyfile
 class MyFileLoader(pyfile.PyFileLoader):
     """Loads My-files using myfile parser/linker."""
 
-    @property
-    def defaults(self):
-        return dict(super(MyFileLoader, self).defaults,
+    def defaults_for_module(self, module):
+        return dict(self.defaults,
                     __builtins__=runtime.builtins,
-                    __my_module__=__import__(self.name))
+                    __my_module__=module)
 
     def get_code(self, fullname):
         source_path = self.get_filename(fullname)

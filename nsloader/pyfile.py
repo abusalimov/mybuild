@@ -28,7 +28,10 @@ class PyFileLoader(SourceFileLoader):
     def is_package(self, fullname):
         return False
 
+    def defaults_for_module(self, module):
+        return self.defaults
+
     def _init_module(self, module):
-        module.__dict__.update(self.defaults)
+        module.__dict__.update(self.defaults_for_module(module))
         super(PyFileLoader, self)._init_module(module)
 
