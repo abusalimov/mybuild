@@ -154,7 +154,7 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
         return repr(self._optuple)
 
 
-class Module(extend(ModuleBase, metaclass=ModuleMeta, internal=True)):
+class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
     def __init__(self, optuple):
