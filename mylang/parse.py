@@ -406,8 +406,8 @@ def p_argspec_empty(p, selfarg_name):
 
 @alias_rule()
 def p_selfarg_explicit(p):
-    """selfarg : selfarg_default
-       selfarg : selfarg_explicit"""
+    """selfarg : selfarg_default skipnl
+       selfarg : selfarg_explicit skipnl"""
 
 @rule
 def p_selfarg_default(p):
@@ -686,8 +686,7 @@ def p_error(t):
 
 
 parser = ply.yacc.yacc(start='exec_start',
-                       errorlog=ply.yacc.NullLogger(),
-                       debug=False,
+                       errorlog=ply.yacc.NullLogger(), debug=False,
                        write_tables=False)
 
 # The main entry point.
@@ -741,10 +740,21 @@ if __name__ == "__main__":
     {:;}
     {:slf;}
     {:||}
-    {|arg|}
     {|arg|;}
     {:|arg={foo:bar}|}
     {:slf|arg|}
+
+    {
+    |
+    xxx
+    |
+    }
+
+    {:s
+    |
+    yyy
+    |
+    }
 
     module() foo: bar= {
         foo: [cc]
