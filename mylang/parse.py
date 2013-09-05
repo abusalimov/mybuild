@@ -315,6 +315,9 @@ def p_closure(p, argspec=2, stmts=3):
     #       closure.__name__
     #       return closure
     #   closure = mk()
+    if not stmts:
+        stmts.append(ast.Pass())  # otherwise all hell will break loose
+
     p.parser.selfarg_stack.pop()
 
     closures = p.parser.suite_stack[-1]
@@ -733,8 +736,8 @@ if __name__ == "__main__":
 
     ast_root = parse(source, debug=0)
 
+    compile(ast_root, "", 'exec')
     print(pr(ast.parse("def foo(a, *v, **kw): pass", mode='exec')))
     print(pr(ast_root))
     print(ast.dump(ast_root))
-    compile(ast_root, "", 'exec')
 
