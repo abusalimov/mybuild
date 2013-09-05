@@ -43,9 +43,10 @@ t_ignore           = ' \t\x0c'
 
 # Newlines
 def t_NEWLINE(t):
-    r'\n+'
-    t.lexer.lineno += len(t.value)
-    if not t.lexer.newline_stack[-1]:
+    r'\n*((/\*(.|\n)*?\*/)|((//.*)?\n))\n*'
+    n_newlines = t.value.count('\n')
+    t.lexer.lineno += n_newlines
+    if n_newlines and not t.lexer.newline_stack[-1]:
         return t
 
 
@@ -81,12 +82,6 @@ def t_STRING(t):
     r'\"([^\\\n]|(\\.))*?\"'
     t.value = t.value[1:-1]
     return t
-
-# Comments
-def t_comment(t):
-    r'(/\*(.|\n)*?\*/)|(//.*\n)'
-    t.lexer.lineno += t.value.count('\n')
-
 
 def t_error(t):
     raise SyntaxError("Illegal character {0!r}".format(t.value[0]),
