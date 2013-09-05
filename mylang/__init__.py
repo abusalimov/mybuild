@@ -21,66 +21,29 @@ def my_compile(source, filename='<unknown>', mode='exec'):
     return compile(ast_root, filename, mode)
 
 
-if __name__ == "__main__":
-    source = '''
+def my_exec(code, globals):
+    from mylang.runtime import builtins
+    my_globals = DelegatingDict(globals,
+                                __builtins__=builtins,
+                                __my_module__=DictObject(globals))
+    exec(code, my_globals)
 
-    kernel :: module(debug = False) {
-        "Docstring!"
 
-        source: "init.c",
+class DictObject(object):
+    def __init__(self, dict_):
+        super(DictObject, self).__init__()
+        self.__dict__ = dict_
 
-        depends: [
-            embox.arch.cpu(endian="be").{runtime: False},
 
-            embox.driver.diag.diag_api,
-        ],
-        depends: embox.kernel.stack,
+class DelegatingDict(dict):
+    __slots__ = 'dict_'
 
-    };
+    def __init__(self, dict_, **kwargs):
+        super(DelegatingDict, self).__init__(**kwargs)
+        self.dict_ = dict_
 
-    '''
-    from mylang import runtime
-    from util.misc import singleton
-    from pprint import pprint
+    def __missing__(self, key):
+        return self.dict_[key]
 
-    def get_globals():
-        @singleton
-        class embox(object):
-            def __call__(self, *args, **kwargs):
-                print(self, args, kwargs)
-                return self
-            def __getattr__(self, attr):
-                return self
-
-        class module(object):
-            def __init__(self, *args, **kwargs):
-                super(module, self).__init__()
-                print(self, args, kwargs)
-            def __call__(self, *args, **kwargs):
-                print(self, args, kwargs)
-                return self
-            def __my_new__(self, init_func):
-                print(self, init_func)
-                return init_func(self)
-
-        __builtins__ = runtime.builtins
-        return locals()
-
-    try:
-        code = my_compile(source)
-        ns = dict(globals(), **get_globals())
-        exec(code, ns)
-
-        print(ns['kernel'].source)
-
-    except:
-        import sys, traceback, code
-        tb = sys.exc_info()[2]
-        traceback.print_exc()
-        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
-        frame = last_frame().tb_frame
-        ns = dict(frame.f_globals)
-        ns.update(frame.f_locals)
-        code.interact(local=ns)
 
 

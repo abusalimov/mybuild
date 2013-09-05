@@ -28,11 +28,14 @@ tokens = (
     # Literals (identifier, number, string)
     'ID', 'NUMBER', 'STRING',
 
-    # Delimeters ( ) [ ] { } , . : :: = ;
+    # Delimeters ( ) [ ] { } , . : $ = ; |
     'LPAREN',   'RPAREN',
     'LBRACKET', 'RBRACKET',
     'LBRACE',   'RBRACE',
-    'COMMA', 'PERIOD', 'COLON', 'DOUBLECOLON', 'EQUALS', 'SEMI',
+    'COMMA', 'PERIOD', 'COLON', 'EQUALS', 'SEMI', 'PIPE', 'STAR', 'DOUBLESTAR',
+
+    # Logical newline
+    'NEWLINE',
 )
 
 # Completely ignored characters
@@ -42,20 +45,27 @@ t_ignore           = ' \t\x0c'
 def t_NEWLINE(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
+    if not t.lexer.newline_stack[-1]:
+        return t
+
+
+# Paren/bracket counting
+def t_LPAREN(t):   r'\('; t.lexer.newline_stack[-1] += 1;  return t
+def t_RPAREN(t):   r'\)'; t.lexer.newline_stack[-1] -= 1;  return t
+def t_LBRACKET(t): r'\['; t.lexer.newline_stack[-1] += 1;  return t
+def t_RBRACKET(t): r'\]'; t.lexer.newline_stack[-1] -= 1;  return t
+def t_LBRACE(t):   r'\{'; t.lexer.newline_stack.append(0); return t
+def t_RBRACE(t):   r'\}'; t.lexer.newline_stack.pop();     return t
 
 # Delimeters
-t_LPAREN           = r'\('
-t_RPAREN           = r'\)'
-t_LBRACKET         = r'\['
-t_RBRACKET         = r'\]'
-t_LBRACE           = r'\{'
-t_RBRACE           = r'\}'
 t_COMMA            = r','
 t_PERIOD           = r'\.'
 t_COLON            = r':'
-t_DOUBLECOLON      = r'::'
 t_EQUALS           = r'='
 t_SEMI             = r';'
+t_PIPE             = r'\|'
+t_STAR             = r'\*'
+t_DOUBLESTAR       = r'\*\*'
 
 # Identifiers
 t_ID               = r'[A-Za-z_][\w_]*'
@@ -79,11 +89,12 @@ def t_comment(t):
 
 
 def t_error(t):
-    raise SyntaxError("Illegal character {0}".format(t.value[0]),
+    raise SyntaxError("Illegal character {0!r}".format(t.value[0]),
                       loc(t).to_syntax_error_tuple())
 
 
 lexer = ply.lex.lex(optimize=1, lextab=None)
+lexer.newline_stack = [0]
 
 if __name__ == "__main__":
     ply.lex.runmain(lexer)

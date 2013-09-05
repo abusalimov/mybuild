@@ -27,8 +27,8 @@ builtin_names = [
     'False', 'True', 'None',
 
     # Mylang-specific
-    '__my_set_block__',
-    '__my_new_block__',
+    '__my_objdef__',
+    '__my_xobjdef__',
 
     # Disabled Python builtins:
     #
@@ -40,68 +40,55 @@ builtin_names = [
 ]
 
 
-def __my_new_block__(obj, func, **attrs):
-    """
-    Source:
-        name :: obj {...}
-    AST:
-        name = __my_new_block__(obj, lambda: ...,
-                                __module__=__name__,
-                                __doc__='docstring',
-                                __name__='name')
-    Runtime:
-        obj.__my_new__(init_func)
-    """
-    attrs.setdefault('__module__', func.__module__)
-    attrs.setdefault('__doc__')
-    attrs.setdefault('__name__', '<unnamed>')
-
+def __objtype_new_meth(objtype):
     try:
-        obj_new = obj.__my_new__
+        return objtype.__my_new__
     except AttributeError:
         raise TypeError("'{cls}' objects cannot be used in "
                         "'object {{...}}' expression "
                         "(missing '__my_new__' method)"
                         .format(cls=type(obj)))
 
-    def init_func(obj, getter_obj=None):
-        if getter_obj is None:
-            getter_obj = obj
-        return _exec_setters(func(obj, getter_obj))
-
-    for attr in iteritems(attrs):
-        setattr(init_func, *attr)
-
-    return obj_new(init_func)
+def __fixup_name(closure, name):
+    closure.__name__ = name
+    return closure
 
 
-def __my_set_block__(obj, func):
+def __my_objdef__(objtype, name, closure_maker, *args):
     """
-    Source:
-        obj.{...}
-    AST:
-        __my_set_block__(obj, lambda: ...)
-    """
-    return _exec_setters(func(obj, obj))
+    Mylang source:
+        objtype foo {...};
 
+    Python equivalent:
+        def __my_closure__():
+            def closure():
+                ...
+            return closure
+        __my_objdef__(objtype, 'foo', __my_closure__)
 
-def _exec_setters(setters):
+    Runtime:
+        closure = __my_closure__()
+        closure.__name__ = name
+        objtype.__my_new__(closure)
     """
-    Source:
-        ... {attr: value, items[42]: self.prop}
-    AST:
-        ... lambda __my_self__, self: [
-                (__my_self__,      'attr', 1, value),
-                (__my_self__.items, 42,    0, self.prop),
-            ]
-    """
-    for obj, target, is_attr, value in setters:
-        if is_attr:
-            setattr(obj, target, value)
-        else:
-            obj[target] = value
+    objtype_new = __objtype_new_meth(objtype)
+    return objtype_new(__fixup_name(closure_maker(*args), name))
 
-    return obj
+def __my_xobjdef__(objtype, names, closure_maker, *args):
+    """
+    Mylang source:
+        objtype foo: bar = {...};
+
+    Python equivalent:
+        def __my_closure__():
+            def closure():
+                ...
+            return closure
+        self.foo, bar = __my_xobjdef__(objtype, ['foo', 'bar'], __my_closure__)
+    """
+    objtype_new = __objtype_new_meth(objtype)
+    return [objtype_new(__fixup_name(closure_maker(*args), name))
+            for name in names]
 
 
 # Note that some name are taken from globals of this module (this includes
