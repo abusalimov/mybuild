@@ -28,6 +28,8 @@ class Fileinfo(object):
             offset += line_len
             offsets.append(offset)
 
+        offsets[-1] += 1  # corner case when there is no newline at end of file
+
     def get_line(self, lineno):
         return self.line_table[lineno-1]
 
@@ -35,7 +37,8 @@ class Fileinfo(object):
         line_start, line_end = self.offset_table[lineno-1:lineno+1]
         if not line_start <= offset < line_end:
             raise ValueError("position {offset} does not fall "
-                             "within the line {lineno}".format(**locals()))
+                             "within the line {lineno} "
+                             "({line_start}:{line_end})".format(**locals()))
         return offset - line_start + 1
 
 
