@@ -667,9 +667,9 @@ def p_error(t):
 
 
 parser = ply.yacc.yacc(start='exec_start',
-                       write_tables=False,
+                       errorlog=ply.yacc.NullLogger(),
                        debug=False,
-                       errorlog=ply.yacc.NullLogger())
+                       write_tables=False)
 
 # The main entry point.
 
@@ -712,6 +712,11 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 if __name__ == "__main__":
     source = """
     "module docstring"
+
+    foo // comment
+    bar /*
+    */ baz
+
     {}
     {;}
     {:;}
