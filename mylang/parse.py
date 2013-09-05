@@ -161,9 +161,25 @@ tokens = lex.tokens
 
 
 @rule
-def p_exec_start(p, body=2):
+def p_exec_start(p, stmts=2):
     """exec_start : skipnl suite"""
-    return ast.Module(body)
+    my_module = colon_assignment_target(p)
+
+    fn_name = '<my-module>'
+    fn_args = ast_arguments([ast_arg(my_module.id)])
+    fn_node = ast_funcdef(fn_name, fn_args, stmts)
+
+    fn_call = ast_call(ast_name(fn_name), [my_module])
+
+    try_node = ast.TryFinally([ast.Expr(fn_call)],
+                              [ast.Delete([ast_name(fn_name, ast.Del())])])
+
+    module_body = [fn_node, try_node]
+    doc_node = docstring(stmts)
+    if doc_node is not None:
+        module_body.insert(0, doc_node)
+
+    return ast.Module(module_body)
 
 def p_skipnl(p):
     """skipnl :
@@ -174,18 +190,24 @@ def p_new_suite(p):
     closures = []
     p.parser.suite_stack.append(closures)
 
+def docstring(stmts):
+    if (stmts and
+        isinstance(stmts[0], ast.Expr) and
+        isinstance(stmts[0].value, ast.Str)):
+        return stmts[0]
+
 @rule
 def p_suite(p, stmts=2):
     """suite : new_suite listof_stmts"""
     stmts.reverse()
+    if not stmts:
+        stmts.append(ast.Pass())  # otherwise all hell will break loose
+
     closures = p.parser.suite_stack.pop()
 
     if closures:
-        has_docstring = (stmts and
-                         isinstance(stmts[0], ast.Expr) and
-                         isinstance(stmts[0].value, ast.Str))
         # always leave a docstring (if any) first
-        insert_idx = bool(has_docstring)
+        insert_idx = (docstring(stmts) is not None)
 
         stmts[insert_idx:insert_idx] = closures
 
@@ -315,9 +337,6 @@ def p_closure(p, argspec=2, stmts=3):
     #       closure.__name__
     #       return closure
     #   closure = mk()
-    if not stmts:
-        stmts.append(ast.Pass())  # otherwise all hell will break loose
-
     p.parser.selfarg_stack.pop()
 
     closures = p.parser.suite_stack[-1]
@@ -732,7 +751,11 @@ if __name__ == "__main__":
         files: ["foo.c"]
     }
     """
-    from mako._ast_util import SourceGenerator as SG
+    from mako._ast_util import SourceGenerator
+
+    class SG(SourceGenerator):
+        def visit_Delete(self, node):
+            super(SG, self).visit_Delete(node.targets)  # workaround
 
     def pr(node):
         sg=SG('    ')
@@ -742,7 +765,6 @@ if __name__ == "__main__":
     ast_root = parse(source, debug=0)
 
     compile(ast_root, "", 'exec')
-    print(pr(ast.parse("def foo(a, *v, **kw): pass", mode='exec')))
     print(pr(ast_root))
     print(ast.dump(ast_root))
 

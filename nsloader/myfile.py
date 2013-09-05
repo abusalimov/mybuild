@@ -9,19 +9,22 @@ __date__ = "2013-07-05"
 from _compat import *
 
 from mylang import my_compile
-from mylang import my_exec
+from mylang import runtime
 from nsloader import pyfile
 
 
 class MyFileLoader(pyfile.PyFileLoader):
     """Loads My-files using myfile parser/linker."""
 
+    @property
+    def defaults(self):
+        return dict(super(MyFileLoader, self).defaults,
+                    __builtins__=runtime.builtins,
+                    __my_module__=__import__(self.name))
+
     def get_code(self, fullname):
         source_path = self.get_filename(fullname)
         source_string = self.get_source(fullname)
 
         return my_compile(source_string, source_path, 'exec')
-
-    def _exec_module(self, module):
-        my_exec(self.get_code(module.__name__), module.__dict__)
 
