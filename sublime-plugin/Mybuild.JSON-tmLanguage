@@ -5,8 +5,6 @@
   "fileTypes": ["Mybuild"],
 
   "patterns": [
-    { "include": "#lex" },
-
     {
       "name": "meta.argspec.mybuild",
       "begin": "(\\|)",
@@ -21,9 +19,7 @@
                "1": { "name": "variable.parameter.mybuild" }
            }
         },
-        {"include": "#lex"},
-        {"include": "#rvaluevar"},
-        {"include": "#rvaluevarattr"}
+        { "include": "#lang" }
       ],
       "end": "(\\|)(?:;|\\n)?",
       "endCaptures": {
@@ -37,46 +33,91 @@
         "1": {"name": "support.class.mybuild"}
       },
       "patterns": [
-        {"include": "#lex"},
-        {"include": "#rvaluevar"},
-        {"include": "#rvaluevarattr"}
+        { "include": "#lang" }
       ],
       "end": "\\{"
     },
 
-    {"include": "#rvaluevar"},
-    {"include": "#rvaluevarattr"}
+    { "include": "#lang" }
   ],
 
 
   "repository": {
-    "lex": {
+    "lang": {
+      "patterns": [
+        {"include": "#dotattr"},
+        {"include": "#colonattr"},
+        {"include": "#rvaluevar"},
+        {"include": "#lex"}
+      ]
+    },
+
+    "rvaluevar": {
+        "name": "meta.rvalue.mybuild",
+        "match": "(?<!\\.)\\b\\w+",
+        "captures": {
+            "0": {"name": "variable.other"}
+        }
+    },
+    "dotattr": {
+        "name": "meta.attr.mybuild",
+        "begin": "(?<=\\.)(?=(/\\*(?:[^*]|\\*[^/])*\\*/|\\s)*\\w+)",
+        "patterns": [
+          {"include": "#ignore"}
+        ],
+        "end": "\\w+",
+        "endCaptures": {
+          "0": {"name": "entity.other.attribute-name.mybuild"}
+        }
+    },
+    "colonattr": {
+        "name": "meta.attr.mybuild",
+        "begin": "\\w+(?=(/\\*(?:[^*]|\\*[^/])*\\*/|\\s)*:)",
+        "beginCaptures": {
+          "0": {"name": "entity.other.attribute-name.mybuild"}
+        },
+        "patterns": [
+          {"include": "#ignore"}
+        ],
+        "end": "(?=:)"
+    },
+
+    "ignore": {
       "patterns": [
         {
           "name": "comment.line.double-slash.mybuild",
+          "match": "(//).*$\\n?"
           "captures": {
             "1": { "name": "punctuation.definition.comment.mybuild" }
           },
-          "match": "(//).*$\\n?"
         },
 
         {
-          "name": "comment.block.documentation.mybuild",
           "begin": "/\\*\\*(?!/)",
+          "end": "\\*/"
           "captures": {
             "0": { "name": "punctuation.definition.comment.mybuild" }
           },
-          "end": "\\*/"
+          "name": "comment.block.documentation.mybuild",
         },
         {
-          "name": "comment.block.mybuild",
           "begin": "/\\*",
+          "end": "\\*/"
           "captures": {
             "0": { "name": "punctuation.definition.comment.mybuild" }
           },
-          "end": "\\*/"
+          "name": "comment.block.mybuild",
         },
 
+        {
+          "match": "\\s+"
+        }
+      ]
+    },
+
+    "lex": {
+      "patterns": [
+        {"include": "#ignore"},
         {
           "begin": "\"",
           "beginCaptures": {
@@ -100,23 +141,6 @@
             "name": "keyword.operator.mybuild"
         }
       ]
-    },
-
-    "rvaluevar": {
-        "name": "meta.rvalue.mybuild",
-        "match": "(?<!\\.)\\b(?:([a-zA-Z]\\w*))",
-        "captures": {
-            "1": {"name": "variable.other"},
-            "2": {"name": "support.class.mybuild"}
-        }
-    },
-    "rvaluevarattr": {
-        "name": "meta.rvalue.mybuild",
-        "match": "(?<=\\.)(?:([a-zA-Z]\\w*))",
-        "captures": {
-            "1": {"name": "entity.other.attribute-name.mybuild"},
-            "2": {"name": "support.constant.mybuild"}
-        }
     }
   },
 
