@@ -1,0 +1,124 @@
+// [PackageDev] target_format: plist
+
+{ "name": "Mybuild",
+  "scopeName": "source.mybuild",
+  "fileTypes": ["Mybuild"],
+
+  "patterns": [
+    { "include": "#lex" },
+
+    {
+      "name": "meta.argspec.mybuild",
+      "begin": "(\\|)",
+      "beginCaptures": {
+        "0": {"name": "keyword.operator.mybuild"}
+      },
+      "patterns": [
+        {
+          "name": "meta.arguments.mybuild",
+          "match": "(\\w+)\\s*(?=[,=|])",
+          "captures": {
+               "1": { "name": "variable.parameter.mybuild" }
+           }
+        },
+        {"include": "#lex"},
+        {"include": "#rvaluevar"},
+        {"include": "#rvaluevarattr"}
+      ],
+      "end": "(\\|)(?:;|\\n)?",
+      "endCaptures": {
+        "0": {"name": "keyword.operator.mybuild"}
+      }
+    },
+
+    {
+      "begin": "([a-zA-Z]\\w*)(?=(((?<ignore>/\\*([^*]|\\*[^/])*\\*/|\\s)+\\w+\\g<ignore>*[:=])+|\\g<ignore>+\\w+)?\\g<ignore>*\\{)",
+      "beginCaptures": {
+        "1": {"name": "support.class.mybuild"}
+      },
+      "patterns": [
+        {"include": "#lex"},
+        {"include": "#rvaluevar"},
+        {"include": "#rvaluevarattr"}
+      ],
+      "end": "\\{"
+    },
+
+    {"include": "#rvaluevar"},
+    {"include": "#rvaluevarattr"}
+  ],
+
+
+  "repository": {
+    "lex": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.mybuild",
+          "captures": {
+            "1": { "name": "punctuation.definition.comment.mybuild" }
+          },
+          "match": "(//).*$\\n?"
+        },
+
+        {
+          "name": "comment.block.documentation.mybuild",
+          "begin": "/\\*\\*(?!/)",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.mybuild" }
+          },
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.block.mybuild",
+          "begin": "/\\*",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.mybuild" }
+          },
+          "end": "\\*/"
+        },
+
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.mybuild" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.mybuild" }
+          },
+          "name": "string.quoted.double.mybuild",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.mybuild"
+            }
+          ]
+        },
+
+        {
+            "match": "=|:",
+            "name": "keyword.operator.mybuild"
+        }
+      ]
+    },
+
+    "rvaluevar": {
+        "name": "meta.rvalue.mybuild",
+        "match": "(?<!\\.)\\b(?:([a-zA-Z]\\w*))",
+        "captures": {
+            "1": {"name": "variable.other"},
+            "2": {"name": "support.class.mybuild"}
+        }
+    },
+    "rvaluevarattr": {
+        "name": "meta.rvalue.mybuild",
+        "match": "(?<=\\.)(?:([a-zA-Z]\\w*))",
+        "captures": {
+            "1": {"name": "entity.other.attribute-name.mybuild"},
+            "2": {"name": "support.constant.mybuild"}
+        }
+    }
+  },
+
+  "uuid": "f925370d-b615-405e-8e51-2c3fb7995650"
+}
