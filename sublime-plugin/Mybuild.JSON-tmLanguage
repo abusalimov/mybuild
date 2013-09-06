@@ -86,27 +86,27 @@
       "patterns": [
         {
           "name": "comment.line.double-slash.mybuild",
-          "match": "(//).*$\\n?"
+          "match": "(//).*$\\n?",
           "captures": {
             "1": { "name": "punctuation.definition.comment.mybuild" }
-          },
+          }
         },
 
         {
           "begin": "/\\*\\*(?!/)",
-          "end": "\\*/"
+          "end": "\\*/",
           "captures": {
             "0": { "name": "punctuation.definition.comment.mybuild" }
           },
-          "name": "comment.block.documentation.mybuild",
+          "name": "comment.block.documentation.mybuild"
         },
         {
           "begin": "/\\*",
-          "end": "\\*/"
+          "end": "\\*/",
           "captures": {
             "0": { "name": "punctuation.definition.comment.mybuild" }
           },
-          "name": "comment.block.mybuild",
+          "name": "comment.block.mybuild"
         },
 
         {
