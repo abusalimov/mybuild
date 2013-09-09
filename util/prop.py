@@ -6,6 +6,7 @@ Property descriptors.
 from _compat import *
 
 from functools import partial as _partial
+import operator as _operator
 
 
 class _func_deco(object):
@@ -143,6 +144,134 @@ class cached_property(default_property):
         ret = super(cached_property, self).__get__(obj, objtype)
         setattr(obj, self.func.__name__, ret)
         return ret
+
+
+class cumulative_sequence_property(object):
+
+    def __init__(self, factory, attr_name, add_meth_name=None):
+        super(cumulative_property, self).__init__()
+        self.factory       = factory
+        self.attr_name     = attr_name
+        self.add_meth_name = add_meth_name
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        try:
+            return getattr(obj, self.attr_name)
+        except AttributeError:
+            default = self.factory()
+            setattr(obj, self.attr_name, default)
+            return default
+
+    def __set__(self, obj, items):
+        try:
+            old_items = getattr(obj, self.attr_name)
+        except AttributeError:
+            items = new_items = self.factory(items)
+        else:
+            new_items = self.factory(item for item in items
+                                     if item not in old_items)
+            items = old_items+new_items
+
+        if self.add_meth_name is not None:
+            func = getattr(obj, self.add_meth_name)
+
+            for item in new_items:
+                func(item)
+
+        setattr(obj, self.attr_name, items)
+
+
+class cumulative_property(object):
+
+    def __init__(self, attr, factory):
+        super(cumulative_property, self).__init__()
+        self.attr    = attr
+        self.factory = factory
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        try:
+            return getattr(obj, self.attr)
+        except AttributeError:
+            default = self.factory()
+            setattr(obj, self.attr, default)
+            return default
+
+    def split_old_new(self, obj, items):
+        old_items = getattr(obj, self.attr, None)
+
+        if old_items is not None:
+            new_items = self.filter_new(items, old_items)
+        else:
+            new_items = items
+
+        return old_items, self.factory(new_items)
+
+    def filter_new(self, items, old_items):
+        return items
+
+
+class cumulative_mapping_property(cumulative_property):
+
+    def __init__(self, attr, factory=dict):
+        super(cumulative_mapping_property, self).__init__(attr, factory)
+
+    def __set__(self, obj, items):
+        old_items, items = self.split_old_new(obj, items)
+
+        if old_items is not None:
+            old_items.update(items)
+            items = old_items
+
+        setattr(obj, self.attr, items)
+
+    def filter_new(self, items, old_items):
+        if not isinstance(items, dict):
+            items = dict(items)
+        return (item for item in iteritems(items)
+                if item[0] not in old_items)
+
+
+class cumulative_sequence_property(cumulative_property):
+
+    def __init__(self, attr, factory=list):
+        super(cumulative_sequence_property, self).__init__(attr, factory)
+
+    def __set__(self, obj, items):
+        old_items, items = self.split_old_new(obj, items)
+
+        if old_items is not None:
+            items = _operator.__iadd__(old_items, items)
+
+        setattr(obj, self.attr, items)
+
+    def filter_new(self, items, old_items):
+        return (item for item in items
+                if item not in old_items)
+
+
+class cumulative_tuple_property(cumulative_sequence_property):
+
+    def __init__(self, attr, add_meth=None):
+        super(cumulative_tuple_property, self).__init__(attr, factory=tuple)
+        self.add_meth = add_meth
+
+    def __set__(self, obj, items):
+        old_items, items = self.split_old_new(obj, items)
+
+        if self.add_meth is not None:
+            func = getattr(obj, self.add_meth)
+
+            for item in items:
+                func(item)
+
+        if old_items is not None:
+            items = _operator.__iadd__(old_items, items)
+
+        setattr(obj, self.attr, items)
 
 
 class intercepting_property(property):
