@@ -5,7 +5,7 @@ Necessary bindings for Pybuild files.
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-29"
 
-__all__ = ['module', 'option']
+__all__ = ['module', 'project', 'option']
 
 
 from _compat import *
@@ -60,7 +60,7 @@ class PyDslModuleMeta(core.ModuleMeta):
         if isinstance(instance, cls):
             # The following dirty hack is to be sure that Module.__init__ gets
             # called with proper arguments and exactly once.
-            super(PyDslModule, instance).__init__(optuple, *args, **kwargs)
+            super(PyDslModuleBase, instance).__init__(optuple, *args, **kwargs)
             # On the other hand, the real __init__ is invoked with keyword
             # arguments holding option values and it is not required to call
             # super constructor (which anyway does nothing, see
@@ -70,8 +70,8 @@ class PyDslModuleMeta(core.ModuleMeta):
         return instance
 
 
-class PyDslModule(extend(core.Module,
-                         metaclass=PyDslModuleMeta, internal=True)):
+class PyDslModuleBase(extend(core.ModuleBase,
+                             metaclass=PyDslModuleMeta, internal=True)):
     """
     Example of a simple module without any options:
 
@@ -108,7 +108,11 @@ class PyDslModule(extend(core.Module,
     consider  = _consider  = core.Module._discover
 
 
-module = constructor_decorator(PyDslModule)
+module  = constructor_decorator(core.new_module_type('PyDslModule',
+                                PyDslModuleBase, core.Module))
+project = constructor_decorator(core.new_module_type('PyDslProject',
+                                PyDslModuleBase, core.Project))
+
 option = core.Optype
 
 

@@ -12,8 +12,11 @@ __all__ = [
     "ModuleMeta",
     "ModuleBase",
     "Module",
+    "CompositeModule",
+    "Project",
+    "Tool",
     "Optype",
-    "Optuple",
+    "OptupleBase",
     "MybuildError",
     "InstanceError",
 ]
@@ -26,10 +29,13 @@ from itertools import starmap
 from operator import attrgetter
 import sys
 
+from util.operator import attr
 from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
 from util.prop import class_default_property
+from util.prop import cumulative_sequence_property
+from util.prop import cumulative_tuple_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -154,18 +160,59 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
         return repr(self._optuple)
 
 
+def new_module_type(name, *bases):
+    if not bases:
+        bases = (ModuleBase,)
+    return new_type(name, bases, {}, metaclass=ModuleMeta, internal=True)
+
+
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
-    def __init__(self, optuple):
+    tools = cumulative_tuple_property(attr.__tools, '_add_tool')
+
+    def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)
+        self._container = container
+
         self._constraints = []  # [(optuple, condition)]
 
-    def _constrain(self, mslice, condition=True):
+    def _post_init(self):
+        for tool in self.tools:
+            tool.initialize_module(self)
+
+    def _add_tool(self, tool):
+        self.__dict__.update(tool.create_namespaces(self))
+
+    def _add_constraint(self, mslice, condition=True):
         self._constraints.append((mslice(), condition))
 
     def _discover(self, mslice):
-        self._constrain(mslice, condition=False)
+        self._add_constraint(mslice, condition=False)
+
+    _constrain = _add_constraint
+
+
+class CompositeModule(Module):
+
+    components = cumulative_sequence_property(attr.__components)
+
+    def _add_component(self, mslice, condition=True):
+        self._add_constraint(mslice, condition)
+
+
+class Project(CompositeModule):
+    pass
+
+
+class Tool(object):
+    """docstring for Tool"""
+
+    def create_namespaces(self, instance):
+        return {}
+
+    def initialize_module(self, instance):
+        pass
 
 
 class OptupleBase(InstanceBoundTypeMixin):
