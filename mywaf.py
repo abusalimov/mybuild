@@ -9,6 +9,7 @@ __all__ = [
     "namespace_importer",
     "register_namespace",
     "unregister_namespace",
+    "mybuild_project",
 ]  # the rest is bound as Waf Context methods.
 
 
@@ -19,7 +20,6 @@ import os.path
 
 from collections import deque
 import functools
-from operator import attrgetter
 
 from glue import PyDslLoader
 from glue import MyDslLoader
@@ -33,46 +33,17 @@ from mybuild.rgraph import *
 from waflib import Context as wafcontext
 from waflib import Errors  as waferrors
 from waflib import Logs    as waflogs
-from waflib import Node    as wafnode
 from waflib import Utils   as wafutils
 
 import unittest
 from test import module_tests_solver
 from mybuild.test import test_solver
 
-from util.deco import constructor_decorator
-
-
-def bypass_return(func):
-    @functools.wraps(func)
-    def decorated(*args, **kwargs):
-        func(*args, **kwargs)
-    return decorated
-
-
-def class_from_constructor(cls, constructor):
-    return constructor_decorator(cls)(bypass_return(constructor))
-
-
-class project(object):
-    __my_new__ = classmethod(class_from_constructor)
-
-
-class WafLoaderMixin(object):
-
-    @property
-    def defaults(self):
-        return dict(super(WafLoaderMixin, self).defaults,
-                    project=project)
-
-
-class MyDslWafLoader(WafLoaderMixin, MyDslLoader): pass
-class PyDslWafLoader(WafLoaderMixin, PyDslLoader): pass
 
 namespace_importer = NamespaceImportHook(loaders={
-        'Mybuild': MyDslWafLoader,
-        'Pybuild': PyDslWafLoader,
-    })
+    'Mybuild': MyDslLoader,
+    'Pybuild': PyDslLoader,
+})
 sys.meta_path.insert(0, namespace_importer)
 
 
@@ -98,6 +69,16 @@ def register_namespace(namespace, path='.'):
 def unregister_namespace(namespace):
     """Unregisters and returns a previously registered namespace (if any)."""
     return namespace_importer.namespace_path.pop(namespace, None)
+
+
+def mybuild_project(module):
+    def decorator(func):
+        @functools.wraps(func)
+        def decorated(ctx):
+            ctx.mybuild(module)
+            return func(ctx)
+        return decorated
+    return decorator
 
 
 def ctx_method(func):
@@ -156,11 +137,11 @@ def print_graph(rgraph):
 
     def dfs(node, reason, depth):
         if node in used:
-            print_reason(reason,depth)
+            print_reason(reason, depth)
             return
 
         used.add(node)
-        print_reason(reason,depth)
+        print_reason(reason, depth)
         for cons in node.therefore:
             dfs(cons, node.therefore[cons], depth + 1)
             for container in cons.containers:
@@ -202,7 +183,7 @@ def print_graph(rgraph):
 
 
 @wafcontext.ctx_method
-def my_recurse(ctx, instances, name=None, mandatory=False):
+def my_recurse(ctx, instances, name=None, mandatory=True):
     if name is None:
         name = ctx.fun
 
@@ -210,17 +191,19 @@ def my_recurse(ctx, instances, name=None, mandatory=False):
         node = ctx.root.find_node(instance._file)
 
         ctx.pre_recurse(node)
-        try:
-            user_function = getattr(instance, name, None)
-            if user_function is None:
-                if not mandatory:
-                    continue
-                raise waferrors.WafError('No method %s defined in %s' %
-                                         (name, instance))
-            user_function(ctx)
+        for tool in instance.tools:
+            try:
+                user_function = getattr(tool, name, None)
+                if user_function is None:
+                    if not mandatory:
+                        continue
+                    msg = ("No method '{name}' defined in {tool} "
+                           "needed for {instance}".format(**locals()))
+                    raise waferrors.WafError(msg)
+                user_function(instance, ctx)
 
-        finally:
-            ctx.post_recurse(node)
+            finally:
+                ctx.post_recurse(node)
 
 
 class MybuildInstanceAccessor(object):
