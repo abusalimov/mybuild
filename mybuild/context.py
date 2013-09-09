@@ -13,7 +13,6 @@ __all__ = [
 
 from _compat import *
 
-from collections import defaultdict
 from collections import deque
 from functools import partial
 from itertools import product
@@ -45,8 +44,8 @@ class Context(object):
             domain = self._domains[module]
         except KeyError:
             domain = self._domains[module] = \
-                    module._opmake(set(optype._values)
-                                   for optype in module._optypes)
+                module._opmake(set(optype._values)
+                               for optype in module._optypes)
             self.post_product(domain)
 
         return domain
@@ -88,6 +87,8 @@ class Context(object):
                         why=why_inviable_instance_is_disabled)
 
         else:
+            instance._post_init()
+
             node.instance = instance
 
             for constraint, condition in instance._constraints:
