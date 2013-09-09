@@ -25,6 +25,18 @@ class GetterType(object):
 getter = GetterType()
 
 
+class AttrType(object):
+    """
+    attr.attr -> 'attr'
+    attr.__attr -> '_<class>__attr'
+    """
+
+    def __getattr__(self, attr):
+        return attr
+
+attr = AttrType()
+
+
 class InvokerType(object):
     """
     invoker.meth(*args, **kwargs) -> methodcaller('meth', *args, **kwargs)
