@@ -18,7 +18,6 @@ from _compat import *
 import sys
 import os.path
 
-from collections import deque
 import functools
 
 from glue import PyDslLoader
@@ -117,7 +116,9 @@ def my_resolve(ctx, conf_module):
             instance_map = resolve(conf_module)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
-            print_graph(e.rgraph)
+            reason_generator = traversal(e.rgraph)
+            for reason, depth in reason_generator:
+                print_reason(e.rgraph, reason, depth)
             raise e
 
         cache[conf_module] = instance_map
@@ -127,59 +128,24 @@ def my_resolve(ctx, conf_module):
 wafcontext.Context._my_resolve_cache = {}  # {conf_module: instance_map}
 
 
-def print_graph(rgraph):
-    """
-    Simple way to print reason graph. Nodes of more one reason are printed
-    in new line without offset.
-    """
-    node_deque = deque()
-    used = set()
-
-    def dfs(node, reason, depth):
-        if node in used:
-            print_reason(reason, depth)
-            return
-
-        used.add(node)
-        print_reason(reason, depth)
-        for cons in node.therefore:
-            dfs(cons, node.therefore[cons], depth + 1)
-            for container in cons.containers:
-                process_container(container)
-
-    def process_container(container):
-        if container in used:
-            return
-        used.add(container)
-        for ccons in container.therefore:
-            if ccons not in node_deque:
-                node_deque.appendleft((ccons, container.therefore[ccons]))
-
-    def print_reason(reason, depth):
-        print('  ' * depth, reason)
+def print_reason(rgraph, reason, depth):
+        print ('  ' * depth, reason)
         if not reason.follow:
             return
-
+  
         literal = None
         if reason.literal is not None:
             literal = ~reason.literal
         else:
             literal = reason.cause_literals[0]
-
+  
         assert literal in rgraph.violation_graphs
-
+  
         print('---dead branch {0}---------'.format(literal))
-        print_graph(rgraph.violation_graphs[literal])
+        reason_generator = traversal(rgraph.violation_graphs[literal])
+        for reason in reason_generator:
+            print_reason(rgraph, reason[0], reason[1])   
         print('---------dead branch {0}---'.format(literal))
-
-    #node_deque contains touples (node, reason)
-    for node in rgraph.initial.therefore:
-        node_deque.append((node, rgraph.initial.therefore[node]))
-        process_container(node)
-
-    while node_deque:
-        node, reason = node_deque.pop()
-        dfs(node, reason, 0)
 
 
 @wafcontext.ctx_method

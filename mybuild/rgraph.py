@@ -9,6 +9,7 @@ __date__ = "2013-06-28"
 from  _compat import *
 
 import heapq
+from collections import deque
 
 from mybuild.pgraph import Reason
 
@@ -286,5 +287,42 @@ def get_error_rgraph(solution_error):
     # print 'violation_nodes:', violation_nodes
     return get_rgraph_way(rgraph, literals)
 
+def traversal(rgraph):
+    """
+    Simple way to print reason graph. Nodes of more one reason are printed
+    in new line without offset. Returns generator of touples (reason, depth)
+    """
+    node_deque = deque()
+    visited = set()
 
+    def dfs(node, reason, depth):
+        if node in visited:
+            yield (reason, depth)
+            return
 
+        visited.add(node)
+        yield (reason, depth)
+        for cons in node.therefore:       
+            for each in dfs(cons, node.therefore[cons], depth + 1):
+                yield each
+            for container in cons.containers:
+                process_container(container)
+        
+
+    def process_container(container):
+        if container in visited:
+            return
+        visited.add(container)
+        for ccons in container.therefore:
+            if ccons not in node_deque:
+                node_deque.appendleft((ccons, container.therefore[ccons]))
+
+    #node_deque contains touples (node, reason)
+    for node in rgraph.initial.therefore:
+        node_deque.append((node, rgraph.initial.therefore[node]))
+        process_container(node)
+
+    while node_deque:
+        node, reason = node_deque.pop()
+        for each in dfs(node, reason, 0):
+            yield each
