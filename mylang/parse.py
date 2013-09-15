@@ -479,14 +479,18 @@ def p_test(p):
 @rule
 def p_xtest(p, trailers):
     """pytest : xattr_chain
-       mytest : my_chain"""
+       pytest : py_chain
+       pytest : my_chain_plus
+       mytest : my_chain_atom"""
     return fold_trailers(trailers)
 
 @list_rule()
 def p_xchain(p):
-    """xattr_chain : pyatom listof_trailers
-       xattr_chain : name   listof_trailers
-       my_chain    : myatom listof_trailers"""
+    """xattr_chain   : name    listof_trailers
+       py_chain      : pyatom  listof_trailers
+       my_chain_atom : myatom  empty_list
+       my_chain_plus : myatom  trailers_plus
+       trailers_plus : trailer listof_trailers"""
 
 
 @atom_func_wloc
@@ -639,6 +643,7 @@ def p_testlist_list(p):
 
 def p_list(p):
     """
+    empty_list :
     listof_stmts :
     listof_trailers :
     listof_arguments :
@@ -757,7 +762,7 @@ if __name__ == "__main__":
     }
 
     module() foo: bar= {
-        foo: [cc]
+        x[foo]: [cc]
         files: ["foo.c"]
     }
     """
@@ -776,5 +781,5 @@ if __name__ == "__main__":
 
     compile(ast_root, "", 'exec')
     print(pr(ast_root))
-    print(ast.dump(ast_root))
+    # print(ast.dump(ast_root))
 
