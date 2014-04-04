@@ -51,6 +51,7 @@ class Context(object):
         return domain
 
     def post(self, optuple, origin=None):
+        logger.debug("add %s (posted by %s)", optuple, origin)
         self._instantiation_queue.append((optuple, origin))
 
     def post_product(self, iterables_optuple, origin=None):
