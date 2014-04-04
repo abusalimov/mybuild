@@ -17,7 +17,7 @@ def identity(x):
     return x
 
 
-_logging.DUMP = _logging.DEBUG / 2
+_logging.DUMP = _logging.DEBUG // 2
 _logging.addLevelName(_logging.DUMP, 'DUMP')
 
 logging_defaults = dict(
