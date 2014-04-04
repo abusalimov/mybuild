@@ -7,9 +7,11 @@ from _compat import *
 
 import logging as _logging
 import functools as _functools
+from inspect import ismethod
 
 from util.collections import is_container
 from util.collections import is_mapping
+from util.operator import invoker
 import pprint
 
 
@@ -79,6 +81,8 @@ def logger_dump(logger, target, attrs=None):
         except AttributeError as e:
             obj = e
         else:
+            if ismethod(obj):
+                continue
             obj = _log_dump_normalize(obj)
 
         try:
