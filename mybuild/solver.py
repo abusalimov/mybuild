@@ -376,6 +376,7 @@ def create_trunk(pgraph, initial_literals=[]):
 
     for node in pgraph.nodes:
         for literal in node:
+            logger.dump(literal)
             for neglast in literal.neglasts:
                 negleft = neglefts[neglast] = set(neglast.literals)
 
