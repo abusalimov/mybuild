@@ -62,6 +62,7 @@ class Context(object):
     def post_discover(self, optuple, origin=None):
         domain = self.domain_for(optuple._module)
 
+        logger.debug("discover %s (posted by %s)", optuple, origin)
         for value, domain_to_extend in optuple._zipwith(domain):
             if value in domain_to_extend:
                 continue
