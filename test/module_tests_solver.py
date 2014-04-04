@@ -133,7 +133,7 @@ if __name__ == '__main__':
     import util, sys, logging
     # util.init_logging(filename='%s.log' % __name__)
     util.init_logging(sys.stderr,
-                      level=logging.INFO)
+                      level=logging.DUMP)
 
-    unittest.main(verbosity=2)
+    unittest.main()
 

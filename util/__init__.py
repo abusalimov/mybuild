@@ -17,8 +17,8 @@ def identity(x):
     return x
 
 
-LOGGING_DUMP = _logging.DEBUG / 2
-_logging.addLevelName(LOGGING_DUMP, 'DUMP')
+_logging.DUMP = _logging.DEBUG / 2
+_logging.addLevelName(_logging.DUMP, 'DUMP')
 
 logging_defaults = dict(
     level=_logging.DEBUG,
@@ -72,7 +72,7 @@ def logger_dump(logger, target, attrs=None):
         except AttributeError:
             attrs = filternot(invoker.startswith('_'), dir(target))
 
-    logger.log(LOGGING_DUMP, '%r', target)
+    logger.log(_logging.DUMP, '%r', target)
     for attr in attrs:
         try:
             obj = getattr(target, attr)
@@ -88,9 +88,9 @@ def logger_dump(logger, target, attrs=None):
         else:
             msg = '.{0}: (len={1})'.format(attr, obj_len)
 
-        logger.log(LOGGING_DUMP, '\t||%s', msg)
+        logger.log(_logging.DUMP, '\t||%s', msg)
         for line in pprint.pformat(obj).splitlines():
-            logger.log(LOGGING_DUMP, '\t||\t\t%s', line)
+            logger.log(_logging.DUMP, '\t||\t\t%s', line)
 
 
 def _log_dump_normalize(obj):
