@@ -29,6 +29,7 @@ from itertools import starmap
 from operator import attrgetter
 import sys
 
+from util.collections import OrderedDict
 from util.operator import attr
 from util.operator import getter
 from util.operator import invoker
@@ -216,8 +217,22 @@ class Tool(object):
 
 
 class OptupleBase(InstanceBoundTypeMixin):
+    __slots__ = ()  # This is essential as far as we overload __dict__.
 
     _tuple_attrs = frozenset(filternot(invoker.startswith('_'), dir(tuple())))
+
+    # Here __dict__ <-> _asdict() dependence is revesed comparing to
+    # an implementation of namedtuple in Python 3.3.
+    # This allows subclasses to introduce a regular __dict__ without
+    # breaking _asdict() logic.
+
+    @property
+    def __dict__(self):
+        return self._asdict()
+
+    def _asdict(self):
+        'Return a new OrderedDict which maps field names to their values.'
+        return OrderedDict(zip(self._fields, self))
 
     def _instantiate_module(self, *args, **kwargs):
         return self._module._instantiate(self, *args, **kwargs)
