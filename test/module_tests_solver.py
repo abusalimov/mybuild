@@ -91,7 +91,7 @@ class SolverTestCase(unittest.TestCase):
             pass
 
         with self.assertRaises(SolveError):
-            self.wafctx.my_resolve(conf)
+            resolve(conf)
 
     def test_solve(self):
         #(~A | A&~A)
@@ -127,3 +127,13 @@ def suite(wafctx_):
     class WafCtxBoundTestCase(SolverTestCase):
         wafctx = wafctx_
     return unittest.TestLoader().loadTestsFromTestCase(WafCtxBoundTestCase)
+
+
+if __name__ == '__main__':
+    import util, sys, logging
+    # util.init_logging(filename='%s.log' % __name__)
+    util.init_logging(sys.stderr,
+                      level=logging.INFO)
+
+    unittest.main(verbosity=2)
+
