@@ -161,17 +161,6 @@ def rule_wloc(func):
     return rule(wloc(func))
 
 
-def list_rule(item_index=1, list_index=-1):
-    def decorator(func):
-        @functools.wraps(func)
-        def decorated(p):
-            l = _symbol_at(p, list_index)
-            l.append(p[item_index])
-            p[0] = l
-        return decorated
-    return decorator
-
-
 # Here go grammar definitions for PLY.
 
 tokens = lex.tokens
@@ -504,13 +493,15 @@ def p_xtest(p, builders):
        mytest : my_chain_atom"""
     return build_chain(builders)
 
-@list_rule()
 def p_xchain(p):
     """xattr_chain   : name    listof_trailers
        py_chain      : pyatom  listof_trailers
        my_chain_atom : myatom  empty_list
        my_chain_plus : myatom  trailers_plus
        trailers_plus : trailer listof_trailers"""
+    l = _symbol_at(p, -1)
+    l.append(p[1])
+    p[0] = l
 
 
 @rule_wloc
@@ -683,7 +674,6 @@ def p_list_head(p):
     """
     p[0] = [p[1]]
 
-@list_rule()
 def p_list_tail(p):
     """
     listof_stmts :        stmt   stmtdelim listof_stmts
@@ -693,6 +683,9 @@ def p_list_tail(p):
     listof_getters :      getter     COMMA listof_getters
     listof_setters :      setter     COMMA listof_setters
     """
+    l = _symbol_at(p, -1)
+    l.append(p[1])
+    p[0] = l
 
 def p_stmtdelim(p):
     """stmtdelim : NEWLINE
