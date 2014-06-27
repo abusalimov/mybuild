@@ -161,6 +161,18 @@ def rule_wloc(func):
     return rule(wloc(func))
 
 
+# AST fragments builders.
+
+def build_node(builder_wloc, expr=None):
+    builder, loc = builder_wloc
+    return set_loc(builder(expr) if expr is not None else builder(), loc)
+
+def build_chain(builder_wlocs, expr=None):
+    for builder_wloc in reversed(builder_wlocs):
+        expr = build_node(builder_wloc, expr)
+    return expr
+
+
 # Here go grammar definitions for PLY.
 
 tokens = lex.tokens
@@ -186,10 +198,6 @@ def p_exec_start(p, stmts=2):
         module_body.insert(0, doc_node)
 
     return ast.Module(module_body)
-
-def p_skipnl(p):
-    """skipnl :
-       skipnl : NEWLINE"""
 
 def p_new_suite(p):
     """new_suite :"""
@@ -263,16 +271,6 @@ def p_xlist_tail(p, target, targets_value_pair):
        listof_typedefs :  typedef  listof_typedefs"""
     targets_value_pair[0].append(target)
     return targets_value_pair
-
-
-def build_node(builder_wloc, expr=None):
-    builder, loc = builder_wloc
-    return set_loc(builder(expr) if expr is not None else builder(), loc)
-
-def build_chain(builder_wlocs, expr=None):
-    for builder_wloc in reversed(builder_wlocs):
-        expr = build_node(builder_wloc, expr)
-    return expr
 
 
 def prepare_assignment(p, target):
@@ -355,19 +353,6 @@ def p_closure(p, argspec=2, stmts=3):
     auxctx.append(mk_node)
 
     return set_loc_p(ast_call(ast_name(mk_name)), p)
-
-def p_nl_off(p):
-    """nl_off :"""
-    p.lexer.ignore_newline_stack[-1] += 1
-
-def p_nl_on(p):
-    """nl_on :"""
-    # Work around a 'nl_on' preceding a token pushing to the
-    # ignore_newline_stack (aka 'ins' below).
-    # In this case the 'nl_on' gets reduced _after_ handling the token,
-    # and naive decreasing of the stack top would underflow it.
-    was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
-    p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
 
 @rule
 def p_argspec(p, selfarg_name, argdefs=4):
@@ -690,6 +675,23 @@ def p_list_tail(p):
     l = _symbol_at(p, -1)
     l.append(p[1])
     p[0] = l
+
+def p_nl_off(p):
+    """nl_off :"""
+    p.lexer.ignore_newline_stack[-1] += 1
+
+def p_nl_on(p):
+    """nl_on :"""
+    # Work around a 'nl_on' preceding a token pushing to the
+    # ignore_newline_stack (aka 'ins' below).
+    # In this case the 'nl_on' gets reduced _after_ handling the token,
+    # and naive decreasing of the stack top would underflow it.
+    was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
+    p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
+
+def p_skipnl(p):
+    """skipnl :
+       skipnl : NEWLINE"""
 
 def p_stmtdelim(p):
     """stmtdelim : NEWLINE
