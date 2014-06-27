@@ -46,17 +46,17 @@ def t_NEWLINE(t):
     r'\n*((/\*(.|\n)*?\*/)|((//.*)?\n))\n*'
     n_newlines = t.value.count('\n')
     t.lexer.lineno += n_newlines
-    if n_newlines and not t.lexer.newline_stack[-1]:
+    if n_newlines and not t.lexer.ignore_newline_stack[-1]:
         return t
 
 
 # Paren/bracket counting
-def t_LPAREN(t):   r'\('; t.lexer.newline_stack[-1] += 1;  return t
-def t_RPAREN(t):   r'\)'; t.lexer.newline_stack[-1] -= 1;  return t
-def t_LBRACKET(t): r'\['; t.lexer.newline_stack[-1] += 1;  return t
-def t_RBRACKET(t): r'\]'; t.lexer.newline_stack[-1] -= 1;  return t
-def t_LBRACE(t):   r'\{'; t.lexer.newline_stack.append(0); return t
-def t_RBRACE(t):   r'\}'; t.lexer.newline_stack.pop();     return t
+def t_LPAREN(t):   r'\('; t.lexer.ignore_newline_stack[-1] += 1;  return t
+def t_RPAREN(t):   r'\)'; t.lexer.ignore_newline_stack[-1] -= 1;  return t
+def t_LBRACKET(t): r'\['; t.lexer.ignore_newline_stack[-1] += 1;  return t
+def t_RBRACKET(t): r'\]'; t.lexer.ignore_newline_stack[-1] -= 1;  return t
+def t_LBRACE(t):   r'\{'; t.lexer.ignore_newline_stack.append(0); return t
+def t_RBRACE(t):   r'\}'; t.lexer.ignore_newline_stack.pop();     return t
 
 # Delimeters
 t_COMMA            = r','
@@ -89,7 +89,7 @@ def t_error(t):
 
 
 lexer = ply.lex.lex(optimize=1, lextab=None)
-lexer.newline_stack = [0]
+lexer.ignore_newline_stack = [0]
 
 if __name__ == "__main__":
     ply.lex.runmain(lexer)

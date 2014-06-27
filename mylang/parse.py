@@ -357,11 +357,11 @@ def p_closure(p, argspec=2, stmts=3):
 
 def p_nl_off(p):
     """nl_off :"""
-    p.lexer.newline_stack[-1] += 1
+    p.lexer.ignore_newline_stack[-1] += 1
 
 def p_nl_on(p):
     """nl_on :"""
-    p.lexer.newline_stack[-1] -= 1
+    p.lexer.ignore_newline_stack[-1] -= 1
 
 @rule
 def p_argspec(p, selfarg_name, argdefs=4):
