@@ -362,7 +362,12 @@ def p_nl_off(p):
 
 def p_nl_on(p):
     """nl_on :"""
-    p.lexer.ignore_newline_stack[-1] -= 1
+    # Work around a 'nl_on' preceding a token pushing to the
+    # ignore_newline_stack (aka 'ins' below).
+    # In this case the 'nl_on' gets reduced _after_ handling the token,
+    # and naive decreasing of the stack top would underflow it.
+    was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
+    p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
 
 @rule
 def p_argspec(p, selfarg_name, argdefs=4):
