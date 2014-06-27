@@ -59,27 +59,41 @@ def from_rlist(reversed_list, item=None):
 
 # ast wrappers (py3k compat + arg defaults).
 
-def _to_list(l=None):
-    if l is None:
-        l = []
-    return l
-
 def ast_name(name, ctx=None):
     if ctx is None:
         ctx = ast.Load()
     return ast.Name(name, ctx)
 
-def ast_call(func, args=None, keywords=None, stararg=None, kwarg=None):
-    return ast.Call(func, _to_list(args), _to_list(keywords), stararg, kwarg)
+def ast_call(func, args=None, keywords=None, starargs=None, kwargs=None):
+    return ast.Call(func, args or [], keywords or [], starargs, kwargs)
 
 if py3k:
     def ast_arg(name):
         return ast.arg(name, None)
     ast_arg_name = getter.arg
 
-    def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
-        return ast.arguments(_to_list(args), vararg, [], [], kwarg,
-                             _to_list(defaults))
+    try:
+        def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
+            return ast.arguments(args or [], vararg, [], [], kwarg,
+                                 defaults or [])
+        ast_arguments()
+
+    except TypeError:
+        # earlier versions of py3k have slightly different ast
+        def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
+            if vararg is not None:
+                varargarg = vararg.arg
+                varargannotation = vararg.annotation
+            else:
+                varargarg = varargannotation = None
+            if kwarg is not None:
+                kwargarg = kwarg.arg
+                kwargannotation = kwarg.annotation
+            else:
+                kwargarg = kwargannotation = None
+            return ast.arguments(args or [], varargarg, varargannotation,
+                                 [], kwargarg, kwargannotation,
+                                 defaults or [], [])
 
     def ast_funcdef(name, args, body):
         return ast.FunctionDef(name, args, body, [], None)
@@ -90,8 +104,7 @@ else:
     ast_arg_name = getter.id
 
     def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
-        return ast.arguments(_to_list(args), vararg, kwarg,
-                             _to_list(defaults))
+        return ast.arguments(args or [], vararg, kwarg, defaults or [])
 
     def ast_funcdef(name, args, body):
         return ast.FunctionDef(name, args, body, [])
