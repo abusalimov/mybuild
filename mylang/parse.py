@@ -294,14 +294,13 @@ def p_xlist_tail(p, target, targets_value_pair):
     return targets_value_pair
 
 
-def apply_trailer(trailer_wloc, expr=None):
-    trailer, loc = trailer_wloc
-    return loc.init_ast_node(trailer(expr) if expr is not None else trailer())
+def build_node(builder_wloc, expr=None):
+    builder, loc = builder_wloc
+    return set_loc(builder(expr) if expr is not None else builder(), loc)
 
-def fold_trailers(trailer_wlocs, expr=None):
-    for trailer_wloc in reversed(trailer_wlocs):
-        expr = apply_trailer(trailer_wloc, expr)
-
+def build_chain(builder_wlocs, expr=None):
+    for builder_wloc in reversed(builder_wlocs):
+        expr = build_node(builder_wloc, expr)
     return expr
 
 
@@ -329,11 +328,11 @@ def colon_assignment_target(p):
     return ast_name(selfarg_name)
 
 @rule
-def p_assing_colon(p, target_trailers):
+def p_assing_colon(p, target_builders):
     """binding : xattr_chain COLON
        objdef  : name_single COLON"""
-    return prepare_assignment(p, fold_trailers(target_trailers,
-                                               colon_assignment_target(p)))
+    return prepare_assignment(p, build_chain(target_builders,
+                                             colon_assignment_target(p)))
 
 @rule
 def p_assign_equals(p, target):
@@ -348,7 +347,7 @@ def p_name_single(p, name):
 @rule
 def p_name_apply(p, name):
     """name_apply : name"""
-    return apply_trailer(name)
+    return build_node(name)
 
 
 def fixup_closure_name(closure_maker, name):
@@ -511,12 +510,12 @@ def p_test(p):
        test : mytest"""
 
 @rule
-def p_xtest(p, trailers):
+def p_xtest(p, builders):
     """pytest : xattr_chain
        pytest : py_chain
        pytest : my_chain_plus
        mytest : my_chain_atom"""
-    return fold_trailers(trailers)
+    return build_chain(builders)
 
 @list_rule()
 def p_xchain(p):
@@ -624,12 +623,12 @@ def p_argument_kw(p, key, value=3):
 def p_trailer_attr_or_name(p, name=-1):  # x.attr
     """trailer : PERIOD ID
        name    : ID"""
-    def trailer(expr=None):
+    def builder(expr=None):
         if expr is not None:
             return ast.Attribute(expr, name, ast.Load())
         else:
             return ast_name(name)
-    return trailer
+    return builder
 
 
 @rule_wloc
