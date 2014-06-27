@@ -298,7 +298,7 @@ def colon_assignment_target(p):
 
 @rule
 def p_assing_colon(p, target_builders):
-    """binding : xattr_chain COLON
+    """binding : name_trailers COLON
        typedef  : name_single COLON"""
     return prepare_assignment(p, build_chain(target_builders,
                                              colon_assignment_target(p)))
@@ -476,18 +476,18 @@ def p_test(p, test):
 
 @rule
 def p_xtest(p, builders):
-    """pytest : xattr_chain
-       pytest : py_chain
-       pytest : my_chain_plus
-       mytest : my_chain_atom"""
+    """pytest : name_trailers
+       pytest : pyatom_trailers
+       pytest : myatom_trailers_plus
+       mytest : myatom_single"""
     return build_chain(builders)
 
 def p_xchain(p):
-    """xattr_chain   : name    listof_trailers
-       py_chain      : pyatom  listof_trailers
-       my_chain_atom : myatom  empty_list
-       my_chain_plus : myatom  trailers_plus
-       trailers_plus : trailer listof_trailers"""
+    """name_trailers        : name    listof_trailers
+       pyatom_trailers      : pyatom  listof_trailers
+       myatom_single        : myatom  empty_list
+       myatom_trailers_plus : myatom  trailers_plus
+       trailers_plus        : trailer listof_trailers"""
     l = _symbol_at(p, -1)
     l.append(p[1])
     p[0] = l
@@ -609,7 +609,7 @@ def p_trailer_multigetter(p):  # x.[attr, [item], (call), ...]
     raise NotImplementedError
 
 def p_getter(p):
-    """getter : xattr_chain"""
+    """getter : name_trailers"""
     raise NotImplementedError
 
 def p_trailer_multisetter(p):  # x.[attr: value, [item]: value, ...]
@@ -617,7 +617,7 @@ def p_trailer_multisetter(p):  # x.[attr: value, [item]: value, ...]
     raise NotImplementedError
 
 def p_setter(p):
-    """setter : xattr_chain COLON test"""
+    """setter : name_trailers COLON test"""
     raise NotImplementedError
 
 
