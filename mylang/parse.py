@@ -161,15 +161,6 @@ def rule_wloc(func):
     return rule(wloc(func))
 
 
-def atom_func_wloc(func):
-    indices = _rule_indices_from_argspec(func, with_p=False)
-    @functools.wraps(func)
-    def decorated(p):
-        p[0] = (partial(func, *_symbols_at(p, indices)),
-                ploc(p))
-    return decorated
-
-
 def alias_rule(index=1):
     def decorator(func):
         @functools.wraps(func)
@@ -526,13 +517,13 @@ def p_xchain(p):
        trailers_plus : trailer listof_trailers"""
 
 
-@atom_func_wloc
-def p_myatom_closure(closure):
+@rule_wloc
+def p_myatom_closure(p, closure):
     """myatom : closure"""
-    return closure
+    return lambda: closure
 
-@atom_func_wloc
-def p_myatom(objtype, mb_name, closure=-1):
+@rule_wloc
+def p_myatom(p, objtype, mb_name, closure=-1):
     """myatom : pytest closure
        myatom : pytest ID closure"""
     if mb_name is closure:
@@ -541,45 +532,45 @@ def p_myatom(objtype, mb_name, closure=-1):
     closure.args[0:0] = [objtype, ast.Str(mb_name), closure.func]
     closure.func = ast_name('__my_objdef__')
 
-    return closure
+    return lambda: closure
 
 
-@atom_func_wloc
-def p_pyatom_num(n):
+@rule_wloc
+def p_pyatom_num(p, n):
     """pyatom : NUMBER"""
-    return ast.Num(n)
+    return lambda: ast.Num(n)
 
-@atom_func_wloc
-def p_pyatom_str(s):
+@rule_wloc
+def p_pyatom_str(p, s):
     """pyatom : STRING"""
-    return ast.Str(s)
+    return lambda: ast.Str(s)
 
-@atom_func_wloc
-def p_pyatom_list(testlist=2):  # [item, ...]
+@rule_wloc
+def p_pyatom_list(p, testlist=2):  # [item, ...]
     """pyatom : LBRACKET testlist RBRACKET"""
-    return ast.List(from_rlist(testlist[0]), ast.Load())
+    return lambda: ast.List(from_rlist(testlist[0]), ast.Load())
 
-@atom_func_wloc
-def p_pyatom_dict(kv_pairs=2):  # [key: value, ...]
+@rule_wloc
+def p_pyatom_dict(p, kv_pairs=2):  # [key: value, ...]
     """pyatom : LBRACKET listof_dictents RBRACKET"""
     keys   = from_rlist(kv_pairs, 0)
     values = from_rlist(kv_pairs, 1)
 
-    return ast.Dict(keys, values)
+    return lambda: ast.Dict(keys, values)
 
 @rule
 def p_dictent(p, key, value=3):
     """dictent : test COLON test"""
     return key, value
 
-@atom_func_wloc
-def p_pyatom_tuple(testlist=2):  # (item, ...)
+@rule_wloc
+def p_pyatom_tuple(p, testlist=2):  # (item, ...)
     """pyatom : LPAREN testlist RPAREN"""
     test_l, test_el = testlist
     if test_el is not None:
-        return test_el
+        return lambda: test_el
     else:
-        return ast.Tuple(from_rlist(test_l), ast.Load())
+        return lambda: ast.Tuple(from_rlist(test_l), ast.Load())
 
 @rule_wloc
 def p_trailer_call(p, kw_arg_pairs=2):  # x(arg, kw=arg, ...)
