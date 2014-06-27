@@ -113,41 +113,59 @@ else:
 # p_func definition helpers.
 
 def _rule_indices_from_argspec(func, with_p=True):
-    args, _, _, defaults = inspect.getargspec(func)
+    args, _, _, defaults = inspect.getargspec(inspect.unwrap(func))
+    nr_args = len(args)
+    defaults = list(defaults) if defaults is not None else []
+
     if with_p:
-        if not args:
+        if not nr_args:
             raise TypeError("need at least 'p' argument")
-        if defaults and len(defaults) == len(args):
+        if len(defaults) == nr_args:
             defaults = defaults[1:]
-        args = args[1:]
+        nr_args -= 1
 
-    if defaults is not None:
-        indices = list(range(1, len(args)-len(defaults)+1)) + list(defaults)
+    if None in defaults:
+        def_nones = defaults[defaults.index(None):]
+        if def_nones.count(None) != len(def_nones):
+            raise TypeError("index argument after 'None'")
+
+        def_indices = defaults[:-len(def_nones)]
     else:
-        indices = list(range(1, len(args)+1))
+        def_indices = defaults
 
-    return indices
+    return list(range(1, nr_args-len(defaults)+1)) + def_indices
+
+def _symbol_at(p, idx):
+    return p[idx + (idx < 0 and len(p))]
+def _symbols_at(p, indices):
+    return [_symbol_at(p, idx) for idx in indices]
 
 def rule(func):
     indices = _rule_indices_from_argspec(func)
     @functools.wraps(func)
     def decorated(p):
-        p[0] = func(p, *[p[i if i>=0 else len(p)+i] for i in indices])
+        p[0] = func(p, *_symbols_at(p, indices))
     return decorated
 
+def wloc_of(idx):
+    def decorator(func):
+        @functools.wraps(func)
+        def decorated(p, *symbols):
+            return func(p, *symbols), ploc(p, idx)
+        return decorated
+    return decorator
+
+wloc = wloc_of(1)
+
 def rule_wloc(func):
-    indices = _rule_indices_from_argspec(func)
-    @functools.wraps(func)
-    def decorated(p):
-        p[0] = (func(p, *[p[i if i>=0 else len(p)+i] for i in indices]),
-                ploc(p))
-    return decorated
+    return rule(wloc(func))
+
 
 def atom_func_wloc(func):
     indices = _rule_indices_from_argspec(func, with_p=False)
     @functools.wraps(func)
     def decorated(p):
-        p[0] = (partial(func, *[p[i if i>=0 else len(p)+i] for i in indices]),
+        p[0] = (partial(func, *_symbols_at(p, indices)),
                 ploc(p))
     return decorated
 
@@ -156,7 +174,7 @@ def alias_rule(index=1):
     def decorator(func):
         @functools.wraps(func)
         def decorated(p):
-            p[0] = p[index + (index < 0 and len(p))]
+            p[0] = _symbol_at(p, index)
         return decorated
     return decorator
 
@@ -164,7 +182,7 @@ def list_rule(item_index=1, list_index=-1):
     def decorator(func):
         @functools.wraps(func)
         def decorated(p):
-            l = p[list_index + (list_index < 0 and len(p))]
+            l = _symbol_at(p, list_index)
             l.append(p[item_index])
             p[0] = l
         return decorated
