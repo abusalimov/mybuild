@@ -161,14 +161,6 @@ def rule_wloc(func):
     return rule(wloc(func))
 
 
-def alias_rule(index=1):
-    def decorator(func):
-        @functools.wraps(func)
-        def decorated(p):
-            p[0] = _symbol_at(p, index)
-        return decorated
-    return decorator
-
 def list_rule(item_index=1, list_index=-1):
     def decorator(func):
         @functools.wraps(func)
@@ -428,18 +420,19 @@ def p_argspec_empty(p, selfarg_name):
     p.parser.selfarg_stack.append(selfarg_name)
     return ast_arguments(args)
 
-@alias_rule()
-def p_selfarg_explicit(p):
+@rule
+def p_selfarg_explicit(p, selfarg):
     """selfarg : selfarg_default skipnl
        selfarg : selfarg_explicit skipnl"""
+    return selfarg
 
 @rule
 def p_selfarg_default(p):
     """selfarg_default :"""
     return 'self'
 
-@alias_rule(-1)
-def p_selfarg_explicit_name(p):
+@rule
+def p_selfarg_explicit_name(p, name=-1):
     """selfarg_explicit : COLON ID"""
 
 def p_selfarg_explicit_none(p):
@@ -473,18 +466,20 @@ def p_argdefs_starargs_vararg(p, vararg):
 def p_argdefs_starargs_kwarg(p, kwarg):
     """argdefs_starargs : argdefs_kwarg"""
     return (None, kwarg)
-@alias_rule()
-def p_argdefs_starargs_none(p):
+@rule
+def p_argdefs_starargs_none(p, pair):
     """argdefs_starargs : no_starargs"""
+    return pair
 @rule
 def p_no_starargs(p):
     """no_starargs :"""
     return (None, None)
 
-@alias_rule(2)
-def p_argdefs_stararg(p):
+@rule
+def p_argdefs_stararg(p, name=-1):
     """argdefs_vararg : STAR       ID
        argdefs_kwarg  : DOUBLESTAR ID"""
+    return name
 
 @rule
 def p_argdef(p, name, mb_default=-1):
@@ -495,10 +490,11 @@ def p_argdef(p, name, mb_default=-1):
     return set_loc_p(ast_arg(name), p), mb_default
 
 
-@alias_rule()
-def p_test(p):
+@rule
+def p_test(p, test):
     """test : pytest
        test : mytest"""
+    return test
 
 @rule
 def p_xtest(p, builders):
