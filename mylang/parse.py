@@ -33,6 +33,9 @@ def ploc(p, i=1):
 def set_loc(ast_node, loc):
     return loc.init_ast_node(ast_node)
 
+def set_loc_p(ast_node, p, i=1):
+    return set_loc(ast_node, ploc(p, i))
+
 copy_loc = ast.copy_location
 
 
@@ -350,7 +353,7 @@ def p_closure(p, argspec=2, stmts=3):
 
     closures.append(mk_node)
 
-    return set_loc(ast_call(ast_name(mk_name)), ploc(p))
+    return set_loc_p(ast_call(ast_name(mk_name)), p)
 
 def p_nl_off(p):
     """nl_off :"""
@@ -365,7 +368,7 @@ def p_argspec(p, selfarg_name, argdefs=4):
     """argspec : selfarg nl_off PIPE argdefs nl_on PIPE mb_stmtdelim"""
     argdefault_pairs, (vararg, kwarg) = argdefs
     if selfarg_name is not None:
-        selfarg = set_loc(ast_arg(selfarg_name), ploc(p))
+        selfarg = set_loc_p(ast_arg(selfarg_name), p)
         argdefault_pairs.append((selfarg, None))
 
     args = []
@@ -397,7 +400,7 @@ def p_argspec_empty(p, selfarg_name):
     """argspec : selfarg_default mb_stmtdelim
        argspec : selfarg_explicit stmtdelim"""
     if selfarg_name is not None:
-        args = [set_loc(ast_arg(selfarg_name), ploc(p))]
+        args = [set_loc_p(ast_arg(selfarg_name), p)]
     else:
         args = []
 
@@ -468,7 +471,7 @@ def p_argdef(p, name, mb_default=-1):
        argdef : ID"""
     if mb_default is name:
         mb_default = None
-    return set_loc(ast_arg(name), ploc(p)), mb_default
+    return set_loc_p(ast_arg(name), p), mb_default
 
 
 @alias_rule()
