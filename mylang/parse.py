@@ -193,8 +193,7 @@ def p_skipnl(p):
 
 def p_new_suite(p):
     """new_suite :"""
-    closures = []
-    p.parser.suite_stack.append(closures)
+    p.parser.auxctx_stack.append([])
 
 def docstring(stmts):
     if (stmts and
@@ -209,13 +208,13 @@ def p_suite(p, stmts=2):
     if not stmts:
         stmts.append(ast.Pass())  # otherwise all hell will break loose
 
-    closures = p.parser.suite_stack.pop()
+    auxctx = p.parser.auxctx_stack.pop()
 
-    if closures:
+    if auxctx:
         # always leave a docstring (if any) first
         insert_idx = (docstring(stmts) is not None)
 
-        stmts[insert_idx:insert_idx] = closures
+        stmts[insert_idx:insert_idx] = auxctx
 
     return stmts
 
@@ -344,16 +343,16 @@ def p_closure(p, argspec=2, stmts=3):
     #   closure = mk()
     p.parser.selfarg_stack.pop()
 
-    closures = p.parser.suite_stack[-1]
+    auxctx = p.parser.auxctx_stack[-1]
 
     fn_name = '<closure>'
     fn_node = ast_funcdef(fn_name, argspec, stmts)
 
-    mk_name = '__my_closure_maker_{n}__'.format(n=len(closures))
+    mk_name = '__my_closure_maker_{n}__'.format(n=len(auxctx))
     mk_body = [fn_node, ast.Return(ast_name(fn_name))]
     mk_node = ast_funcdef(mk_name, ast_arguments(), mk_body)
 
-    closures.append(mk_node)
+    auxctx.append(mk_node)
 
     return set_loc_p(ast_call(ast_name(mk_name)), p)
 
@@ -732,7 +731,7 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 
     p = parser
 
-    p.suite_stack = []
+    p.auxctx_stack = []
     p.selfarg_stack = ['__my_module__']
 
     l = lex.lexer.clone()
