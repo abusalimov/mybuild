@@ -230,17 +230,17 @@ def p_stmt_binding(p, targets_value_pair):
         return copy_loc(ast.Expr(value), value)
 
 
-@rule  # objtype name1: name2= { ... }
-def p_stmt_objdef(p, objtype, targets_value_pair):
-    """stmt : pytest listof_objdefs"""
+@rule  # metatype name1: name2= { ... }
+def p_stmt_typedef(p, metatype, targets_value_pair):
+    """stmt : pytest listof_typedefs"""
     targets, closure = targets_value_pair
     targets.reverse()
 
     names = [ast.Str(target.id if isinstance(target, ast.Name) else
                      target.attr) for target in targets]
 
-    # __maker(...) -> __objdef(objtype, [names], __maker, ...)
-    closure.args[0:0] = [objtype, ast.List(names, ast.Load()), closure.func]
+    # __maker(...) -> __typedef(metatype, [names], __maker, ...)
+    closure.args[0:0] = [metatype, ast.List(names, ast.Load()), closure.func]
     closure.func = ast_name('__my_xobjdef__')
 
     return copy_loc(ast.Assign([ast.Tuple(targets, ast.Store())], closure),
@@ -253,14 +253,14 @@ def p_bindings_head(p, value):
     return [], value
 
 @rule
-def p_objdefs_head(p, target, value):
-    """listof_objdefs : objdef closure"""
+def p_typedefs_head(p, target, value):
+    """listof_typedefs : typedef closure"""
     return [target], value
 
 @rule
 def p_xlist_tail(p, target, targets_value_pair):
     """listof_bindings : binding listof_bindings
-       listof_objdefs :  objdef  listof_objdefs"""
+       listof_typedefs :  typedef  listof_typedefs"""
     targets_value_pair[0].append(target)
     return targets_value_pair
 
@@ -301,14 +301,14 @@ def colon_assignment_target(p):
 @rule
 def p_assing_colon(p, target_builders):
     """binding : xattr_chain COLON
-       objdef  : name_single COLON"""
+       typedef  : name_single COLON"""
     return prepare_assignment(p, build_chain(target_builders,
                                              colon_assignment_target(p)))
 
 @rule
 def p_assign_equals(p, target):
     """binding : test EQUALS
-       objdef  : name_apply EQUALS"""
+       typedef  : name_apply EQUALS"""
     return prepare_assignment(p, target)
 
 @rule
@@ -514,13 +514,13 @@ def p_myatom_closure(p, closure):
     return lambda: closure
 
 @rule_wloc
-def p_myatom(p, objtype, mb_name, closure=-1):
+def p_myatom(p, metatype, mb_name, closure=-1):
     """myatom : pytest closure
        myatom : pytest ID closure"""
     if mb_name is closure:
         mb_name = '<unnamed>'
 
-    closure.args[0:0] = [objtype, ast.Str(mb_name), closure.func]
+    closure.args[0:0] = [metatype, ast.Str(mb_name), closure.func]
     closure.func = ast_name('__my_objdef__')
 
     return lambda: closure
