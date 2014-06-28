@@ -592,12 +592,16 @@ def p_nl_on(p):
     was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
     p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
 
+def p_newlines(p):
+    """newlines : NEWLINE
+       newlines : NEWLINE newlines"""
+
 def p_skipnl(p):
     """skipnl :
-       skipnl : NEWLINE"""
+       skipnl : newlines"""
 
 def p_stmtdelim(p):
-    """stmtdelim : NEWLINE
+    """stmtdelim : newlines
        stmtdelim : SEMI skipnl"""
 
 def p_empty(p):

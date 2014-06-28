@@ -39,14 +39,15 @@ tokens = (
 )
 
 # Completely ignored characters
-t_ignore           = ' \t\x0c'
+t_ignore           = ' \t'
+t_ignore_COMMENT   = r'//.*'
 
-# Newlines
+# Newlines (including block comments)
 def t_NEWLINE(t):
-    r'\n*((/\*(.|\n)*?\*/)|((//.*)?\n))\n*'
-    n_newlines = t.value.count('\n')
-    t.lexer.lineno += n_newlines
-    if n_newlines and not t.lexer.ignore_newline_stack[-1]:
+    r'(\n|/\*(.|\n)*?\*/)+'
+    nr_newlines = t.value.count('\n')
+    t.lexer.lineno += nr_newlines
+    if nr_newlines and not t.lexer.ignore_newline_stack[-1]:
         return t
 
 
