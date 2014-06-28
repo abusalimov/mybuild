@@ -9,6 +9,7 @@ __date__ = "2013-08-22"
 
 
 from _compat import *
+from _compat import _calculate_meta
 
 
 builtin_names = [
@@ -27,8 +28,8 @@ builtin_names = [
     'False', 'True', 'None',
 
     # Mylang-specific
-    '__my_objdef__',
-    '__my_xobjdef__',
+    '__my_new_type__',
+    '__my_call_args__',
 
     # Disabled Python builtins:
     #
@@ -40,6 +41,67 @@ builtin_names = [
 ]
 
 
+def __my_call_args__(*args, **kwargs):
+    return args, kwargs
+
+def __my_new_type__(exec_body, meta=None, name='_', bases=(), kwds={}):
+    if meta is not None:
+        return my_new_type(exec_body, meta, name, bases, kwds)
+
+    else: # module scope
+        exec_body()
+
+
+class MyDelegate(object):
+
+    def __init__(self, ns):
+        super(MyDelegate, self).__init__()
+        super(MyDelegate, self).__setattr__('__dict__', ns)
+
+    def __setattr__(self, name, func):
+        super(MyDelegate, self).__setattr__(name, self.func_to_value(func))
+
+    func_to_value = staticmethod(property)
+
+
+# Provide a PEP 3115 compliant mechanism for class creation
+def my_new_type(exec_body, meta, name, bases=(), kwds={}):
+    """Create a class object dynamically using the appropriate metaclass."""
+    meta, ns = my_prepare_type(meta, name, bases, kwds)
+    ns.setdefault('__module__', exec_body.__module__)
+
+    delegate = my_ns_delegate(meta, ns)
+    exec_body(delegate)
+
+    return meta(name, bases, ns, **kwds)
+
+
+def my_prepare_type(meta, name, bases=(), kwds={}):
+    """Call the __prepare__ method of the appropriate metaclass.
+
+    Returns (metaclass, namespace) as a tuple
+
+    *metaclass* is the appropriate metaclass
+    *namespace* is the prepared class namespace
+    """
+    if isinstance(meta, type):
+        # when meta is a type, we first determine the most-derived metaclass
+        # instead of invoking the initial candidate directly
+        meta = _calculate_meta(meta, bases)
+
+    if hasattr(meta, '__prepare__'):
+        ns = meta.__prepare__(name, bases, **kwds)
+    else:
+        ns = {}
+
+    return meta, ns
+
+def my_ns_delegate(meta, ns):
+    """Call the __my_delegate__ method (if any) of the metaclass."""
+    delegate_type = getattr(meta, '__my_delegate__', MyDelegate)
+    return delegate_type(ns)
+
+
 def __objtype_new_meth(objtype):
     try:
         return objtype.__my_new__
@@ -48,47 +110,6 @@ def __objtype_new_meth(objtype):
                         "'object {{...}}' expression "
                         "(missing '__my_new__' method)"
                         .format(cls=type(objtype)))
-
-def __fixup_name(closure, name):
-    closure.__name__ = name
-    return closure
-
-
-def __my_objdef__(objtype, name, closure_maker, *args):
-    """
-    Mylang source:
-        objtype foo {...};
-
-    Python equivalent:
-        def __my_closure__():
-            def closure():
-                ...
-            return closure
-        __my_objdef__(objtype, 'foo', __my_closure__)
-
-    Runtime:
-        closure = __my_closure__()
-        closure.__name__ = name
-        objtype.__my_new__(closure)
-    """
-    objtype_new = __objtype_new_meth(objtype)
-    return objtype_new(__fixup_name(closure_maker(*args), name))
-
-def __my_xobjdef__(objtype, names, closure_maker, *args):
-    """
-    Mylang source:
-        objtype foo: bar = {...};
-
-    Python equivalent:
-        def __my_closure__():
-            def closure():
-                ...
-            return closure
-        self.foo, bar = __my_xobjdef__(objtype, ['foo', 'bar'], __my_closure__)
-    """
-    objtype_new = __objtype_new_meth(objtype)
-    return [objtype_new(__fixup_name(closure_maker(*args), name))
-            for name in names]
 
 
 # Note that some name are taken from globals of this module (this includes
