@@ -32,20 +32,20 @@ class InheritMeta(type):
                                 "must be a (non-strict) subclass "
                                 "of the metaclasses of all its bases")
 
-    def __check_old_owner(cls, value):
+    def __check_owner(cls, attr, value):
         try:
             owner_cls, owner_attr = value.__owner
         except AttributeError:
             return
 
-        if owner_cls is not cls:
+        if owner_cls is not cls or owner_attr != attr:
             raise ValueError("Can't inherit an owned value '{value}': "
                              "owned by '{owner_cls}' "
                              "through '{owner_attr}' attribute"
                              .format(**locals()))
 
     def __inherit_attr(cls, attr, value):
-        cls.__check_old_owner(value)
+        cls.__check_owner(attr, value)
 
         value.__owner = cls, attr
         value.__bases__ = cls.__bases_for_attr(attr)
