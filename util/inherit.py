@@ -7,42 +7,47 @@ from util.itertools import pop_iter
 from util.itertools import unique
 
 
-class InheritMetaBase(type):
+class InheritMeta(type):
 
     def _kick_mro_update(cls):
         cls.__bases__ = cls.__bases__
 
     def mro(cls):
-        meta = type(cls)
-        for base in cls.__bases__:
-            base_meta = type(base)
-            if not issubclass(meta, base_meta):
-                # Impose more strict requirements on changing __bases__,
-                # see: http://bugs.python.org/issue21919
+        cls.__check_base_metas(map(type, cls.__bases__))
+
+        for attr, value in iteritems(cls.__dict__):
+            if is_inherit_value(value):
+                cls.__inherit_attr(attr, value)
+
+        return super(InheritMeta, cls).mro()
+
+    @classmethod
+    def __check_base_metas(mcls, base_metas):
+        for base_meta in base_metas:
+            if not issubclass(mcls, base_meta):
+                # Impose more strict requirements in case of changing
+                # cls.__bases__, see: http://bugs.python.org/issue21919
                 raise TypeError("metaclass conflict: "
                                 "the metaclass of a derived class "
                                 "must be a (non-strict) subclass "
                                 "of the metaclasses of all its bases")
 
-        return super(InheritMetaBase, cls).mro()
+    def __check_old_owner(cls, value):
+        try:
+            owner_cls, owner_attr = value.__owner
+        except AttributeError:
+            return
 
-
-class InheritOwnerMeta(InheritMetaBase):
-
-    def __new__(mcls, name, bases, attrs):
-        cls = super(InheritOwnerMeta, mcls).__new__(mcls, name, bases, attrs)
-
-        for attr, value in iteritems(cls.__dict__):
-            if isinstance(value, InheritValueMeta):
-                if value._inherit_owner is not None:
-                    raise ValueError
-
-                cls.__inherit_attr(attr, value)
-
-        return cls
+        if owner_cls is not cls:
+            raise ValueError("Can't inherit an owned value '{value}': "
+                             "owned by '{owner_cls}' "
+                             "through '{owner_attr}' attribute"
+                             .format(**locals()))
 
     def __inherit_attr(cls, attr, value):
-        value._inherit_owner = cls
+        cls.__check_old_owner(value)
+
+        value.__owner = cls, attr
         value.__bases__ = cls.__bases_for_attr(attr)
 
     def __bases_for_attr(cls, attr):
@@ -57,9 +62,6 @@ class InheritOwnerMeta(InheritMetaBase):
         return [base for base in cls.__mro__ if id(base) in base_ids]
 
 
-class InheritValueMeta(InheritMetaBase):
-
-    def __init__(cls, name, bases, attrs):
-        super(InheritValueMeta, cls).__init__(name, bases, attrs)
-        cls._inherit_owner = None
+def is_inherit_value(value):
+    return getattr(value, 'auto_inherit', False)
 
