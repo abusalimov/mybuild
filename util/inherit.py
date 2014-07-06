@@ -8,6 +8,81 @@ from util.itertools import unique
 
 
 class InheritMeta(type):
+    """
+    Classes created with this metaclass manage their class attributes so that
+    a value (with its 'auto_inherit' attribute set to a truth) can inherit
+    one from the same attribute of some base type.
+
+    Let's create three classes using InheritMeta (owner classes): A, B, C
+
+    >>> from util.inherit import InheritMeta
+    >>> from _compat import *
+    >>> class A(extend(metaclass=InheritMeta)):
+    ...     pass
+    ...
+    >>> class B(A):
+    ...     pass
+    ...
+    >>> class C(B):
+    ...     pass
+    ...
+
+    Now define classes that are gonna be managed (value classes): X, Y, Z
+    The __repr__ method of each class is overridden to emit its name along
+    with a result of a super class, effectively resulting in a pretty-printed
+    __mro__ chain.
+
+    >>> class O(object):
+    ...     auto_inherit = True
+    ...     __repr__ = lambda self: 'O'
+    ...
+    >>> class X(O):
+    ...     __repr__ = lambda self: 'X -> ' + super(X, self).__repr__()
+    ...
+    >>> class Y(O):
+    ...     __repr__ = lambda self: 'Y -> ' + super(Y, self).__repr__()
+    ...
+    >>> class Z(O):
+    ...     __repr__ = lambda self: 'Z -> ' + super(Z, self).__repr__()
+    ...
+
+    Create an instance of each value class:
+
+    >>> x, y, z = X(), Y(), Z()
+    >>> x, y, z
+    (X -> O, Y -> O, Z -> O)
+
+    Now assigning the value classes to an attribute 'V' of the owner classes
+    reflects on the inheritance hieararchy of the value classes:
+
+    >>> A.V = X
+    >>> x
+    X -> O
+
+    >>> B.V = Y
+    >>> issubclass(Y, X)
+    True
+    >>> y
+    Y -> X -> O
+
+    >>> C.V = Z
+    >>> issubclass(Z, Y)
+    True
+    >>> z
+    Z -> Y -> X -> O
+
+    >>> del B.V
+    >>> issubclass(Z, Y)
+    False
+    >>> issubclass(Z, X)
+    True
+    >>> z
+    Z -> X -> O
+
+    Values don't necessarily need to be actual classes, an owner class in fact
+    only manages __bases__ attribute of a value.
+
+    """
 
     def __bases_for_attr(cls, attr, mro):
         base_values = dict()  # {id(base): value}
@@ -107,3 +182,7 @@ class InheritMeta(type):
 def is_inherit_value(value):
     return getattr(value, 'auto_inherit', False)
 
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
