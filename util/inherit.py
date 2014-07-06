@@ -9,7 +9,7 @@ from util.itertools import unique
 
 class InheritMeta(type):
 
-    def __bases_for_attr(cls, attr):
+    def __bases_for_attr(cls, attr, mro):
         base_values = dict()  # {id(base): value}
 
         check_owner = cls.__check_owner
@@ -22,14 +22,21 @@ class InheritMeta(type):
             else:
                 todo += base.__bases__
 
-        return [base_values[base_id] for base_id in map(id, cls.__mro__)
-                if base_id in base_values]
+        return tuple(base_values[base_id] for base_id in map(id, mro)
+                     if base_id in base_values)
 
-    def __inherit_attr(cls, attr, value):
-        if cls.__check_owner(attr, value) is None:
-            value.__owner = cls, attr, value.__bases__
+    def __inherit_attr(cls, attr, value, mro):
+        orig_bases = cls.__check_owner(attr, value)
+        if orig_bases is None or cls.__mro__ != mro:
+            if orig_bases is None:
+                orig_bases = value.__bases__
+            value.__owner = cls, attr, orig_bases
+
+            attr_bases = cls.__bases_for_attr(attr, mro)
+            rest_bases = tuple(base for base in orig_bases
+                               if base not in attr_bases)
             try:
-                value.__bases__ = cls.__bases_for_attr(attr)
+                value.__bases__ = attr_bases + rest_bases
             except:
                 del value.__owner  # __bases__ is rolled back automatically
                 raise
@@ -70,12 +77,13 @@ class InheritMeta(type):
 
     def mro(cls):
         cls.__check_base_metas(map(type, cls.__bases__))
+        mro = super(InheritMeta, cls).mro()
 
         for attr, value in iteritems(cls.__dict__):
             if is_inherit_value(value):
-                cls.__inherit_attr(attr, value)
+                cls.__inherit_attr(attr, value, mro)
 
-        return super(InheritMeta, cls).mro()
+        return mro
 
     def __kick_mro_update(cls):
         type.__dict__['__bases__'].__set__(cls, cls.__bases__)
