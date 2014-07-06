@@ -10,7 +10,7 @@ from util.itertools import unique
 class InheritMeta(type):
     """
     Classes created with this metaclass manage their class attributes so that
-    a value (with its 'auto_inherit' attribute set to a truth) can inherit
+    a value (with its 'inherit_self' attribute set to a truth) can inherit
     one from the same attribute of some base type.
 
     Let's create three classes using InheritMeta (owner classes): A, B, C
@@ -33,7 +33,7 @@ class InheritMeta(type):
     __mro__ chain.
 
     >>> class O(object):
-    ...     auto_inherit = True
+    ...     inherit_self = True
     ...     __repr__ = lambda self: 'O'
     ...
     >>> class X(O):
@@ -189,7 +189,7 @@ class InheritMeta(type):
 
 
 def is_inherit_value(value):
-    return getattr(value, 'auto_inherit', False)
+    return getattr(value, 'inherit_self', False)
 
 
 if __name__ == '__main__':
