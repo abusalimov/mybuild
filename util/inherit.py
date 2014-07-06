@@ -78,7 +78,7 @@ class InheritMeta(type):
         return super(InheritMeta, cls).mro()
 
     def __kick_mro_update(cls):
-        cls.__bases__ = cls.__bases__
+        type.__dict__['__bases__'].__set__(cls, cls.__bases__)
 
     def __setattr__(cls, attr, value):
         cls.__check_owner(attr, value)
