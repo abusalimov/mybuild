@@ -90,6 +90,11 @@ class InheritMeta(type):
         check_owner = cls.__check_owner
         todo = list(cls.__bases__)
         for base in unique(pop_iter(todo)):
+            if not hasattr(base, 'inherit_update_subclasses'):
+                # Base is definitely not an instance of InheritMeta, nor
+                # it provides a manual way to invoke refreshing of
+                # auto-inheritance of its subclasses that support it.
+                continue
             if attr in base.__dict__:
                 value = base.__dict__[attr]
                 check_owner(attr, value, base)
@@ -160,7 +165,9 @@ class InheritMeta(type):
 
         return mro
 
-    def __kick_mro_update(cls):
+    def inherit_update_subclasses(cls):
+        """Assigning to __bases__ invokes mro() recalculation on the class
+        and all of its direct and indirect sublcasses."""
         type.__dict__['__bases__'].__set__(cls, cls.__bases__)
 
     def __setattr__(cls, attr, value):
@@ -168,15 +175,17 @@ class InheritMeta(type):
         try:
             cls.__uninherit_attr(attr, cls.__dict__.get(attr))
             super(InheritMeta, cls).__setattr__(attr, value)
+            # inherit_update_subclasses will find the value in cls.__dict__
+            # and perform the actual __inherit_attr on it.
         finally:
-            cls.__kick_mro_update()  # will find the value in cls.__dict__
+            cls.inherit_update_subclasses()
 
     def __delattr__(cls, attr):
         try:
             cls.__uninherit_attr(attr, cls.__dict__.get(attr))
             super(InheritMeta, cls).__delattr__(attr)
         finally:
-            cls.__kick_mro_update()
+            cls.inherit_update_subclasses()
 
 
 def is_inherit_value(value):
