@@ -32,7 +32,7 @@ tokens = (
     'LPAREN',   'RPAREN',
     'LBRACKET', 'RBRACKET',
     'LBRACE',   'RBRACE',
-    'COMMA', 'PERIOD', 'COLON', 'EQUALS', 'SEMI', 'PIPE', 'STAR', 'DOUBLESTAR',
+    'COMMA', 'PERIOD', 'COLON', 'DOUBLECOLON', 'EQUALS', 'SEMI',
 
     # Logical newline
     'NEWLINE',
@@ -63,11 +63,9 @@ def t_RBRACE(t):   r'\}'; t.lexer.ignore_newline_stack.pop();     return t
 t_COMMA            = r','
 t_PERIOD           = r'\.'
 t_COLON            = r':'
+t_DOUBLECOLON      = r'::'
 t_EQUALS           = r'='
 t_SEMI             = r';'
-t_PIPE             = r'\|'
-t_STAR             = r'\*'
-t_DOUBLESTAR       = r'\*\*'
 
 # Identifiers
 t_ID               = r'[A-Za-z_][\w_]*'
