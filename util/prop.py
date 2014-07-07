@@ -129,7 +129,7 @@ class cached_property(default_property, _func_deco_with_attr):
         return ret
 
 
-class class_default_property(_func_deco):
+class default_class_property(_func_deco):
     """Non-data descriptor.
 
     Calls func on an instance type everytime a property is accessed.
@@ -137,7 +137,7 @@ class class_default_property(_func_deco):
     Usage example:
 
     >>> class C(object):
-    ...     @class_default_property
+    ...     @default_class_property
     ...     def prop(cls):
     ...         print("Accessing {cls.__name__}.prop"
     ...               .format(**locals()))
@@ -161,7 +161,7 @@ class class_default_property(_func_deco):
         return self.func(objtype)
 
 
-class class_cached_property(class_default_property, _func_deco_with_attr):
+class cached_class_property(default_class_property, _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to func only the first time a property is accessed.
@@ -169,7 +169,7 @@ class class_cached_property(class_default_property, _func_deco_with_attr):
     Usage example:
 
     >>> class C(object):
-    ...     @class_cached_property
+    ...     @cached_class_property
     ...     def cached(cls):
     ...         print("Accessing {cls.__name__}.cached"
     ...               .format(**locals()))
@@ -192,7 +192,7 @@ class class_cached_property(class_default_property, _func_deco_with_attr):
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
-        ret = super(class_cached_property, self).__get__(obj, objtype)
+        ret = super(cached_class_property, self).__get__(obj, objtype)
         setattr(objtype, self.attr, ret)
         return ret
 

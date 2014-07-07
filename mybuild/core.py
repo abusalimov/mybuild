@@ -34,7 +34,7 @@ from util.operator import attr
 from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
-from util.prop import class_default_property
+from util.prop import default_class_property
 from util.prop import cumulative_sequence_property
 from util.prop import cumulative_tuple_property
 from util.misc import InstanceBoundTypeMixin
@@ -133,9 +133,9 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 
     # These properties default to corresponding class attributes,
     # however instance can override them by setting custom values.
-    _name     = class_default_property(getter._name)
-    _fullname = class_default_property(getter._fullname)
-    _file     = class_default_property(getter._file)
+    _name     = default_class_property(getter._name)
+    _fullname = default_class_property(getter._fullname)
+    _file     = default_class_property(getter._file)
 
     # ModuleMetaBase overloads __call__, but the default factory call is still
     # available through ModuleMetaBase._instantiate.
