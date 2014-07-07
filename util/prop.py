@@ -6,7 +6,6 @@ Property descriptors.
 from _compat import *
 
 from functools import partial as _partial
-import operator as _operator
 
 
 class _func_deco(object):
