@@ -68,7 +68,7 @@ t_EQUALS           = r'='
 t_SEMI             = r';'
 
 # Identifiers
-t_ID               = r'[A-Za-z_][\w_]*'
+t_ID               = r'[A-Za-z_]\w*'
 
 # A regular expression rule with some action code
 def t_NUMBER(t):
