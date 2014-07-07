@@ -23,9 +23,10 @@ def hasnext(it):
     return not raises(StopIteration, next, it)
 
 def pop_iter(s, pop=None, pop_meth='pop'):
-    get_next = pop if pop is not None else getattr(s, pop_meth)
+    if pop is None:
+        pop = getattr(s, pop_meth)
     while s:
-        yield get_next()
+        yield pop()
 
 def send_next_iter(it, first=None):
     it = iter(it)
