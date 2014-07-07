@@ -64,6 +64,10 @@ class default_property(_func_deco):
     ...               .format(cls=type(self)))
     ...         return 17
     ...
+    >>> C.default
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'default_property' descriptor 'default' of 'C' objects is not accessible as a class attribute
     >>> x = C()
     >>> x.default
     Accessing C.default
@@ -78,7 +82,11 @@ class default_property(_func_deco):
 
     def __get__(self, obj, objtype=None):
         if obj is None:
-            return self
+            raise AttributeError("'{self.__class__.__name__}' descriptor "
+                                 "'{self.func.__name__}' "
+                                 "of '{objtype.__name__}' objects is not "
+                                 "accessible as a class attribute"
+                                 .format(**locals()))
         return self.func(obj)
 
 
@@ -139,8 +147,6 @@ class cached_property(default_property):
     """
 
     def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
         ret = super(cached_property, self).__get__(obj, objtype)
         setattr(obj, self.func.__name__, ret)
         return ret
