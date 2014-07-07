@@ -90,6 +90,36 @@ class default_property(_func_deco):
         return self.func(obj)
 
 
+class cached_property(default_property):
+    """Non-data descriptor.
+
+    Delegates to func only the first time a property is accessed.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @cached_property
+    ...     def cached(self):
+    ...         print("Accessing {cls.__name__}.cached".format(cls=type(self)))
+    ...         return 17
+    ...
+    >>> x = C()
+    >>> x.cached
+    Accessing C.cached
+    17
+    >>> x.cached
+    17
+    >>> x.cached = 42
+    >>> x.cached
+    42
+    """
+
+    def __get__(self, obj, objtype=None):
+        ret = super(cached_property, self).__get__(obj, objtype)
+        setattr(obj, self.func.__name__, ret)
+        return ret
+
+
 class class_default_property(_func_deco):
     """Non-data descriptor.
 
@@ -120,36 +150,6 @@ class class_default_property(_func_deco):
         if objtype is None:
             objtype = type(obj)
         return self.func(objtype)
-
-
-class cached_property(default_property):
-    """Non-data descriptor.
-
-    Delegates to func only the first time a property is accessed.
-
-    Usage example:
-
-    >>> class C(object):
-    ...     @cached_property
-    ...     def cached(self):
-    ...         print("Accessing {cls.__name__}.cached".format(cls=type(self)))
-    ...         return 17
-    ...
-    >>> x = C()
-    >>> x.cached
-    Accessing C.cached
-    17
-    >>> x.cached
-    17
-    >>> x.cached = 42
-    >>> x.cached
-    42
-    """
-
-    def __get__(self, obj, objtype=None):
-        ret = super(cached_property, self).__get__(obj, objtype)
-        setattr(obj, self.func.__name__, ret)
-        return ret
 
 
 if __name__ == '__main__':
