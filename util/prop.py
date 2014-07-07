@@ -16,6 +16,15 @@ class _func_deco(object):
         self.func = func
 
 
+class _func_deco_with_attr(_func_deco):
+
+    def __init__(self, func, attr=None):
+        super(_func_deco_with_attr, self).__init__(func)
+        if attr is None:
+            attr = func.__name__
+        self.attr = attr
+
+
 class class_instance_method(_func_deco):
     """Non-data descriptor.
 
@@ -91,7 +100,7 @@ class default_property(_func_deco):
         return self.func(obj)
 
 
-class cached_property(default_property):
+class cached_property(default_property, _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to func only the first time a property is accessed.
@@ -117,7 +126,7 @@ class cached_property(default_property):
 
     def __get__(self, obj, objtype=None):
         ret = super(cached_property, self).__get__(obj, objtype)
-        setattr(obj, self.func.__name__, ret)
+        setattr(obj, self.attr, ret)
         return ret
 
 
