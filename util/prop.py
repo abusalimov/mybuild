@@ -64,10 +64,11 @@ class default_property(_func_deco):
     ...               .format(cls=type(self)))
     ...         return 17
     ...
-    >>> C.default
+    >>> C.default  # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    AttributeError: 'default_property' descriptor 'default' of 'C' objects is not accessible as a class attribute
+    AttributeError: 'default_property' descriptor 'default' of 'C' objects \
+    is not accessible as a class attribute
     >>> x = C()
     >>> x.default
     Accessing C.default
