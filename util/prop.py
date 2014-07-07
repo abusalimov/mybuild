@@ -162,6 +162,42 @@ class class_default_property(_func_deco):
         return self.func(objtype)
 
 
+class class_cached_property(class_default_property, _func_deco_with_attr):
+    """Non-data descriptor.
+
+    Delegates to func only the first time a property is accessed.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @class_cached_property
+    ...     def cached(cls):
+    ...         print("Accessing {cls.__name__}.cached"
+    ...               .format(**locals()))
+    ...         return 17
+    ...
+    >>> x = C()
+    >>> x.cached
+    Accessing C.cached
+    17
+    >>> C.cached
+    17
+    >>> y = C()
+    >>> y.cached
+    17
+    >>> y.cached = 42
+    >>> y.cached
+    42
+    """
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+        ret = super(class_cached_property, self).__get__(obj, objtype)
+        setattr(objtype, self.attr, ret)
+        return ret
+
+
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
