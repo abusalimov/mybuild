@@ -660,11 +660,48 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 
 if __name__ == "__main__":
     source = """
+    /**/
     "module docstring"
 
-    foo // comment
-    bar /*
-    */ baz
+    type A(): { prop: "value" }
+    B: "asd" { prop: "value" }
+
+/*
+    z:{}
+    x:a; y:1
+    module foo: {
+        "doc"
+        x.foo: [cc]
+        files: ["foo.c"]
+        dep: module {}
+        module dep: {}
+        inject alloc: -> embox.mm.kmalloc
+    }
+    foo.bar: foo[s]
+    xxx bar: {}
+
+    {}
+    map({2*it}, [1,2,3])
+    map(it => {2*it}, [1,2,3])
+    map(it => 2*it, [1,2,3])
+
+    map((foo, bar) => {foo*bar}, [1,2,3])
+
+    map({foo, bar => foo*bar}, [1,2,3])
+
+    f(foo, bar): => {
+
+    }
+    f: (foo, bar) => {
+        if bar is not None: {
+
+        } else: {
+
+        }
+        x = 1
+        x
+    }
+
 
     {}
     {;}
@@ -686,13 +723,46 @@ if __name__ == "__main__":
     yyy
     |
     }
-
-    module() foo: bar= {
-        x[foo]: [cc]
-        files: ["foo.c"]
+*/
+/*
+    module foo: {
+        files: {
+            ["foo.c"]
+        }
     }
+
+    class baz: {
+
+        def __init__: {
+
+        }
+
+    }
+
+    type name {
+        attr: value
+    }
+
+    name: type {
+        attr:  value
+        attr: {value}
+
+        f: func {value}
+        f: ({value})
+
+        f: ({value})
+        f: ({it -> value})
+
+        type name {}  // name: type name {}
+        (type name {})
+    }
+*/
     """
     from mako._ast_util import SourceGenerator
+    import sys
+    import types
+    from mylang import runtime
+
 
     class SG(SourceGenerator):
         def visit_Delete(self, node):
@@ -703,9 +773,25 @@ if __name__ == "__main__":
         sg.visit(node)
         return ''.join(sg.result)
 
+    source = """
+    value_stub base: {prop: "p"}
+    s: "asd"_(base) { a: 42 }
+    """
     ast_root = parse(source, debug=0)
 
-    compile(ast_root, "", 'exec')
-    print(pr(ast_root))
     # print(ast.dump(ast_root))
+    print(pr(ast_root))
+    code = compile(ast_root, "", 'exec')
+
+    m = sys.modules['m'] = types.ModuleType('m')
+    m.__builtins__ = runtime.builtins
+
+    exec(code, m.__dict__)
+    print(m.base, type(m.base), type(type(m.base)))
+    print(m.s, type(m.s),)
+    # print(m.__dict__)
+    # print(m.x, m.x.__dict__)
+    # print(m.x.prop)
+    # class A: print(locals())
+    # print(A.__dict__)
 
