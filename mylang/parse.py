@@ -305,10 +305,12 @@ def p_suite(p, mb_docstring=2, stmts=-1):
 
 
 @rule
-def p_stmt_binding(p, namefrags_value):
+def p_stmt_binding(p, namefrags_colons_value):
     """stmt : binding"""
     auxctx_stack = p.parser.auxctx_stack
-    namefrags, value = namefrags_value
+    namefrags, colons, value = namefrags_colons_value
+
+    is_class_binding = (colons == '::')
 
     is_global = (len(auxctx_stack) == 1)
     if not is_global:
@@ -331,17 +333,24 @@ def p_stmt_binding(p, namefrags_value):
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
-                      body_name=-1):
-    """binding : nl_off namefrags namefrags mb_call COLON nl_on typedef_body"""
+                      colons=5, body_name=-1):
+    """binding : nl_off namefrags namefrags mb_call colons nl_on typedef_body"""
     # Here namefrags is used instead of pytest to work around
     # a reduce/reduce conflict with simple binding (pytest/namefrags).
-    return namefrags, build_typedef(body_name, build_chain(metatype_builders),
-                                    namefrags, mb_call_builder)
+    return (namefrags, colons,
+            build_typedef(body_name, build_chain(metatype_builders),
+                          namefrags, mb_call_builder))
 
 @rule  # target1: ...
-def p_binding_simple(p, namefrags=2, value=-1):
-    """binding : nl_off namefrags COLON nl_on test"""
-    return namefrags, value
+def p_binding_simple(p, namefrags=2, colons=3, value=-1):
+    """binding : nl_off namefrags colons nl_on test"""
+    return namefrags, colons, value
+
+@rule  # : -> False,  :: -> True
+def p_colons(p, colons):
+    """colons : COLON
+       colons : DOUBLECOLON"""
+    return colons
 
 
 @rule
