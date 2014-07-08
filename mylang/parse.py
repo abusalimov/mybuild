@@ -57,7 +57,22 @@ def from_rlist(reversed_list, item=None):
 
 # ast wrappers (py3k compat + arg defaults).
 
+try:
+    ast_const = ast.NameConstant
+
+except AttributeError:
+    def ast_const(const):
+        return ast.Name(repr(const), ast.Load())
+
+_const_names = {
+    'None':  None,
+    'False': False,
+    'True':  True,
+}
+
 def ast_name(name, ctx=None):
+    if name in _const_names:
+        return ast_const(_const_names[name])
     if ctx is None:
         ctx = ast.Load()
     return ast.Name(name, ctx)
