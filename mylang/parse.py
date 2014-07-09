@@ -229,21 +229,21 @@ def build_typedef(body_name, metatype, namefrags=None, call_builder=None):
 tokens = lex.tokens
 
 
-def p_begin_auxctx(p):
-    """begin_local_auxctx : LBRACE
-       begin_global_auxctx :"""
-    auxctx_stack = p.parser.auxctx_stack
+def p_begin_bblock(p):
+    """begin_local_bblock : LBRACE
+       begin_global_bblock :"""
+    bblock_stack = p.parser.bblock_stack
 
-    auxctx = []
-    if not auxctx_stack:  # outermost => global scope
-        auxctx.append(ast.Global([]))
+    bblock = []
+    if not bblock_stack:  # outermost => global scope
+        bblock.append(ast.Global([]))
 
-    auxctx_stack.append(auxctx)
+    bblock_stack.append(bblock)
 
-def p_end_auxctx(p):
-    """end_local_auxctx : RBRACE
-       end_global_auxctx :"""
-    p.parser.auxctx_stack.pop()
+def p_end_bblock(p):
+    """end_local_bblock : RBRACE
+       end_global_bblock :"""
+    p.parser.bblock_stack.pop()
 
 
 def docstring(stmts):
@@ -255,7 +255,7 @@ def docstring(stmts):
 
 @rule
 def p_exec_start(p, suite_func=2):
-    """exec_start : begin_global_auxctx suite end_global_auxctx"""
+    """exec_start : begin_global_bblock suite end_global_bblock"""
     # stms... ->
     #
     # @__my_new_type__
@@ -278,13 +278,13 @@ def p_exec_start(p, suite_func=2):
 
 @rule
 def p_typedef_body(p, suite_func=2):
-    """typedef_body : begin_local_auxctx suite end_local_auxctx"""
-    auxctx_stack = p.parser.auxctx_stack
-    auxctx = auxctx_stack[-1]
+    """typedef_body : begin_local_bblock suite end_local_bblock"""
+    bblock_stack = p.parser.bblock_stack
+    bblock = bblock_stack[-1]
 
-    suite_func.name = AUX_SUITE_FMT.format('{0}_{1}'.format(len(auxctx_stack),
-                                                            len(auxctx)))
-    auxctx.append(suite_func)
+    suite_func.name = AUX_SUITE_FMT.format('{0}_{1}'.format(len(bblock_stack),
+                                                            len(bblock)))
+    bblock.append(suite_func)
 
     return set_loc_p(ast_name(suite_func.name), p)
 
@@ -292,8 +292,8 @@ def p_typedef_body(p, suite_func=2):
 @rule
 def p_suite(p, mb_docstring=2, stmts=-1):
     """suite : skipnl mb_docstring listof_stmts"""
-    auxctx_stack = p.parser.auxctx_stack
-    auxctx = auxctx_stack[-1]
+    bblock_stack = p.parser.bblock_stack
+    bblock = bblock_stack[-1]
 
     has_docstring = (mb_docstring is not None)
     if has_docstring:
@@ -304,12 +304,12 @@ def p_suite(p, mb_docstring=2, stmts=-1):
 
     # always leave a docstring (if any) first
     ins_idx = int(has_docstring)
-    stmts[ins_idx:ins_idx] = auxctx
+    stmts[ins_idx:ins_idx] = bblock
 
     if not stmts:
         stmts.append(ast.Pass())  # otherwise all hell will break loose
 
-    is_global = (len(auxctx_stack) == 1)
+    is_global = (len(bblock_stack) == 1)
     if not is_global:
         suite_args = ast_arguments([ast_arg(AUX_DELEGATE)])
     else:
@@ -322,12 +322,12 @@ def p_suite(p, mb_docstring=2, stmts=-1):
 @rule
 def p_stmt_binding(p, namefrags_colons_value):
     """stmt : binding"""
-    auxctx_stack = p.parser.auxctx_stack
+    bblock_stack = p.parser.bblock_stack
     namefrags, colons, value = namefrags_colons_value
 
     is_class_binding = (colons == '::')
 
-    is_global = (len(auxctx_stack) == 1)
+    is_global = (len(bblock_stack) == 1)
     if not is_global:
         value = ast.Lambda(ast_arguments([ast_arg('self')]), value)
         target = build_chain(namefrags, ast_name(AUX_DELEGATE))
@@ -335,8 +335,8 @@ def p_stmt_binding(p, namefrags_colons_value):
         target = build_chain(namefrags)
 
         if isinstance(target, ast.Name):
-            auxctx = auxctx_stack[0]
-            global_stmt = auxctx[0]
+            bblock = bblock_stack[0]
+            global_stmt = bblock[0]
             assert isinstance(global_stmt, ast.Global)
 
             if target.id not in global_stmt.names:
@@ -670,7 +670,7 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 
     p = parser
 
-    p.auxctx_stack = []
+    p.bblock_stack = []
 
     l = lex.lexer.clone()
     l.fileinfo = Fileinfo(source, filename)
