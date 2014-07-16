@@ -37,17 +37,6 @@ def set_loc_p(ast_node, p, i=1):
 copy_loc = ast.copy_location
 
 
-# Some utils.
-
-class MySyntaxError(Exception):
-    """Stub class for using instead of standard SyntaxError because the latter
-    has the special meaning for PLY."""
-
-    def __init__(self, msg, loc=None):
-        loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
-        super(MySyntaxError, self).__init__(msg, *loc_args)
-
-
 # p_func definition helpers.
 
 def _rule_indices_from_argspec(func, with_p=True):
@@ -749,6 +738,15 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 
     finally:
         del pr.bblock
+
+
+class MySyntaxError(Exception):
+    """Stub class for using instead of standard SyntaxError because the latter
+    has the special meaning for PLY."""
+
+    def __init__(self, msg, loc=None):
+        loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
+        super(MySyntaxError, self).__init__(msg, *loc_args)
 
 
 if __name__ == "__main__":
