@@ -361,19 +361,20 @@ def p_colons(p, colons):
 @rule
 def p_test(p, test):
     """test : pytest
-       test : mytest"""
+       test : mystub"""
     return test
 
 @rule
-def p_pytest(p, builders):
-    """pytest : name_trailers
-       pytest : pyatom_trailers
-       pytest : myatom_trailers_plus"""
-    return build_chain(builders)
+def p_pytest(p, stub, builders):
+    """pytest : pystub trailers
+       pytest : mystub trailers_plus"""
+    return build_chain(builders, stub)
 
 @rule
-def p_mytest(p, builder):
-    """mytest : myatom"""
+def p_stub(p, builder):
+    """pystub : name
+       pystub : pyatom
+       mystub : myatom"""
     return build_node(builder)
 
 
@@ -506,7 +507,7 @@ def p_trailer_multigetter(p):  # x.[attr, [item], (call), ...]
     raise NotImplementedError
 
 def p_getter(p):
-    """getter : name_trailers"""
+    """getter : name trailers"""
     raise NotImplementedError
 
 def p_trailer_multisetter(p):  # x.[attr: value, [item]: value, ...]
@@ -514,7 +515,7 @@ def p_trailer_multisetter(p):  # x.[attr: value, [item]: value, ...]
     raise NotImplementedError
 
 def p_setter(p):
-    """setter : name_trailers COLON test"""
+    """setter : name trailers COLON test"""
     raise NotImplementedError
 
 
@@ -569,16 +570,6 @@ def p_list_tail(p, l, el=-1):
     trailers_plus      :  trailers                   trailer
     """
     l.append(el)
-    return l
-
-@rule
-def p_rlist_tail(p, el, l=-1):
-    """
-    name_trailers        :  name                 trailers
-    pyatom_trailers      :  pyatom               trailers
-    myatom_trailers_plus :  myatom               trailers_plus
-    """
-    l.insert(0, el)
     return l
 
 @rule
