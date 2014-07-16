@@ -8,12 +8,12 @@ __date__ = "2013-07-05"
 
 from _compat import *
 
-import ast
 import functools
 import inspect
 import ply.yacc
 
 from mylang import lex
+from mylang import xast as ast
 from mylang.location import Fileinfo
 from mylang.location import Location
 
@@ -46,85 +46,6 @@ class MySyntaxError(Exception):
     def __init__(self, msg, loc=None):
         loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
         super(MySyntaxError, self).__init__(msg, *loc_args)
-
-
-# ast wrappers (py3k compat + arg defaults).
-
-try:
-    ast_const = ast.NameConstant
-
-except AttributeError:
-    def ast_const(const):
-        return ast.Name(repr(const), ast.Load())
-
-_const_names = {
-    'None':  None,
-    'False': False,
-    'True':  True,
-}
-
-def ast_name(name, ctx=None):
-    if name in _const_names:
-        return ast_const(_const_names[name])
-    if ctx is None:
-        ctx = ast.Load()
-    return ast.Name(name, ctx)
-
-def ast_call(func, args=None, keywords=None, starargs=None, kwargs=None):
-    return ast.Call(func, args or [], keywords or [], starargs, kwargs)
-
-if py3k:
-    def ast_arg(name):
-        return ast.arg(name, None)
-    ast_arg_name = getter.arg
-
-    try:
-        def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
-            return ast.arguments(args or [], vararg, [], [], kwarg,
-                                 defaults or [])
-        ast_arguments()
-
-    except TypeError:
-        # earlier versions of py3k have slightly different ast
-        def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
-            if vararg is not None:
-                varargarg = vararg.arg
-                varargannotation = vararg.annotation
-            else:
-                varargarg = varargannotation = None
-            if kwarg is not None:
-                kwargarg = kwarg.arg
-                kwargannotation = kwarg.annotation
-            else:
-                kwargarg = kwargannotation = None
-            return ast.arguments(args or [], varargarg, varargannotation,
-                                 [], kwargarg, kwargannotation,
-                                 defaults or [], [])
-
-    def ast_funcdef(name, args, body, decos=None):
-        return ast.FunctionDef(name, args, body or [ast.Pass()], decos or [],
-                               None)
-
-else:
-    def ast_arg(name):
-        return ast.Name(name, ast.Param())
-    ast_arg_name = getter.id
-
-    def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
-        return ast.arguments(args or [], vararg, kwarg, defaults or [])
-
-    def ast_funcdef(name, args, body, decos=None):
-        return ast.FunctionDef(name, args, body or [ast.Pass()], decos or [])
-
-try:
-    ast.Try
-
-except AttributeError:
-    def ast_try_except(body, handlers, orelse=None):
-        return ast.TryExcept(body, handlers, orelse or [ast.Pass()])
-else:
-    def ast_try_except(body, handlers, orelse=None):
-        return ast.Try(body, handlers, orelse or [ast.Pass()], [ast.Pass()])
 
 
 # p_func definition helpers.
@@ -223,7 +144,7 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
         args.append(ast.Str(qualname))
 
     if call_builder is not None:
-        starargs = build_node(call_builder, ast_name(MY_CALL_ARGS))
+        starargs = build_node(call_builder, ast.XName(MY_CALL_ARGS))
         # but:
         if not (starargs.args or
                 starargs.keywords or
@@ -231,7 +152,7 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
                 starargs.kwargs):
             starargs = None  # optimize out
 
-    ret_call = ast_call(ast_name(MY_NEW_TYPE), args, starargs=starargs)
+    ret_call = ast.XCall(ast.XName(MY_NEW_TYPE), args, starargs=starargs)
     return copy_loc(ret_call, metatype)
 
 
@@ -270,7 +191,7 @@ class BuildingBlock(object):
 
     def make_assigning(self, name=_RESULT_TMP):
         AssigningTransformer(name).modify_stmts_list(self.stmts)
-        return ast_name(name)
+        return ast.XName(name)
 
     def new_aux_name(self):
         cnt = self.aux_cnt
@@ -280,8 +201,8 @@ class BuildingBlock(object):
     def build_func_from(self, stmts, arguments, name=None):
         if name is None:
             name = self.new_aux_name()
-        self.append(ast_funcdef(name, arguments, stmts))
-        return ast_name(name)
+        self.append(ast.XFunctionDef(name, arguments, stmts))
+        return ast.XName(name)
 
     def fold_into_func(self, arguments, name=None):
         self.make_returning()
@@ -294,11 +215,11 @@ class BuildingBlock(object):
             raise MySyntaxError("Unexpected static binding at module level")
 
         if not module_level:
-            args = [ast_arg(CLS_ARG if static else SELF_ARG)]
+            args = [ast.xarg(CLS_ARG if static else SELF_ARG)]
         else:
             args = []
 
-        return self.fold_into_func(ast_arguments(args))
+        return self.fold_into_func(ast.xarguments(args))
 
 
 class ResultingTransformer(ast.NodeTransformer):
@@ -339,7 +260,7 @@ class ResultingTransformer(ast.NodeTransformer):
     visit_Pass      = noresult_visit
 
     def create_noresult(self):
-        return self.transform_expr(ast_const(None))
+        return self.transform_expr(ast.XConst(None))
 
     def transform_expr(self, expr):
         raise NotImplementedError
@@ -361,7 +282,7 @@ class AssigningTransformer(ResultingTransformer):
         self.name = name
 
     def transform_expr(self, expr):
-        return ast.Assign([ast_name(self.name, ast.Store())], expr)
+        return ast.Assign([ast.XName(self.name, ast.Store())], expr)
 
 
 def emit_stmt(p, stmt):
@@ -409,20 +330,22 @@ def p_exec_start(p, docstring_bindings=-1):
 
     doc_str, bindings_list = docstring_bindings
 
-    exec_call = ast_call(ast_name(MY_EXEC_MODULE), args=[bindings_list])
+    exec_call = ast.XCall(ast.XName(MY_EXEC_MODULE), args=[bindings_list])
 
     binding_idfs = [binding_tuple.elts[0].s
                     for binding_tuple in bindings_list.elts]
-    binding_names = [ast_name(name, ast.Store()) for name in binding_idfs]
+    binding_names = [ast.XName(name, ast.Store()) for name in binding_idfs]
 
     bblock.append(ast.Global(binding_idfs))
     bblock.append(ast.Assign(binding_names, exec_call))
 
-    suite_func = ast_funcdef(_MODULE_EXEC, ast_arguments([ast_arg(_EXEC_ARG)]),
-                             bblock.stmts, decos=[ast_name(MY_EXEC_MODULE)])
+    suite_func = ast.XFunctionDef(_MODULE_EXEC,
+                                  ast.xarguments([ast.xarg(_EXEC_ARG)]),
+                                  bblock.stmts,
+                                  decos=[ast.XName(MY_EXEC_MODULE)])
 
-    eh_stmt = ast.ExceptHandler(ast_name(MY_EXEC_MODULE), None, [ast.Pass()])
-    try_stmt = ast_try_except([suite_func], [eh_stmt])
+    eh_stmt = ast.ExceptHandler(ast.XName(MY_EXEC_MODULE), None, [ast.Pass()])
+    try_stmt = ast.XTryExcept([suite_func], [eh_stmt])
 
     module_body = [try_stmt]
 
@@ -440,7 +363,7 @@ def p_typebody(p, docstring_bindings=2, typeret_func=-1):
 @rule
 def p_typeret(p):
     """typeret : """
-    return ast_const(None)  # stub for further devel
+    return ast.XConst(None)  # stub for further devel
 
 @rule
 def p_stmtexpr(p, value):
@@ -453,7 +376,7 @@ def p_typesuite(p, bindings=-1):
     if bindings and not isinstance(bindings[0], ast.Tuple):
         doc_str = build_node(bindings.pop(0))
     else:
-        doc_str = ast_const(None)
+        doc_str = ast.XConst(None)
 
     return doc_str, ast.List(bindings, ast.Load())
 
@@ -470,7 +393,7 @@ def p_typestmt(p, namefrags_colons=-1):
 
     func = bblock.fold_into_binding(is_static)
 
-    return ast.Tuple([ast.Str(qualname), ast_const(is_static), func],
+    return ast.Tuple([ast.Str(qualname), ast.XConst(is_static), func],
                      ast.Load())
 
 @rule  # metatype target(): { ... }
@@ -519,7 +442,7 @@ def p_stub(p, builder):
 @rule_wloc
 def p_myatom_closure(p, closure):
     """myatom : LBRACE RBRACE"""
-    return lambda: ast_name('XXX')
+    return lambda: ast.XName('XXX')
     raise NotImplementedError
 
 @rule_wloc
@@ -609,7 +532,7 @@ def p_call(p, kw_arg_pairs=2):  # x(arg, kw=arg, ...)
                 seen_kw.add(kw)
             keywords.append(set_loc(ast.keyword(kw, arg), loc))
 
-    return lambda expr: ast_call(expr, args, keywords)
+    return lambda expr: ast.XCall(expr, args, keywords)
 
 @rule
 def p_argument_pos(p, value):
@@ -630,7 +553,7 @@ def p_trailer_attr_or_name(p, name=-1):  # x.attr or name
         if expr is not None:
             return ast.Attribute(expr, name, ast.Load())
         else:
-            return ast_name(name)
+            return ast.XName(name)
     return builder
 
 @rule_wloc
