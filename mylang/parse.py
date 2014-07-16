@@ -676,18 +676,21 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
     if mode != 'exec':
         raise NotImplementedError("Only 'exec' mode is supported")
 
-    p = parser
+    pr = parser
 
-    p.bblock_stack = []
+    lx = lex.lexer.clone()
+    lx.fileinfo = Fileinfo(source, filename)
 
-    l = lex.lexer.clone()
-    l.fileinfo = Fileinfo(source, filename)
+    pr.bblock_stack = []
     try:
-        ast_root = p.parse(source, lexer=l, tracking=True, **kwargs)
+        ast_root = pr.parse(source, lexer=lx, tracking=True, **kwargs)
         return ast.fix_missing_locations(ast_root)
 
     except MySyntaxError as e:
         raise SyntaxError(*e.args)
+
+    finally:
+        del pr.bblock_stack
 
 
 if __name__ == "__main__":
