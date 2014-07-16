@@ -101,8 +101,9 @@ if py3k:
                                  [], kwargarg, kwargannotation,
                                  defaults or [], [])
 
-    def ast_funcdef(name, args, body):
-        return ast.FunctionDef(name, args, body, [], None)
+    def ast_funcdef(name, args, body, decos=None):
+        return ast.FunctionDef(name, args, body or [ast.Pass()], decos or [],
+                               None)
 
 else:
     def ast_arg(name):
@@ -112,8 +113,18 @@ else:
     def ast_arguments(args=None, vararg=None, kwarg=None, defaults=None):
         return ast.arguments(args or [], vararg, kwarg, defaults or [])
 
-    def ast_funcdef(name, args, body):
-        return ast.FunctionDef(name, args, body, [])
+    def ast_funcdef(name, args, body, decos=None):
+        return ast.FunctionDef(name, args, body or [ast.Pass()], decos or [])
+
+try:
+    ast.Try
+
+except AttributeError:
+    def ast_try_except(body, handlers, orelse=None):
+        return ast.TryExcept(body, handlers, orelse or [ast.Pass()])
+else:
+    def ast_try_except(body, handlers, orelse=None):
+        return ast.Try(body, handlers, orelse or [ast.Pass()], [ast.Pass()])
 
 
 # p_func definition helpers.
@@ -171,9 +182,15 @@ def rule_wloc(func):
 
 MY_NEW_TYPE    = '__my_new_type__'
 MY_CALL_ARGS   = '__my_call_args__'
+MY_EXEC_MODULE = '__my_exec_module__'
 
-AUX_DELEGATE   = '<delegate>'
-AUX_SUITE_FMT  = '<suite_{0}>'
+CLS_ARG        = 'cls'
+SELF_ARG       = 'self'
+
+_RESULT_TMP    = '<tmp>'
+_AUX_NAME_FMT  = '<aux-{0}-{1}>'
+_MODULE_EXEC   = '<trampoline>'
+_EXEC_ARG      = '<exec>'
 
 
 # AST fragments builders.
@@ -187,16 +204,18 @@ def build_chain(builder_wlocs, expr=None):
         expr = build_node(builder_wloc, expr)
     return expr
 
-def build_typedef(body_name, metatype, namefrags=None, call_builder=None):
-    # metatype { } ->
-    # __my_new_type__(__suite, metatype)
+def build_typedef(body, metatype, namefrags=None, call_builder=None):
+    # metatype { ... } ->
+    # __my_new_type__([...], metatype)
     #
-    # metatype namefrags { } ->
-    # __my_new_type__(__suite, metatype, 'namefrags')
+    # metatype namefrags { ... } ->
+    # __my_new_type__([...], metatype, 'namefrags')
     #
-    # metatype namefrags(...) { } ->
-    # __my_new_type__(__suite, metatype, 'namefrags', *__my_call_args__(...))
-    args = [body_name, metatype]
+    # metatype namefrags(...) { ... } ->
+    # __my_new_type__([...], metatype, 'namefrags', *__my_call_args__(...))
+    doc_str, bindings_list, typeret_func = body
+
+    args = [doc_str, bindings_list, typeret_func, metatype]
     starargs = None
 
     if namefrags is not None:
@@ -205,151 +224,270 @@ def build_typedef(body_name, metatype, namefrags=None, call_builder=None):
 
     if call_builder is not None:
         starargs = build_node(call_builder, ast_name(MY_CALL_ARGS))
+        # but:
         if not (starargs.args or
                 starargs.keywords or
                 starargs.starargs or
                 starargs.kwargs):
             starargs = None  # optimize out
 
-    ret_call = ast_call(ast_name(MY_NEW_TYPE), args,
-                        starargs=starargs)
+    ret_call = ast_call(ast_name(MY_NEW_TYPE), args, starargs=starargs)
     return copy_loc(ret_call, metatype)
+
+
+# Dealing with statements.
+
+class BuildingBlock(object):
+    """Building Block encapsulates a sequence of statements."""
+
+    def __init__(self, parent=None):
+        super(BuildingBlock, self).__init__()
+        self.parent = parent
+
+        self.stmts = []
+        self.aux_cnt = 0
+        if parent is not None:
+            self.depth = parent.depth + 1
+        else:
+            self.depth = 0
+
+    @property
+    def is_global(self):
+        return self.parent is None
+
+    @property
+    def docstring_stmt(self):
+        if (self.stmts and
+            isinstance(self.stmts[0], ast.Expr) and
+            isinstance(self.stmts[0].value, ast.Str)):
+            return self.stmts[0]
+
+    def append(self, stmt):
+        self.stmts.append(stmt)
+
+    def make_returning(self):
+        ReturningTransformer().modify_stmts_list(self.stmts)
+
+    def make_assigning(self, name=_RESULT_TMP):
+        AssigningTransformer(name).modify_stmts_list(self.stmts)
+        return ast_name(name)
+
+    def new_aux_name(self):
+        cnt = self.aux_cnt
+        self.aux_cnt = cnt + 1
+        return _AUX_NAME_FMT.format(self.depth, cnt)
+
+    def build_func_from(self, stmts, arguments, name=None):
+        if name is None:
+            name = self.new_aux_name()
+        self.append(ast_funcdef(name, arguments, stmts))
+        return ast_name(name)
+
+    def fold_into_func(self, arguments, name=None):
+        self.make_returning()
+        return self.parent.build_func_from(self.stmts, arguments, name)
+
+    def fold_into_binding(self, static=False):
+        module_level = self.parent.is_global
+
+        if module_level and static:
+            raise MySyntaxError("Unexpected static binding at module level")
+
+        if not module_level:
+            args = [ast_arg(CLS_ARG if static else SELF_ARG)]
+        else:
+            args = []
+
+        return self.fold_into_func(ast_arguments(args))
+
+
+class ResultingTransformer(ast.NodeTransformer):
+
+    def modify_stmts_list(self, stmts):
+        if stmts:
+            value = self.visit(stmts.pop())
+        else:
+            value = self.create_noresult()
+
+        if isinstance(value, ast.AST):
+            stmts.append(value)
+        elif value is not None:
+            stmts.extend(value)
+
+        return stmts
+
+    def visit_FunctionDef(self, node):
+        raise ValueError('Unexpected FunctionDef as the last stmt of bblock')
+
+    def visit_Expr(self, node):
+        return copy_loc(self.transform_expr(node.value), node)
+
+    def visit_If(self, node):
+        for bblock in node.body, node.orelse:
+            self.modify_stmts_list(bblock)
+        return node
+
+    def visit_Return(self, node):
+        return node
+
+    def noresult_visit(self, node):
+        return [node] + self.modify_stmts_list([])
+
+    visit_Delete    = noresult_visit
+    visit_Assign    = noresult_visit
+    visit_AugAssign = noresult_visit
+    visit_Pass      = noresult_visit
+
+    def create_noresult(self):
+        return self.transform_expr(ast_const(None))
+
+    def transform_expr(self, expr):
+        raise NotImplementedError
+
+
+class ReturningTransformer(ResultingTransformer):
+
+    def create_noresult(self):
+        # This is the last stmt anyway, 'return None' is implied.
+        return None
+
+    def transform_expr(self, expr):
+        return ast.Return(expr)
+
+class AssigningTransformer(ResultingTransformer):
+
+    def __init__(self, name):
+        super(AssigningTransformer, self).__init__()
+        self.name = name
+
+    def transform_expr(self, expr):
+        return ast.Assign([ast_name(self.name, ast.Store())], expr)
+
+
+def emit_stmt(p, stmt):
+    p.parser.bblock.append(stmt)
+
+def push_new_bblock(p):
+    p.parser.bblock = BuildingBlock(p.parser.bblock)
+
+def pop_bblock(p):
+    bblock = p.parser.bblock
+    p.parser.bblock = bblock.parent
+    return bblock
 
 
 # Here go grammar definitions for PLY.
 
 tokens = lex.tokens
 
-
-def p_begin_bblock(p):
-    """begin_local_bblock : LBRACE
-       begin_global_bblock :"""
-    bblock_stack = p.parser.bblock_stack
-
-    bblock = []
-    if not bblock_stack:  # outermost => global scope
-        bblock.append(ast.Global([]))
-
-    bblock_stack.append(bblock)
-
-def p_end_bblock(p):
-    """end_local_bblock : RBRACE
-       end_global_bblock :"""
-    p.parser.bblock_stack.pop()
-
-
-def docstring(stmts):
-    if (stmts and
-        isinstance(stmts[0], ast.Expr) and
-        isinstance(stmts[0].value, ast.Str)):
-        return stmts[0]
-
+def p_new_bblock(p):
+    """new_bblock :"""
+    push_new_bblock(p)
 
 @rule
-def p_exec_start(p, suite_func=2):
-    """exec_start : begin_global_bblock suite end_global_bblock"""
-    # stms... ->
+def p_exec_start(p, docstring_bindings=-1):
+    """exec_start : new_bblock typesuite"""
+    # stmts... ->
     #
-    # @__my_new_type__
-    # def __suite():
-    #     global foo, bar, baz
-    #     ...
-    # del __suite
+    # try:
+    #     @__my_exec_module__
+    #     def __suite(__delegate):
+    #         ...
+    #         global foo, bar, baz
+    #         foo, bar, baz = __delegate([...])
+    #
+    # except __my_exec_module__:
+    #     pass
+    #
+    # N.B. This voodoo is to avoid storing __suite name into global module
+    # dict. __my_exec_module__ applied as a decorator executes a function
+    # being decorated (__suite in this case) and throws 'itself' instead
+    # of returning as normal).
+    # Likewise any auxiliary function is defined local to the __suite.
+    #
+    bblock = pop_bblock(p)
 
-    suite_func.name = AUX_SUITE_FMT.format('global')
-    suite_func.decorator_list = [ast_name(MY_NEW_TYPE)]
-    del_stmt = ast.Delete([ast_name(suite_func.name, ast.Del())])
+    doc_str, bindings_list = docstring_bindings
 
-    module_body = [suite_func, del_stmt]
+    exec_call = ast_call(ast_name(MY_EXEC_MODULE), args=[bindings_list])
 
-    doc_node = docstring(suite_func.body)
-    if doc_node is not None:
-        module_body.insert(0, doc_node)
+    binding_idfs = [binding_tuple.elts[0].s
+                    for binding_tuple in bindings_list.elts]
+    binding_names = [ast_name(name, ast.Store()) for name in binding_idfs]
+
+    bblock.append(ast.Global(binding_idfs))
+    bblock.append(ast.Assign(binding_names, exec_call))
+
+    suite_func = ast_funcdef(_MODULE_EXEC, ast_arguments([ast_arg(_EXEC_ARG)]),
+                             bblock.stmts, decos=[ast_name(MY_EXEC_MODULE)])
+
+    eh_stmt = ast.ExceptHandler(ast_name(MY_EXEC_MODULE), None, [ast.Pass()])
+    try_stmt = ast_try_except([suite_func], [eh_stmt])
+
+    module_body = [try_stmt]
+
+    if isinstance(doc_str, ast.Str):
+        module_body.insert(0, ast.Expr(doc_str))
 
     return ast.Module(module_body)
 
 @rule
-def p_typedef_body(p, suite_func=2):
-    """typedef_body : begin_local_bblock suite end_local_bblock"""
-    bblock_stack = p.parser.bblock_stack
-    bblock = bblock_stack[-1]
+def p_typebody(p, docstring_bindings=2, typeret_func=-1):
+    """typebody : LBRACE typesuite RBRACE typeret"""
+    doc_str, bindings_list = docstring_bindings
+    return doc_str, bindings_list, typeret_func
 
-    suite_func.name = AUX_SUITE_FMT.format('{0}_{1}'.format(len(bblock_stack),
-                                                            len(bblock)))
-    bblock.append(suite_func)
+@rule
+def p_typeret(p):
+    """typeret : """
+    return ast_const(None)  # stub for further devel
 
-    return set_loc_p(ast_name(suite_func.name), p)
+@rule
+def p_stmtexpr(p, value):
+    """stmtexpr : test"""
+    emit_stmt(p, ast.Expr(value))
+
+@rule
+def p_typesuite(p, bindings=-1):
+    """typesuite : skipnl typestmts"""
+    if bindings and not isinstance(bindings[0], ast.Tuple):
+        doc_str = build_node(bindings.pop(0))
+    else:
+        doc_str = ast_const(None)
+
+    return doc_str, ast.List(bindings, ast.Load())
 
 
 @rule
-def p_suite(p, mb_docstring=2, stmts=-1):
-    """suite : skipnl mb_docstring typestmts"""
-    bblock_stack = p.parser.bblock_stack
-    bblock = bblock_stack[-1]
+def p_typestmt(p, namefrags_colons=-1):
+    """typestmt : new_bblock binding_typedef
+       typestmt : new_bblock binding_simple"""
+    bblock = pop_bblock(p)
 
-    has_docstring = (mb_docstring is not None)
-    if has_docstring:
-        doc_node = ast.Expr(build_node(mb_docstring))
-        stmts.insert(0, doc_node)
+    namefrags, colons = namefrags_colons
+    qualname = '.'.join(namefrag().id for namefrag, loc in namefrags)
+    is_static = (colons == '::')
 
-    # always leave a docstring (if any) first
-    ins_idx = int(has_docstring)
-    stmts[ins_idx:ins_idx] = bblock
+    func = bblock.fold_into_binding(is_static)
 
-    if not stmts:
-        stmts.append(ast.Pass())  # otherwise all hell will break loose
-
-    is_global = (len(bblock_stack) == 1)
-    if not is_global:
-        suite_args = ast_arguments([ast_arg(AUX_DELEGATE)])
-    else:
-        suite_args = ast_arguments()
-    suite_func = ast_funcdef(None, suite_args, stmts)
-
-    return suite_func
-
-
-@rule
-def p_typestmt_binding(p, namefrags_colons_value):
-    """typestmt : binding"""
-    bblock_stack = p.parser.bblock_stack
-    namefrags, colons, value = namefrags_colons_value
-
-    is_class_binding = (colons == '::')
-
-    is_global = (len(bblock_stack) == 1)
-    if not is_global:
-        value = ast.Lambda(ast_arguments([ast_arg('self')]), value)
-        target = build_chain(namefrags, ast_name(AUX_DELEGATE))
-    else:
-        target = build_chain(namefrags)
-
-        if isinstance(target, ast.Name):
-            bblock = bblock_stack[0]
-            global_stmt = bblock[0]
-            assert isinstance(global_stmt, ast.Global)
-
-            if target.id not in global_stmt.names:
-                global_stmt.names.append(target.id)
-
-    target.ctx = ast.Store()
-    return copy_loc(ast.Assign([target], value), target)
-
+    return ast.Tuple([ast.Str(qualname), ast_const(is_static), func],
+                     ast.Load())
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
-                      colons=5, body_name=-1):
-    """binding : nl_off namefrags namefrags mb_call colons nl_on typedef_body"""
+                      colons=5, body=-1):
     # Here namefrags is used instead of pytest to work around
     # a reduce/reduce conflict with simple binding (pytest/namefrags).
-    return (namefrags, colons,
-            build_typedef(body_name, build_chain(metatype_builders),
-                          namefrags, mb_call_builder))
+    """binding_typedef : nl_off namefrags namefrags mb_call colons nl_on typebody"""
+    value = build_typedef(body, build_chain(metatype_builders),
+                          namefrags, mb_call_builder)
+    emit_stmt(p, ast.Expr(value))
+    return namefrags, colons
 
 @rule  # target1: ...
-def p_binding_simple(p, namefrags=2, colons=3, value=-1):
-    """binding : nl_off namefrags colons nl_on test"""
-    return namefrags, colons, value
+def p_binding_simple(p, namefrags=2, colons=3):
+    """binding_simple : nl_off namefrags colons nl_on stmtexpr"""
+    return namefrags, colons
 
 @rule  # : -> False,  :: -> True
 def p_colons(p, colons):
@@ -385,14 +523,14 @@ def p_myatom_closure(p, closure):
     raise NotImplementedError
 
 @rule_wloc
-def p_myatom_typedef(p, metatype, body_name):
-    """myatom : pytest typedef_body"""
-    return lambda: build_typedef(body_name, metatype)
+def p_myatom_typedef(p, metatype, body):
+    """myatom : pytest typebody"""
+    return lambda: build_typedef(body, metatype)
 
 @rule_wloc
-def p_myatom_typedef_named(p, metatype, namefrags, mb_call_builder, body_name):
-    """myatom : pytest namefrags mb_call typedef_body"""
-    return lambda: build_typedef(body_name, metatype, namefrags, mb_call_builder)
+def p_myatom_typedef_named(p, metatype, namefrags, mb_call_builder, body):
+    """myatom : pytest namefrags mb_call typebody"""
+    return lambda: build_typedef(body, metatype, namefrags, mb_call_builder)
 
 
 @rule_wloc
@@ -400,14 +538,15 @@ def p_pyatom_num(p, n):
     """pyatom : NUMBER"""
     return lambda: ast.Num(n)
 
-@rule_wloc
-def p_pyatom_str_mb_docstring(p, s):
-    """pyatom       : STRING
-       mb_docstring : STRING stmtdelim"""
-    return lambda: ast.Str(s)
+@rule
+def p_pyatom_string(p, string):
+    """pyatom : string"""
+    return string
 
-def p_mb_docstring_empty(p):
-    """mb_docstring : empty"""
+@rule_wloc
+def p_string(p, s):
+    """string : STRING"""
+    return lambda: ast.Str(s)
 
 @rule_wloc
 def p_pyatom_parens_or_tuple(p, testlist=2):  # (item, ...)
@@ -551,6 +690,7 @@ def p_list_head(p, el):
     """
     namefrags          :  name
 
+    typestmts_plus     :  string
     typestmts_plus     :  typestmt
     arguments_plus     :  argument
     dictents_plus      :  dictent
@@ -618,6 +758,7 @@ def p_nl_on(p):
     was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
     p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
 
+
 def p_skipnl(p):
     """skipnl :
        skipnl : skipnl NEWLINE"""
@@ -675,7 +816,7 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
     lx = lex.lexer.clone()
     lx.fileinfo = Fileinfo(source, filename)
 
-    pr.bblock_stack = []
+    pr.bblock = None
     try:
         ast_root = pr.parse(source, lexer=lx, tracking=True, **kwargs)
         return ast.fix_missing_locations(ast_root)
@@ -684,7 +825,7 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
         raise SyntaxError(*e.args)
 
     finally:
-        del pr.bblock_stack
+        del pr.bblock
 
 
 if __name__ == "__main__":
