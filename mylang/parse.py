@@ -521,24 +521,27 @@ def p_setter(p):
 
 # testlist is a pair of [list of elements] and a single element (if any)
 
-def p_testlist(p):
+@rule
+def p_testlist(p, l):
     """testlist : testlist_plus mb_comma"""
-    p[0] = p[1]
+    return l
 
+@rule
 def p_testlist_empty(p):
     """testlist :"""
-    p[0] = [], None
+    return [], None
 
-def p_testlist_single(p):
+@rule
+def p_testlist_single(p, el):
     """testlist_plus : test"""
-    el = p[1]
-    p[0] = [el], el
+    return [el], el
 
-def p_testlist_list(p):
+@rule
+def p_testlist_list(p, l_el, el=-1):
     """testlist_plus : testlist_plus COMMA test"""
-    l, _ = p[1]
-    l.append(p[3])
-    p[0] = l, None
+    l, _ = l_el
+    l.append(el)
+    return l, None
 
 
 # generic (possibly comma-separated, and with trailing comma) list parsing
