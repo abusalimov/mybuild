@@ -283,7 +283,7 @@ def p_typedef_body(p, suite_func=2):
 
 @rule
 def p_suite(p, mb_docstring=2, stmts=-1):
-    """suite : skipnl mb_docstring stmts"""
+    """suite : skipnl mb_docstring typestmts"""
     bblock_stack = p.parser.bblock_stack
     bblock = bblock_stack[-1]
 
@@ -310,8 +310,8 @@ def p_suite(p, mb_docstring=2, stmts=-1):
 
 
 @rule
-def p_stmt_binding(p, namefrags_colons_value):
-    """stmt : binding"""
+def p_typestmt_binding(p, namefrags_colons_value):
+    """typestmt : binding"""
     bblock_stack = p.parser.bblock_stack
     namefrags, colons, value = namefrags_colons_value
 
@@ -547,7 +547,7 @@ def p_list_head(p, el):
     """
     namefrags          :  name
 
-    stmts_plus         :  stmt
+    typestmts_plus     :  typestmt
     arguments_plus     :  argument
     dictents_plus      :  dictent
     getters_plus       :  getter
@@ -560,7 +560,7 @@ def p_list_tail(p, l, el=-1):
     """
     namefrags          :  namefrags       PERIOD     name
 
-    stmts_plus         :  stmts_plus      stmtdelim  stmt
+    typestmts_plus     :  typestmts_plus  stmtdelim  typestmt
     arguments_plus     :  arguments_plus  COMMA      argument
     dictents_plus      :  dictents_plus   COMMA      dictent
     getters_plus       :  getters_plus    COMMA      getter
@@ -587,13 +587,13 @@ def p_list_alias(p, l):
     trailers             :  empty_list
     trailers             :  trailers_plus
 
-    stmts              :  stmts_plus      mb_stmtdelim
+    typestmts          :  typestmts_plus  mb_stmtdelim
     arguments          :  arguments_plus  mb_comma
     dictents           :  dictents_plus   mb_comma
     getters            :  getters_plus    mb_comma
     setters            :  setters_plus    mb_comma
 
-    stmts              :  empty_list
+    typestmts          :  empty_list
     arguments          :  empty_list
     getters            :  empty_list
     """
