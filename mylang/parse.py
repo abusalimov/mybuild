@@ -693,34 +693,12 @@ def parse(source, filename='<unknown>', mode='exec', **kwargs):
 if __name__ == "__main__":
     source = """
     "module docstring"
-
-    foo // comment
-    bar /*
-    */ baz
-
-    {}
-    {;}
-    {:;}
-    {:slf;}
-    {:||}
-    {|arg|;}
-    {:|arg={foo:bar}|}
-    {:slf|arg|}
-
-    {
-    |
-    xxx
-    |
-    }
-
-    {:s
-    |
-    yyy
-    |
-    }
-
-    module() foo: bar= {
-        x[foo]: [cc]
+    y: mod { "doc"; a::s }
+    a: 0; b: 1; c: 2
+    x: (call(s,d,f,x=0,y=1,z=2), [1,2,3,4], ["a":1, "b":2, "c":3, "d":4], [:])
+    module foo: {
+        option bar(metaclass=type _(type){}):: {}
+        tools:: [cc]
         files: ["foo.c"]
     }
     """
