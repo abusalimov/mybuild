@@ -48,13 +48,6 @@ class MySyntaxError(Exception):
         super(MySyntaxError, self).__init__(msg, *loc_args)
 
 
-def from_rlist(reversed_list, item=None):
-    if item is not None:
-        return list(map(getter[item], reversed(reversed_list)))
-    else:
-        return reversed_list[::-1]
-
-
 # ast wrappers (py3k compat + arg defaults).
 
 try:
@@ -190,7 +183,7 @@ def build_node(builder_wloc, expr=None):
     return set_loc(builder(expr) if expr is not None else builder(), loc)
 
 def build_chain(builder_wlocs, expr=None):
-    for builder_wloc in reversed(builder_wlocs):
+    for builder_wloc in builder_wlocs:
         expr = build_node(builder_wloc, expr)
     return expr
 
@@ -207,8 +200,7 @@ def build_typedef(body_name, metatype, namefrags=None, call_builder=None):
     starargs = None
 
     if namefrags is not None:
-        qualname = '.'.join(namefrag().id for namefrag, loc
-                            in reversed(namefrags))
+        qualname = '.'.join(namefrag().id for namefrag, loc in namefrags)
         args.append(ast.Str(qualname))
 
     if call_builder is not None:
@@ -291,16 +283,14 @@ def p_typedef_body(p, suite_func=2):
 
 @rule
 def p_suite(p, mb_docstring=2, stmts=-1):
-    """suite : skipnl mb_docstring listof_stmts"""
+    """suite : skipnl mb_docstring stmts"""
     bblock_stack = p.parser.bblock_stack
     bblock = bblock_stack[-1]
 
     has_docstring = (mb_docstring is not None)
     if has_docstring:
         doc_node = ast.Expr(build_node(mb_docstring))
-        stmts.append(doc_node)
-
-    stmts.reverse()
+        stmts.insert(0, doc_node)
 
     # always leave a docstring (if any) first
     ins_idx = int(has_docstring)
@@ -421,28 +411,26 @@ def p_mb_docstring_empty(p):
 @rule_wloc
 def p_pyatom_parens_or_tuple(p, testlist=2):  # (item, ...)
     """pyatom : LPAREN testlist RPAREN"""
-    test_rl, test_el = testlist
+    test_l, test_el = testlist
     if test_el is not None:
         return lambda: test_el
     else:
-        test_l = from_rlist(test_rl)
         return lambda: ast.Tuple(test_l, ast.Load())
 
 @rule_wloc
 def p_pyatom_list(p, testlist=2):  # [item, ...]
     """pyatom : LBRACKET testlist RBRACKET"""
-    test_l = from_rlist(testlist[0])
+    test_l = testlist[0]
     return lambda: ast.List(test_l, ast.Load())
 
 @rule_wloc
 def p_pyatom_dict(p, kv_pairs=2):  # [key: value, ...], [:]
-    """pyatom : LBRACKET listof_dictents RBRACKET
+    """pyatom : LBRACKET dictents RBRACKET
        pyatom : LBRACKET COLON RBRACKET"""
-    if kv_pairs == ':':
-        kv_pairs = []
-
-    keys   = from_rlist(kv_pairs, 0)
-    values = from_rlist(kv_pairs, 1)
+    if kv_pairs != ':':
+        keys, values = map(list, zip(*kv_pairs))
+    else:
+        keys, values = [], []
 
     return lambda: ast.Dict(keys, values)
 
@@ -461,12 +449,12 @@ def p_trailer_call(p, call):
 
 @rule_wloc
 def p_call(p, kw_arg_pairs=2):  # x(arg, kw=arg, ...)
-    """call : LPAREN listof_arguments RPAREN"""
+    """call : LPAREN arguments RPAREN"""
     args      = []  # positional arguments
     keywords  = []  # keyword arguments
     seen_kw   = set()
 
-    for kw_wloc, arg in reversed(kw_arg_pairs):
+    for kw_wloc, arg in kw_arg_pairs:
         if kw_wloc is None:
             if seen_kw:
                 raise MySyntaxError('non-keyword arg after keyword arg',
@@ -514,7 +502,7 @@ def p_trailer_item(p, item=2):  # x[item]
 # NIY
 
 def p_trailer_multigetter(p):  # x.[attr, [item], (call), ...]
-    """trailer : PERIOD LBRACKET listof_getters RBRACKET"""
+    """trailer : PERIOD LBRACKET getters RBRACKET"""
     raise NotImplementedError
 
 def p_getter(p):
@@ -522,7 +510,7 @@ def p_getter(p):
     raise NotImplementedError
 
 def p_trailer_multisetter(p):  # x.[attr: value, [item]: value, ...]
-    """trailer : PERIOD LBRACKET listof_setters RBRACKET"""
+    """trailer : PERIOD LBRACKET setters RBRACKET"""
     raise NotImplementedError
 
 def p_setter(p):
@@ -532,19 +520,23 @@ def p_setter(p):
 
 # testlist is a pair of [list of elements] and a single element (if any)
 
+def p_testlist(p):
+    """testlist : testlist_plus mb_comma"""
+    p[0] = p[1]
+
 def p_testlist_empty(p):
     """testlist :"""
     p[0] = [], None
 
 def p_testlist_single(p):
-    """testlist : test"""
+    """testlist_plus : test"""
     el = p[1]
     p[0] = [el], el
 
 def p_testlist_list(p):
-    """testlist : test COMMA testlist"""
-    l, _ = p[3]
-    l.append(p[1])
+    """testlist_plus : testlist_plus COMMA test"""
+    l, _ = p[1]
+    l.append(p[3])
     p[0] = l, None
 
 
@@ -553,34 +545,40 @@ def p_testlist_list(p):
 @rule
 def p_list_head(p, el):
     """
-    namefrags            :  name
-    listof_stmts         :  stmt
-    listof_arguments     :  argument
-    listof_dictents      :  dictent
-    listof_dictents      :  dictent   COMMA
-    listof_setters       :  setter
-    listof_setters       :  setter    COMMA
-    listof_getters       :  getter
+    namefrags          :  name
+
+    stmts_plus         :  stmt
+    arguments_plus     :  argument
+    dictents_plus      :  dictent
+    getters_plus       :  getter
+    setters_plus       :  setter
     """
     return [el]
 
 @rule
-def p_list_tail(p, el, l=-1):
+def p_list_tail(p, l, el=-1):
     """
-    namefrags            :  name      PERIOD     namefrags
+    namefrags          :  namefrags       PERIOD     name
 
-    trailers_plus        :  trailer              trailers
+    stmts_plus         :  stmts_plus      stmtdelim  stmt
+    arguments_plus     :  arguments_plus  COMMA      argument
+    dictents_plus      :  dictents_plus   COMMA      dictent
+    getters_plus       :  getters_plus    COMMA      getter
+    setters_plus       :  setters_plus    COMMA      setter
+
+    trailers_plus      :  trailers                   trailer
+    """
+    l.append(el)
+    return l
+
+@rule
+def p_rlist_tail(p, el, l=-1):
+    """
     name_trailers        :  name                 trailers
     pyatom_trailers      :  pyatom               trailers
     myatom_trailers_plus :  myatom               trailers_plus
-
-    listof_stmts         :  stmt      stmtdelim  listof_stmts
-    listof_arguments     :  argument  COMMA      listof_arguments
-    listof_dictents      :  dictent   COMMA      listof_dictents
-    listof_getters       :  getter    COMMA      listof_getters
-    listof_setters       :  setter    COMMA      listof_setters
     """
-    l.append(el)
+    l.insert(0, el)
     return l
 
 @rule
@@ -589,9 +587,15 @@ def p_list_alias(p, l):
     trailers             :  empty_list
     trailers             :  trailers_plus
 
-    listof_stmts         :  empty_list
-    listof_arguments     :  empty_list
-    listof_getters       :  empty_list
+    stmts              :  stmts_plus      mb_stmtdelim
+    arguments          :  arguments_plus  mb_comma
+    dictents           :  dictents_plus   mb_comma
+    getters            :  getters_plus    mb_comma
+    setters            :  setters_plus    mb_comma
+
+    stmts              :  empty_list
+    arguments          :  empty_list
+    getters            :  empty_list
     """
     return l
 
@@ -599,6 +603,10 @@ def p_list_alias(p, l):
 def p_empty_list(p):
     """empty_list :"""
     return []
+
+def p_mb_comma(p):
+    """mb_comma :
+       mb_comma : COMMA"""
 
 
 # new line control and stuff
@@ -616,17 +624,17 @@ def p_nl_on(p):
     was_ins_pushing_token = (p.lexer.ignore_newline_stack[-1] == 0)
     p.lexer.ignore_newline_stack[-1 - was_ins_pushing_token] -= 1
 
-def p_newlines(p):
-    """newlines : NEWLINE
-       newlines : NEWLINE newlines"""
-
 def p_skipnl(p):
     """skipnl :
-       skipnl : newlines"""
+       skipnl : skipnl NEWLINE"""
 
 def p_stmtdelim(p):
-    """stmtdelim : newlines
-       stmtdelim : SEMI skipnl"""
+    """stmtdelim : mb_stmtdelim NEWLINE
+       stmtdelim : mb_stmtdelim SEMI"""
+
+def p_mb_stmtdelim(p):
+    """mb_stmtdelim :
+       mb_stmtdelim : stmtdelim"""
 
 def p_empty(p):
     """empty :"""
