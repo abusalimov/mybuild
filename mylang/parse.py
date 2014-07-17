@@ -9,15 +9,28 @@ __date__ = "2013-07-05"
 from _compat import *
 
 import functools
-import inspect
 import ply.yacc
 
 from mylang import lex
 from mylang import xast as ast
 from mylang.location import Fileinfo
 from mylang.location import Location
+from mylang.helpers import rule
 
-from util.operator import getter
+
+# Runtime intrinsics and internal auxiliary names.
+
+MY_NEW_TYPE    = '__my_new_type__'
+MY_CALL_ARGS   = '__my_call_args__'
+MY_EXEC_MODULE = '__my_exec_module__'
+
+CLS_ARG        = 'cls'
+SELF_ARG       = 'self'
+
+_RESULT_TMP    = '<tmp>'
+_AUX_NAME_FMT  = '<aux-{0}-{1}>'
+_MODULE_EXEC   = '<trampoline>'
+_EXEC_ARG      = '<exec>'
 
 
 # Location tracking.
@@ -37,70 +50,14 @@ def set_loc_p(ast_node, p, i=1):
 copy_loc = ast.copy_location
 
 
-# p_func definition helpers.
-
-def _rule_indices_from_argspec(func, with_p=True):
-    args, _, _, defaults = inspect.getargspec(inspect.unwrap(func))
-    nr_args = len(args)
-    defaults = list(defaults) if defaults is not None else []
-
-    if with_p:
-        if not nr_args:
-            raise TypeError("need at least 'p' argument")
-        if len(defaults) == nr_args:
-            defaults = defaults[1:]
-        nr_args -= 1
-
-    if None in defaults:
-        def_nones = defaults[defaults.index(None):]
-        if def_nones.count(None) != len(def_nones):
-            raise TypeError("index argument after 'None'")
-
-        def_indices = defaults[:-len(def_nones)]
-    else:
-        def_indices = defaults
-
-    return list(range(1, nr_args-len(defaults)+1)) + def_indices
-
-def _symbol_at(p, idx):
-    return p[idx + (idx < 0 and len(p))]
-def _symbols_at(p, indices):
-    return [_symbol_at(p, idx) for idx in indices]
-
-def rule(func):
-    indices = _rule_indices_from_argspec(func)
+def wloc(func):
     @functools.wraps(func)
-    def decorated(p):
-        p[0] = func(p, *_symbols_at(p, indices))
+    def decorated(p, *symbols):
+        return func(p, *symbols), ploc(p)
     return decorated
-
-def wloc_of(idx):
-    def decorator(func):
-        @functools.wraps(func)
-        def decorated(p, *symbols):
-            return func(p, *symbols), ploc(p, idx)
-        return decorated
-    return decorator
-
-wloc = wloc_of(1)
 
 def rule_wloc(func):
     return rule(wloc(func))
-
-
-# Runtime intrinsics and internal auxiliary names.
-
-MY_NEW_TYPE    = '__my_new_type__'
-MY_CALL_ARGS   = '__my_call_args__'
-MY_EXEC_MODULE = '__my_exec_module__'
-
-CLS_ARG        = 'cls'
-SELF_ARG       = 'self'
-
-_RESULT_TMP    = '<tmp>'
-_AUX_NAME_FMT  = '<aux-{0}-{1}>'
-_MODULE_EXEC   = '<trampoline>'
-_EXEC_ARG      = '<exec>'
 
 
 # AST fragments builders.
