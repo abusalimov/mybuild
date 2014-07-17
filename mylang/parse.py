@@ -659,7 +659,7 @@ parser = ply.yacc.yacc(start='exec_start',
 
 # The main entry point.
 
-def parse(source, filename='<unknown>', mode='exec', **kwargs):
+def my_parse(source, filename='<unknown>', mode='exec', **kwargs):
     """
     Parses the given source and returns the result.
 
@@ -729,7 +729,7 @@ if __name__ == "__main__":
         sg.visit(node)
         return ''.join(sg.result)
 
-    ast_root = parse(source, debug=0)
+    ast_root = my_parse(source, debug=0)
 
     compile(ast_root, "", 'exec')
     print(pr(ast_root))

@@ -13,11 +13,11 @@ from _compat import *
 
 def my_compile(source, filename='<unknown>', mode='exec'):
     try:
-        from mylang.parse import parse
+        from mylang.parse import my_parse
     except ImportError:
         raise ImportError('PLY is not installed')
 
-    ast_root = parse(source, filename, mode)
+    ast_root = my_parse(source, filename, mode)
     return compile(ast_root, filename, mode)
 
 
