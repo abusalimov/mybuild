@@ -11,6 +11,9 @@ __date__ = "2013-08-22"
 from _compat import *
 from _compat import _calculate_meta
 
+from util.prop import cached_property
+from util.prop import cached_class_property
+
 
 builtin_names = [
     # Functions
@@ -30,6 +33,7 @@ builtin_names = [
     # Mylang-specific
     '__my_new_type__',
     '__my_call_args__',
+    '__my_exec_module__',
 
     # Disabled Python builtins:
     #
@@ -40,40 +44,54 @@ builtin_names = [
     # apply buffer coerce intern
 ]
 
+class __my_exec_module__(Exception):
+
+    def __init__(self, trampoline):
+        super(__my_exec_module__, self).__init__()
+        trampoline(self)
+        raise self
+
+    def __call__(self, bindings):
+        for name, _, func in bindings:
+            if '.' in name:
+                raise NotImplementedError
+            func.__name__ = name
+            yield func()
 
 def __my_call_args__(*args, **kwargs):
     return args, kwargs
 
-def __my_new_type__(exec_body, meta=None, name='_', bases=(), kwds={}):
-    if meta is not None:
-        return my_new_type(exec_body, meta, name, bases, kwds)
 
-    else: # module scope
-        exec_body()
-
-
-class MyDelegate(object):
-
-    def __init__(self, ns):
-        super(MyDelegate, self).__init__()
-        super(MyDelegate, self).__setattr__('__dict__', ns)
-
-    def __setattr__(self, name, func):
-        super(MyDelegate, self).__setattr__(name, self.func_to_value(func))
-
-    func_to_value = staticmethod(property)
-
-
-# Provide a PEP 3115 compliant mechanism for class creation
-def my_new_type(exec_body, meta, name, bases=(), kwds={}):
+# Provide a similar to PEP 3115 mechanism for class creation
+def my_new_type(meta, name,
+                module=None, docstring=None,
+                property_bindings=[], default_binding_func=None,
+                bases=(), kwds={}):
     """Create a class object dynamically using the appropriate metaclass."""
     meta, ns = my_prepare_type(meta, name, bases, kwds)
-    ns.setdefault('__module__', exec_body.__module__)
+
+    if module is not None:
+        ns.setdefault('__module__', module)
+    if docstring is not None:
+        ns.setdefault('__doc__', docstring)
 
     delegate = my_ns_delegate(meta, ns)
-    exec_body(delegate)
+    my_exec_body(ns, delegate, property_bindings, default_binding_func)
 
     return meta(name, bases, ns, **kwds)
+
+__my_new_type__ = my_new_type
+
+
+def my_exec_body(ns, delegate, props=[], dfl_func=None):
+    for name, static, func in props:
+        func.__name__ = name
+        ns[name] = delegate.create_property_binding(name, static, func)
+
+    if dfl_func is not None:
+        dfl_name = delegate.default_binding_name
+        dfl_func.__name__ = dfl_name
+        ns[dfl_name] = delegate.create_default_binding(dfl_func)
 
 
 def my_prepare_type(meta, name, bases=(), kwds={}):
@@ -96,20 +114,29 @@ def my_prepare_type(meta, name, bases=(), kwds={}):
 
     return meta, ns
 
+
+class MyDelegate(object):
+    __slots__ = ()
+
+    def __init__(self, ns):
+        super(MyDelegate, self).__init__()
+
+    default_binding_name = 'return'
+
+    def create_property_binding(self, name, static, func):
+        if static:
+            return cached_class_property(func, attr=name)
+        else:
+            return cached_property(func, attr=name)
+
+    def create_default_binding(self, func):
+        return cached_class_property(func, attr=self.default_binding_name)
+
+
 def my_ns_delegate(meta, ns):
     """Call the __my_delegate__ method (if any) of the metaclass."""
     delegate_type = getattr(meta, '__my_delegate__', MyDelegate)
     return delegate_type(ns)
-
-
-def __objtype_new_meth(objtype):
-    try:
-        return objtype.__my_new__
-    except AttributeError:
-        raise TypeError("'{cls}' objects cannot be used in "
-                        "'object {{...}}' expression "
-                        "(missing '__my_new__' method)"
-                        .format(cls=type(objtype)))
 
 
 # Note that some name are taken from globals of this module (this includes
