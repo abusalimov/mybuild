@@ -24,6 +24,7 @@ MY_NEW_TYPE    = '__my_new_type__'
 MY_CALL_ARGS   = '__my_call_args__'
 MY_EXEC_MODULE = '__my_exec_module__'
 
+DFL_TYPE_NAME  = '_'
 CLS_ARG        = 'cls'
 SELF_ARG       = 'self'
 
@@ -74,22 +75,25 @@ def build_chain(builder_wlocs, expr=None):
 
 def build_typedef(body, metatype, namefrags=None, call_builder=None):
     # metatype { ... } ->
-    # __my_new_type__([...], metatype)
+    # __my_new_type__(metatype, '_', <module>, [...])
     #
     # metatype namefrags { ... } ->
-    # __my_new_type__([...], metatype, 'namefrags')
+    # __my_new_type__(metatype, 'namefrags', <module>, [...])
     #
     # metatype namefrags(...) { ... } ->
-    # __my_new_type__([...], metatype, 'namefrags', *__my_call_args__(...))
-    doc_str, bindings_list, typeret_func = body
-
-    args = [doc_str, bindings_list, typeret_func, metatype]
-    starargs = None
+    # __my_new_type__(metatype, 'namefrags', <module>, [...],
+    #                 *__my_call_args__(...))
+    assert len(body) == 3, ("body must be a tuple of "
+                            "doc_str, bindings_list, typeret_func")
 
     if namefrags is not None:
-        qualname = '.'.join(namefrag().id for namefrag, loc in namefrags)
-        args.append(ast.Str(qualname))
+        name = '.'.join(namefrag().id for namefrag, loc in namefrags)
+    else:
+        name = DFL_TYPE_NAME
 
+    args = [metatype, ast.Str(name), ast.XName(_MODULE_NAME)] + list(body)
+
+    starargs = None
     if call_builder is not None:
         starargs = build_node(call_builder, ast.XName(MY_CALL_ARGS))
         # but:
