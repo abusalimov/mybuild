@@ -336,7 +336,11 @@ def p_stmtexpr(p, value):
 def p_typesuite(p, bindings=-1):
     """typesuite : skipnl typestmts"""
     if bindings and not isinstance(bindings[0], ast.Tuple):
-        doc_str = build_node(bindings.pop(0))
+        # We don't want a docstring to have location, because otherwise
+        # CPython (debug) crashes with some lineno-related assertion failure.
+        # That is why a builder is invoked directly, not through build_node.
+        doc_builder, doc_loc = bindings.pop(0)
+        doc_str = doc_builder()
     else:
         doc_str = ast.XConst(None)
 
