@@ -330,7 +330,7 @@ def p_typeret(p):
 @rule
 def p_stmtexpr(p, value):
     """stmtexpr : test"""
-    emit_stmt(p, ast.Expr(value))
+    emit_stmt(p, copy_loc(ast.Expr(value), value))
 
 @rule
 def p_typesuite(p, bindings=-1):
@@ -359,8 +359,8 @@ def p_typestmt(p, namefrags_colons=-1):
 
     func = bblock.fold_into_binding(is_static)
 
-    return ast.Tuple([ast.Str(qualname), ast.XConst(is_static), func],
-                     ast.Load())
+    return set_loc(ast.Tuple([ast.Str(qualname), ast.XConst(is_static), func],
+                             ast.Load()), namefrags[0][1])
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
@@ -370,7 +370,7 @@ def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
     """binding_typedef : nl_off namefrags namefrags mb_call colons nl_on typebody"""
     value = build_typedef(body, build_chain(metatype_builders),
                           namefrags, mb_call_builder)
-    emit_stmt(p, ast.Expr(value))
+    emit_stmt(p, copy_loc(ast.Expr(value), value))
     return namefrags, colons
 
 @rule  # target1: ...
