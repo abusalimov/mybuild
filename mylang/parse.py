@@ -30,6 +30,7 @@ SELF_ARG       = 'self'
 _RESULT_TMP    = '<tmp>'
 _AUX_NAME_FMT  = '<aux-{0}-{1}>'
 _MODULE_EXEC   = '<trampoline>'
+_MODULE_NAME   = '<module>'
 _EXEC_ARG      = '<exec>'
 
 
@@ -129,8 +130,11 @@ class BuildingBlock(object):
             isinstance(self.stmts[0].value, ast.Str)):
             return self.stmts[0]
 
-    def append(self, stmt):
-        self.stmts.append(stmt)
+    def insert(self, index, *stmts):
+        self.stmts[index:index] = stmts
+
+    def append(self, *stmts):
+        self.stmts.extend(stmts)
 
     def make_returning(self):
         ReturningTransformer().modify_stmts_list(self.stmts)
@@ -259,6 +263,8 @@ def p_exec_start(p, docstring_bindings=-1):
     # try:
     #     @__my_exec_module__
     #     def __suite(__delegate):
+    #         global __name__
+    #         <module> = __name__
     #         ...
     #         global foo, bar, baz
     #         foo, bar, baz = __delegate([...])
@@ -269,21 +275,27 @@ def p_exec_start(p, docstring_bindings=-1):
     # N.B. This voodoo is to avoid storing __suite name into global module
     # dict. __my_exec_module__ applied as a decorator executes a function
     # being decorated (__suite in this case) and throws 'itself' instead
-    # of returning as normal).
+    # of returning as normal.
     # Likewise any auxiliary function is defined local to the __suite.
     #
     bblock = pop_bblock(p)
 
+    bblock.insert(0,
+                  ast.Global(['__name__']),
+                  ast.Assign([ast.Name(_MODULE_NAME, ast.Store())],
+                             ast.XName('__name__')))
+
     doc_str, bindings_list = docstring_bindings
 
-    exec_call = ast.XCall(ast.XName(MY_EXEC_MODULE), args=[bindings_list])
+    exec_call = ast.XCall(ast.XName(_EXEC_ARG), args=[bindings_list])
 
     binding_idfs = [binding_tuple.elts[0].s
                     for binding_tuple in bindings_list.elts]
-    binding_names = [ast.XName(name, ast.Store()) for name in binding_idfs]
+    binding_names = [ast.Name(name, ast.Store()) for name in binding_idfs]
 
-    bblock.append(ast.Global(binding_idfs))
-    bblock.append(ast.Assign(binding_names, exec_call))
+    bblock.append(ast.Global(binding_idfs),
+                  ast.Assign([ast.Tuple(binding_names, ast.Store())],
+                             exec_call))
 
     suite_func = ast.XFunctionDef(_MODULE_EXEC,
                                   ast.xarguments([ast.xarg(_EXEC_ARG)]),
