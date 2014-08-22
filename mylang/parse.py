@@ -12,7 +12,7 @@ import functools
 import ply.yacc
 
 from mylang import lex
-from mylang import xast as ast
+from mylang import x_ast as ast
 from mylang.location import Fileinfo
 from mylang.location import Location
 from mylang.helpers import rule
@@ -91,11 +91,11 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
     else:
         name = DFL_TYPE_NAME
 
-    args = [metatype, ast.Str(name), ast.XName(_MODULE_NAME)] + list(body)
+    args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME)] + list(body)
 
     starargs = None
     if call_builder is not None:
-        starargs = build_node(call_builder, ast.XName(MY_CALL_ARGS))
+        starargs = build_node(call_builder, ast.x_Name(MY_CALL_ARGS))
         # but:
         if not (starargs.args or
                 starargs.keywords or
@@ -103,7 +103,7 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
                 starargs.kwargs):
             starargs = None  # optimize out
 
-    ret_call = ast.XCall(ast.XName(MY_NEW_TYPE), args, starargs=starargs)
+    ret_call = ast.x_Call(ast.x_Name(MY_NEW_TYPE), args, starargs=starargs)
     return copy_loc(ret_call, metatype)
 
 
@@ -145,7 +145,7 @@ class BuildingBlock(object):
 
     def make_assigning(self, name=_RESULT_TMP):
         AssigningTransformer(name).modify_stmts_list(self.stmts)
-        return ast.XName(name)
+        return ast.x_Name(name)
 
     def new_aux_name(self):
         cnt = self.aux_cnt
@@ -155,8 +155,8 @@ class BuildingBlock(object):
     def build_func_from(self, stmts, arguments, name=None):
         if name is None:
             name = self.new_aux_name()
-        self.append(ast.XFunctionDef(name, arguments, stmts))
-        return ast.XName(name)
+        self.append(ast.x_FunctionDef(name, arguments, stmts))
+        return ast.x_Name(name)
 
     def fold_into_func(self, arguments, name=None):
         self.make_returning()
@@ -169,11 +169,11 @@ class BuildingBlock(object):
             raise MySyntaxError("Unexpected static binding at module level")
 
         if not module_level:
-            args = [ast.xarg(CLS_ARG if static else SELF_ARG)]
+            args = [ast.x_arg(CLS_ARG if static else SELF_ARG)]
         else:
             args = []
 
-        return self.fold_into_func(ast.xarguments(args))
+        return self.fold_into_func(ast.x_arguments(args))
 
 
 class ResultingTransformer(ast.NodeTransformer):
@@ -214,7 +214,7 @@ class ResultingTransformer(ast.NodeTransformer):
     visit_Pass      = noresult_visit
 
     def create_noresult(self):
-        return self.transform_expr(ast.XConst(None))
+        return self.transform_expr(ast.x_Const(None))
 
     def transform_expr(self, expr):
         raise NotImplementedError
@@ -236,7 +236,7 @@ class AssigningTransformer(ResultingTransformer):
         self.name = name
 
     def transform_expr(self, expr):
-        return ast.Assign([ast.XName(self.name, ast.Store())], expr)
+        return ast.Assign([ast.Name(self.name, ast.Store())], expr)
 
 
 def emit_stmt(p, stmt):
@@ -287,11 +287,11 @@ def p_exec_start(p, docstring_bindings=-1):
     bblock.insert(0,
                   ast.Global(['__name__']),
                   ast.Assign([ast.Name(_MODULE_NAME, ast.Store())],
-                             ast.XName('__name__')))
+                             ast.x_Name('__name__')))
 
     doc_str, bindings_list = docstring_bindings
 
-    exec_call = ast.XCall(ast.XName(_EXEC_ARG), args=[bindings_list])
+    exec_call = ast.x_Call(ast.x_Name(_EXEC_ARG), args=[bindings_list])
 
     binding_idfs = [binding_tuple.elts[0].s
                     for binding_tuple in bindings_list.elts]
@@ -301,13 +301,13 @@ def p_exec_start(p, docstring_bindings=-1):
                   ast.Assign([ast.Tuple(binding_names, ast.Store())],
                              exec_call))
 
-    suite_func = ast.XFunctionDef(_MODULE_EXEC,
-                                  ast.xarguments([ast.xarg(_EXEC_ARG)]),
-                                  bblock.stmts,
-                                  decos=[ast.XName(MY_EXEC_MODULE)])
+    suite_func = ast.x_FunctionDef(_MODULE_EXEC,
+                                   ast.x_arguments([ast.x_arg(_EXEC_ARG)]),
+                                   bblock.stmts,
+                                   decos=[ast.x_Name(MY_EXEC_MODULE)])
 
-    eh_stmt = ast.ExceptHandler(ast.XName(MY_EXEC_MODULE), None, [ast.Pass()])
-    try_stmt = ast.XTryExcept([suite_func], [eh_stmt])
+    eh_stmt = ast.ExceptHandler(ast.x_Name(MY_EXEC_MODULE), None, [ast.Pass()])
+    try_stmt = ast.x_TryExcept([suite_func], [eh_stmt])
 
     module_body = [try_stmt]
 
@@ -325,7 +325,7 @@ def p_typebody(p, docstring_bindings=2, typeret_func=-1):
 @rule
 def p_typeret(p):
     """typeret : """
-    return ast.XConst(None)  # stub for further devel
+    return ast.x_Const(None)  # stub for further devel
 
 @rule
 def p_stmtexpr(p, value):
@@ -342,7 +342,7 @@ def p_typesuite(p, bindings=-1):
         doc_builder, doc_loc = bindings.pop(0)
         doc_str = doc_builder()
     else:
-        doc_str = ast.XConst(None)
+        doc_str = ast.x_Const(None)
 
     return doc_str, ast.List(bindings, ast.Load())
 
@@ -359,7 +359,7 @@ def p_typestmt(p, namefrags_colons=-1):
 
     func = bblock.fold_into_binding(is_static)
 
-    return set_loc(ast.Tuple([ast.Str(qualname), ast.XConst(is_static), func],
+    return set_loc(ast.Tuple([ast.Str(qualname), ast.x_Const(is_static), func],
                              ast.Load()), namefrags[0][1])
 
 @rule  # metatype target(): { ... }
@@ -408,7 +408,7 @@ def p_stub(p, builder):
 @rule_wloc
 def p_myatom_closure(p, closure):
     """myatom : LBRACE RBRACE"""
-    return lambda: ast.XName('XXX')
+    return lambda: ast.x_Name('XXX')
     raise NotImplementedError
 
 @rule_wloc
@@ -498,7 +498,7 @@ def p_call(p, kw_arg_pairs=2):  # x(arg, kw=arg, ...)
                 seen_kw.add(kw)
             keywords.append(set_loc(ast.keyword(kw, arg), loc))
 
-    return lambda expr: ast.XCall(expr, args, keywords)
+    return lambda expr: ast.x_Call(expr, args, keywords)
 
 @rule
 def p_argument_pos(p, value):
@@ -519,7 +519,7 @@ def p_trailer_attr_or_name(p, name=-1):  # x.attr or name
         if expr is not None:
             return ast.Attribute(expr, name, ast.Load())
         else:
-            return ast.XName(name)
+            return ast.x_Name(name)
     return builder
 
 @rule_wloc
