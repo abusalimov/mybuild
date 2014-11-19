@@ -48,15 +48,13 @@ class __my_exec_module__(Exception):
 
     def __init__(self, trampoline):
         super(__my_exec_module__, self).__init__()
-        trampoline(self)
-        raise self
 
-    def __call__(self, bindings):
-        for name, _, func in bindings:
-            if '.' in name:
-                raise NotImplementedError
-            func.__name__ = name
-            yield func()
+        ns = trampoline.__globals__
+        delegate_type = ns.get('__my_delegate__', MyModuleDelegate)
+        my_exec_body(ns, delegate_type(ns), trampoline())
+
+        raise self  # see docs for top-level rules of parser for explanations
+
 
 def __my_call_args__(*args, **kwargs):
     return args, kwargs
@@ -64,8 +62,7 @@ def __my_call_args__(*args, **kwargs):
 
 # Provide a similar to PEP 3115 mechanism for class creation
 def my_new_type(meta, name,
-                module=None, docstring=None,
-                property_bindings=[], default_binding_func=None,
+                module=None, docstring=None, bindings=[],
                 bases=(), kwds={}):
     """Create a class object dynamically using the appropriate metaclass."""
     meta, ns = my_prepare_type(meta, name, bases, kwds)
@@ -76,22 +73,19 @@ def my_new_type(meta, name,
         ns.setdefault('__doc__', docstring)
 
     delegate = my_ns_delegate(meta, ns)
-    my_exec_body(ns, delegate, property_bindings, default_binding_func)
+    my_exec_body(ns, delegate, bindings)
 
     return meta(name, bases, ns, **kwds)
 
 __my_new_type__ = my_new_type
 
 
-def my_exec_body(ns, delegate, props=[], dfl_func=None):
-    for name, static, func in props:
+def my_exec_body(ns, delegate, bindings=[]):
+    for name, func, static in bindings:
+        if name is None:
+            name = delegate.default_binding_name
         func.__name__ = name
-        ns[name] = delegate.create_property_binding(name, static, func)
-
-    if dfl_func is not None:
-        dfl_name = delegate.default_binding_name
-        dfl_func.__name__ = dfl_name
-        ns[dfl_name] = delegate.create_default_binding(dfl_func)
+        ns[name] = delegate.create_binding(name, func, static)
 
 
 def my_prepare_type(meta, name, bases=(), kwds={}):
@@ -123,14 +117,18 @@ class MyDelegate(object):
 
     default_binding_name = 'return'
 
-    def create_property_binding(self, name, static, func):
+    def create_binding(self, name, func, static):
         if static:
             return cached_class_property(func, attr=name)
         else:
             return cached_property(func, attr=name)
 
-    def create_default_binding(self, func):
-        return cached_class_property(func, attr=self.default_binding_name)
+
+class MyModuleDelegate(MyDelegate):
+    __slots__ = ()
+
+    def create_binding(self, name, func, static):
+        return func()
 
 
 def my_ns_delegate(meta, ns):

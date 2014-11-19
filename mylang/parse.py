@@ -32,7 +32,6 @@ _RESULT_TMP    = '<tmp>'
 _AUX_NAME_FMT  = '<aux-{0}-{1}>'
 _MODULE_EXEC   = '<trampoline>'
 _MODULE_NAME   = '<module>'
-_EXEC_ARG      = '<exec>'
 
 
 # Location tracking.
@@ -83,8 +82,7 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
     # metatype namefrags(...) { ... } ->
     # __my_new_type__(metatype, 'namefrags', <module>, [...],
     #                 *__my_call_args__(...))
-    assert len(body) == 3, ("body must be a tuple of "
-                            "doc_str, bindings_list, typeret_func")
+    assert len(body) == 2, "body must be a tuple of (doc_str, bindings_list)"
 
     if namefrags is not None:
         name = '.'.join(namefrag().id for namefrag, loc in namefrags)
@@ -266,18 +264,17 @@ def p_exec_start(p, docstring_bindings=-1):
     #
     # try:
     #     @__my_exec_module__
-    #     def __suite(__delegate):
+    #     def __suite():
     #         global __name__
     #         <module> = __name__
     #         ...
-    #         global foo, bar, baz
-    #         foo, bar, baz = __delegate([...])
+    #         return [...]
     #
     # except __my_exec_module__:
     #     pass
     #
     # N.B. This voodoo is to avoid storing __suite name into global module
-    # dict. __my_exec_module__ applied as a decorator executes a function
+    # dict. Applied as a decorator, __my_exec_module__ executes a function
     # being decorated (__suite in this case) and throws 'itself' instead
     # of returning as normal.
     # Likewise any auxiliary function is defined local to the __suite.
@@ -291,18 +288,9 @@ def p_exec_start(p, docstring_bindings=-1):
 
     doc_str, bindings_list = docstring_bindings
 
-    exec_call = ast.x_Call(ast.x_Name(_EXEC_ARG), args=[bindings_list])
+    bblock.append(ast.Return(bindings_list))
 
-    binding_idfs = [binding_tuple.elts[0].s
-                    for binding_tuple in bindings_list.elts]
-    binding_names = [ast.Name(name, ast.Store()) for name in binding_idfs]
-
-    bblock.append(ast.Global(binding_idfs),
-                  ast.Assign([ast.Tuple(binding_names, ast.Store())],
-                             exec_call))
-
-    suite_func = ast.x_FunctionDef(_MODULE_EXEC,
-                                   ast.x_arguments([ast.x_arg(_EXEC_ARG)]),
+    suite_func = ast.x_FunctionDef(_MODULE_EXEC, ast.x_arguments(),
                                    bblock.stmts,
                                    decos=[ast.x_Name(MY_EXEC_MODULE)])
 
@@ -320,12 +308,17 @@ def p_exec_start(p, docstring_bindings=-1):
 def p_typebody(p, docstring_bindings=2, typeret_func=-1):
     """typebody : LBRACE typesuite RBRACE typeret"""
     doc_str, bindings_list = docstring_bindings
-    return doc_str, bindings_list, typeret_func
+
+    if typeret_func is not None:
+        binding_triple = [ast.x_Const(None), typeret_func, ast.x_Const(None)]
+        bindings_list.elts.append(ast.Tuple(binding_triple, ast.Load()))
+
+    return doc_str, bindings_list
 
 @rule
 def p_typeret(p):
     """typeret : """
-    return ast.x_Const(None)  # stub for further devel
+    return None  # stub for further devel
 
 @rule
 def p_stmtexpr(p, value):
@@ -359,8 +352,8 @@ def p_typestmt(p, namefrags_colons=-1):
 
     func = bblock.fold_into_binding(is_static)
 
-    return set_loc(ast.Tuple([ast.Str(qualname), ast.x_Const(is_static), func],
-                             ast.Load()), namefrags[0][1])
+    binding_triple = [ast.Str(qualname), func, ast.x_Const(is_static)]
+    return set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
