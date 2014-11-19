@@ -89,7 +89,7 @@ def my_exec_body(ns, delegate, bindings=[]):
 
 
 def my_prepare_type(meta, name, bases=(), kwds={}):
-    """Call the __prepare__ method of the appropriate metaclass.
+    """Call the __my_prepare__ method of the appropriate metaclass.
 
     Returns (metaclass, namespace) as a tuple
 
@@ -101,8 +101,8 @@ def my_prepare_type(meta, name, bases=(), kwds={}):
         # instead of invoking the initial candidate directly
         meta = _calculate_meta(meta, bases)
 
-    if hasattr(meta, '__prepare__'):
-        ns = meta.__prepare__(name, bases, **kwds)
+    if hasattr(meta, '__my_prepare__'):
+        ns = meta.__my_prepare__(name, bases, **kwds)
     else:
         ns = {}
 
