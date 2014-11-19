@@ -5,6 +5,7 @@ Dynamic inheritance for class members.
 from _compat import *
 from util.itertools import pop_iter
 from util.itertools import unique
+from util.operator import attr as mangler
 
 
 class InheritMeta(type):
@@ -95,8 +96,18 @@ class InheritMeta(type):
                 # it provides a manual way to invoke refreshing of
                 # auto-inheritance of its subclasses that support it.
                 continue
+
             if attr in base.__dict__:
                 value = base.__dict__[attr]
+
+                if hasattr(value, '__get__'):
+                    if not is_inherit_descriptor(value):
+                        continue
+                    try:
+                        value = value.__get__(None, base)
+                    except AttributeError:
+                        continue
+
                 check_owner(attr, value, base)
                 base_values[id(base)] = value
             else:
@@ -156,10 +167,14 @@ class InheritMeta(type):
                                 "of the metaclasses of all its bases")
 
     def mro(cls):
-        cls.__check_base_metas(map(type, cls.__bases__))
         mro = super(InheritMeta, cls).mro()
+        cls.__check_base_metas(map(type, cls.__bases__))
+
+        private_owner_attr = mangler.__owner
 
         for attr, value in iteritems(cls.__dict__):
+            if attr == private_owner_attr:
+                continue
             if is_inherit_value(value):
                 cls.__inherit_attr(attr, value, mro)
 
@@ -171,25 +186,40 @@ class InheritMeta(type):
         type.__dict__['__bases__'].__set__(cls, cls.__bases__)
 
     def __setattr__(cls, attr, value):
+        if attr == mangler.__owner:
+            return
         cls.__check_owner(attr, value)
         try:
+            if attr == '__bases__':
+                print("FUUUUUUUUUUUUUUUUUUUU")
+                # import traceback
+                # traceback.print_stack()
+            print("old_value: ", cls, attr, cls.__dict__.get(attr))
+            print("new_value: ", cls, attr, value)
             cls.__uninherit_attr(attr, cls.__dict__.get(attr))
             super(InheritMeta, cls).__setattr__(attr, value)
             # inherit_update_subclasses will find the value in cls.__dict__
             # and perform the actual __inherit_attr on it.
         finally:
-            cls.inherit_update_subclasses()
+            if attr != '__bases__':
+                cls.inherit_update_subclasses()
 
     def __delattr__(cls, attr):
+        if attr == mangler.__owner:
+            return
         try:
             cls.__uninherit_attr(attr, cls.__dict__.get(attr))
             super(InheritMeta, cls).__delattr__(attr)
         finally:
-            cls.inherit_update_subclasses()
+            if attr != '__bases__':
+                cls.inherit_update_subclasses()
 
 
 def is_inherit_value(value):
     return getattr(value, 'inherit_self', False)
+
+def is_inherit_descriptor(descriptor):
+    return getattr(descriptor, 'inherit_aware', False)
 
 
 if __name__ == '__main__':

@@ -729,13 +729,21 @@ class MySyntaxError(Exception):
 if __name__ == "__main__":
     source = """
     "module docstring"
-    y: mod { "doc"; a::s }
+//    y: mod { "doc"; a::s }
     a: 0; b: 1; c: 2
-    x: (call(s,d,f,x=0,y=1,z=2), [1,2,3,4], ["a":1, "b":2, "c":3, "d":4], [:])
-    module foo: {
-        option bar(metaclass=type _(type){}):: {}
-        tools:: [cc]
-        files: ["foo.c"]
+//    x: (call(s,d,f,x=0,y=1,z=2), [1,2,3,4], ["a":1, "b":2, "c":3, "d":4], [:])
+
+    type ns: {
+        module foo:: {
+            option opt:: { m: "foo" }
+            tools:: ["cc"]
+            files: ["foo.c"]
+        }
+
+        module bar(ns.foo):: {
+            option opt:: { m: "bar" }
+        }
+
     }
     """
     from mako._ast_util import SourceGenerator
@@ -751,7 +759,45 @@ if __name__ == "__main__":
 
     ast_root = my_parse(source, debug=0)
 
-    compile(ast_root, "", 'exec')
+    print(ast.dump(ast_root, include_attributes=True))
+    code = compile(ast_root, "<string>", 'exec')
     print(pr(ast_root))
-    # print(ast.dump(ast_root))
+
+    import sys, types
+    from util.inherit import InheritMeta
+    from mylang import runtime
+
+    m = sys.modules['m'] = types.ModuleType('m')
+    m.__builtins__ = runtime.builtins
+
+    class Object(object):
+        pass
+
+    class Meta(InheritMeta):
+        def __new__(mcls, name, bases, ns, **kwargs):
+            print("<<<", name, bases)
+            if not bases or bases == (object,):
+                bases = (Object,)
+            return super(Meta, mcls).__new__(mcls, name, bases, ns, **kwargs)
+
+    class ModuleType(Meta):
+        pass
+
+    class OptionType(Meta):
+        inherit_self = True
+
+    m.module = ModuleType
+    m.option = OptionType
+
+    exec(code, m.__dict__)
+
+    print(m.a, m.b)
+    n = m.ns()
+    print(n.foo.tools)
+    print(n.bar.opt().m)
+    # print(m.__dict__)
+    # print(m.x, m.x.__dict__)
+    # print(m.x.prop)
+    # class A: print(locals())
+    # print(A.__dict__)
 

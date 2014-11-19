@@ -189,10 +189,13 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
     42
     """
 
+    inherit_aware = True
+
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
         ret = super(cached_class_property, self).__get__(obj, objtype)
+        # FIXME must perform mro lookup and cache on the owner of the property
         setattr(objtype, self.attr, ret)
         return ret
 
