@@ -350,7 +350,7 @@ class EmptyOptuple(OptupleBase):
 
     @classmethod
     def _new_type(cls, module, optypes):
-        assert not optypes
+        assert len(optypes) == 0
         new_type = cls._create_type(cls.__empty_base, module)
         new_type._ellipsis = new_type._optypes = new_type._options = new_type()
         return new_type
