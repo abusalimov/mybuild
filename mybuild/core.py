@@ -35,8 +35,6 @@ from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
 from util.prop import default_class_property
-from util.prop import cumulative_sequence_property
-from util.prop import cumulative_tuple_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -170,7 +168,7 @@ def new_module_type(name, *bases):
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
-    tools = cumulative_tuple_property(attr.__tools, '_add_tool')
+    # tools = cumulative_tuple_property(attr.__tools, '_add_tool')
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)
@@ -196,7 +194,7 @@ class Module(ModuleBase):
 
 class CompositeModule(Module):
 
-    components = cumulative_sequence_property(attr.__components)
+    # components = cumulative_sequence_property(attr.__components)
 
     def _add_component(self, mslice, condition=True):
         self._add_constraint(mslice, condition)
