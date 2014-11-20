@@ -30,6 +30,7 @@ from operator import attrgetter
 import sys
 
 from util.collections import OrderedDict
+from util.itertools import unique_values
 from util.operator import attr
 from util.operator import getter
 from util.operator import invoker
@@ -66,18 +67,37 @@ class ModuleMetaBase(type):
         """Suppresses any redundant arguments."""
         return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, optypes=None):
-        """Real module classes must be created with 'optypes' keyword
+    def mro(cls):
+        new_mro = super(ModuleMetaBase, cls).mro()
+
+        if cls.__mro__ is not None and cls.__mro__ != new_mro:
+            if (list(filter_mtypes(cls.__mro__)) !=
+                list(filter_mtypes(new_mro))):
+                raise NotImplementedError('Dynamic modification '
+                                          'of inheritance hierarchy '
+                                          'of module types is not supported')
+
+        return new_mro
+
+    def __init__(cls, name, bases, attrs, option_types=None):
+        """Real module classes must be created with 'option_types' keyword
         argument. By default produces internal classes."""
         super(ModuleMetaBase, cls).__init__(name, bases, attrs)
 
-        if optypes is not None:
+        if option_types is not None:
             if not cls._internal:
                 raise TypeError("A non-internal class '{cls}' already has "
                                 "its options initialized".format(**locals()))
+
+            base_option_types = [pair for base in filter_mtypes(cls.__mro__)
+                                 for pair in base._optypes._iterpairs()]
+            optypes = unique_values(list(option_types) + base_option_types)
+
             cls._init_options(optypes)
 
     def _init_options(cls, optypes):
+        optypes = tuple(optypes)
+
         optuple_type = Optuple if optypes else EmptyOptuple
         cls._options = options = optuple_type._new_type(cls, optypes)._options
 
@@ -106,22 +126,27 @@ class ModuleMetaBase(type):
         return cls._fullname + options_str
 
 
+def filter_mtypes(types, with_internal=False):
+    return (cls for cls in types if isinstance(cls, ModuleMetaBase) and
+                (with_internal or not cls._internal))
+
+
 class ModuleMeta(ModuleMetaBase):
     """Adds an optional 'internal' keyword argument.
 
     Produces real modules by default, however subclasses must still pass
-    an 'optype' keyword argument or provide a resonable implementation
+    an 'option_types' keyword argument or provide a resonable implementation
     of '_prepare_optypes' method."""
 
     def __init__(cls, name, bases, attrs, internal=False, **kwargs):
         """Keyword arguments are passed to '_prepare_optypes' method."""
         super(ModuleMeta, cls).__init__(name, bases, attrs,
-                optypes=(None if internal else
-                         cls._prepare_optypes(**kwargs)))
+                option_types=(None if internal else
+                              cls._prepare_optypes(**kwargs)))
 
-    def _prepare_optypes(cls, optypes):
+    def _prepare_optypes(cls, option_types):
         """Always called with keyword arguments passed to the constructor."""
-        return optypes
+        return option_types
 
 
 class ModuleBase(extend(metaclass=ModuleMetaBase)):

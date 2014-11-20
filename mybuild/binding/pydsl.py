@@ -51,8 +51,8 @@ class PyDslModuleMeta(core.ModuleMeta):
         head = [core.Optype() for _ in range(len(args) - len(dfls))]
         tail = list(map(to_optype, dfls))
 
-        return [optype.set(name=name)
-                for optype, name in zip(head + tail, args)]
+        return [(name, optype.set(name=name))
+                for name, optype in zip(args, head + tail)]
 
     def _instantiate(cls, optuple, *args, **kwargs):
         instance = cls.__new__(cls, optuple, *args, **kwargs)
