@@ -53,13 +53,15 @@ def unique(iterable, key=id):
     """
     List unique elements, preserving order. Remember all elements ever seen.
     """
+    return unique_values((key(element), element) for element in iterable)
+
+def unique_values(pairs):
     seen = set()
     seen_add = seen.add
-    for element in iterable:
-        k = key(element)
+    for k, v in pairs:
         if k not in seen:
             seen_add(k)
-            yield element
+            yield v
 
 def filter_bypass(func, exception, iterable):
     if func is None:
