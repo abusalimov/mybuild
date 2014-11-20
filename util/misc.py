@@ -82,7 +82,7 @@ class InstanceBoundTypeMixin(object):
     _type_hash = classmethod(id)
 
     def __eq__(self, other):
-        return self._type_eq(type(other))
+        return self._type_eq(other)
     def __hash__(self):
         return self._type_hash()
 
