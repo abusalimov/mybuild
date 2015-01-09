@@ -24,6 +24,14 @@
 					"python", "-u", "-m", "coverage", "run",
 					"run-fixup.py", "$file"],
 			"working_dir": "${project_path}"
+		},
+		{
+			"name": "Waf (project-specific)",
+			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
+			"selector": "source.python",
+
+			"cmd": ["./waf", "-v"],
+			"working_dir": "${project_path}"
 		}
 	]
 }
