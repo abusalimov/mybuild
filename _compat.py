@@ -11,11 +11,12 @@ py3k = (_sys.version_info[0] == 3)
 
 # builtins
 if py3k:
-    range  = range
-    filter = filter
-    map    = map
-    zip    = zip
-    next   = next
+    range   = range
+    filter  = filter
+    map     = map
+    zip     = zip
+    next    = next
+    hasattr = hasattr
 
 else:
     range = xrange
@@ -23,6 +24,14 @@ else:
     from itertools import imap    as map
     from itertools import izip    as zip
     next = _operator.methodcaller('next')
+
+    def hasattr(obj, attr):
+        try:
+            getattr(obj, attr)
+        except AttributeError:
+            return False
+        else:
+            return True
 
 
 if py3k:
