@@ -193,7 +193,7 @@ def new_module_type(name, *bases):
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
-    # tools = cumulative_tuple_property(attr.__tools, '_add_tool')
+    tools = []
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)

@@ -16,7 +16,6 @@ from mybuild.binding import mydsl
 from mybuild.binding import pydsl
 
 from util.operator import attr
-from util.prop import cumulative_mapping_property
 
 
 class LoaderMixin(object):
@@ -29,7 +28,8 @@ class LoaderMixin(object):
                     module  = self.dsl.module,
                     project = self.dsl.project,
                     option  = self.dsl.option,
-                    tool=tool,
+                    tool    = tool,
+                    ns      = NsObject,
                     MYBUILD_VERSION=mybuild.__version__)
 
 
@@ -70,7 +70,8 @@ class WafBasedTool(mybuild.core.Tool):
 
 
 class CcNs(NsObject):
-    defines = cumulative_mapping_property(attr.__defines)
+    def __init__(self, dict_={}, **kwargs):
+        super(CcNs, self).__init__(defines={})
 
 class CcTool(WafBasedTool):
     waf_tools = ['compiler_c']
