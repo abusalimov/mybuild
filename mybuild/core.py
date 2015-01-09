@@ -201,12 +201,14 @@ class Module(ModuleBase):
 
         self._constraints = []  # [(optuple, condition)]
 
+        for tool in self.tools:
+            for attr, value in iteritems(tool.create_namespaces(self)):
+                if not hasattr(self, attr):
+                    setattr(self, attr, value)
+
     def _post_init(self):
         for tool in self.tools:
             tool.initialize_module(self)
-
-    def _add_tool(self, tool):
-        self.__dict__.update(tool.create_namespaces(self))
 
     def _add_constraint(self, mslice, condition=True):
         self._constraints.append((mslice(), condition))
