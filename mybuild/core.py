@@ -63,8 +63,12 @@ class ModuleMetaBase(type):
     def _internal(cls):
         return not hasattr(cls, '_options')
 
+    _base_type = object  # Overridden later to workaround bootstrapping issues.
+
     def __new__(mcls, name, bases, attrs, **kwargs):
         """Suppresses any redundant arguments."""
+        if not any(issubclass(base, mcls._base_type) for base in bases):
+            bases += (mcls._base_type,)
         return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
 
     def mro(cls):
@@ -182,6 +186,8 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 
     def __repr__(self):
         return repr(self._optuple)
+
+ModuleMetaBase._base_type = ModuleBase
 
 
 def new_module_type(name, *bases):
