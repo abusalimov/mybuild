@@ -61,9 +61,9 @@ def __my_call_args__(*args, **kwargs):
 
 
 # Provide a similar to PEP 3115 mechanism for class creation
-def my_new_type(meta, name,
-                module=None, docstring=None, bindings=[],
-                bases=(), kwds={}):
+def __my_new_type__(meta, name,
+                    module=None, docstring=None, bindings=[],
+                    bases=(), kwds={}):
     """Create a class object dynamically using the appropriate metaclass."""
     meta, ns = my_prepare_type(meta, name, bases, kwds)
 
@@ -77,7 +77,7 @@ def my_new_type(meta, name,
 
     return meta(name, bases, ns, **kwds)
 
-__my_new_type__ = my_new_type
+my_new_type = __my_new_type__
 
 
 def my_exec_body(ns, delegate, bindings=[]):
