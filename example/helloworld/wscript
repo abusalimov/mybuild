@@ -1,0 +1,25 @@
+top = '.'
+out = 'build'
+
+from waflib import Context as wafcontext
+
+mywaf = wafcontext.load_tool('mywaf', tooldir=['../..'])
+mywaf.register_namespace('prj', path=['src', 'templates'])
+
+import prj
+mybuild = mywaf.mybuild_project(prj.hello)
+
+@mybuild
+def options(ctx):
+    pass
+
+@mybuild
+def configure(ctx):
+    pass
+
+@mybuild
+def build(bld):
+    pass
+
+def selftest(ctx):
+    ctx.load('mywaf')

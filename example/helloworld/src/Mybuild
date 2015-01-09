@@ -1,0 +1,6 @@
+module hello: {
+	tools:: [tool.cc]
+	files: ["main.c"]
+
+	cc: ns(defines=["MYBUILD_VERSION": MYBUILD_VERSION])
+}
