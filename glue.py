@@ -16,6 +16,7 @@ from mybuild.binding import mydsl
 from mybuild.binding import pydsl
 
 from util.operator import attr
+from util.namespace import *
 
 
 class LoaderMixin(object):
@@ -29,7 +30,7 @@ class LoaderMixin(object):
                     project = self.dsl.project,
                     option  = self.dsl.option,
                     tool    = tool,
-                    ns      = NsObject,
+                    ns      = Namespace,
                     MYBUILD_VERSION=mybuild.__version__)
 
 
@@ -42,24 +43,6 @@ class PyDslLoader(LoaderMixin, pyfile.PyFileLoader):
     FILENAME = 'Pybuild'
     dsl = pydsl
 
-
-
-class NsObject(object):
-    """docstring for NsObject"""
-
-    def __init__(self, dict_={}, **kwargs):
-        super(NsObject, self).__init__()
-        self.__dict__.update(dict_, **kwargs)
-
-class RoNsObject(NsObject):
-    """docstring for RoNsObject"""
-
-    def __setattr__(self, attr, value):
-        raise AttributeError
-    def __delattr__(self, attr):
-        raise AttributeError
-
-
 class WafBasedTool(mybuild.core.Tool):
     waf_tools = []
 
@@ -68,21 +51,16 @@ class WafBasedTool(mybuild.core.Tool):
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
-
-class CcNs(NsObject):
-    def __init__(self, dict_={}, **kwargs):
-        super(CcNs, self).__init__(defines={})
-
 class CcTool(WafBasedTool):
     waf_tools = ['compiler_c']
 
     def create_namespaces(self, module):
-        return dict(cc=CcNs())
+        return dict(cc=Namespace(defines={}))
 
     def build(self, module, ctx):
-        for name, value in iteritems(module.cc.defines):
-            ctx.define(name, value)
+        for name in module.cc.defines:
+            ctx.define(name, module.cc.defines[name])
         ctx.program(source=module.files, target=module._name)
 
-tool = NsObject(cc=CcTool())
+tool = Namespace(cc=CcTool())
 
