@@ -13,6 +13,7 @@ from _compat import _calculate_meta
 
 from util.prop import cached_property
 from util.prop import cached_class_property
+from util.namespace import *
 
 
 builtin_names = [
@@ -31,6 +32,7 @@ builtin_names = [
     'False', 'True', 'None',
 
     # Mylang-specific
+    '__my_new_namespace__',
     '__my_new_type__',
     '__my_call_args__',
     '__my_exec_module__',
@@ -59,6 +61,18 @@ class __my_exec_module__(Exception):
 def __my_call_args__(*args, **kwargs):
     return args, kwargs
 
+
+def __my_new_namespace__(self, docstring, bindings):
+    """Create a class object dynamically using the appropriate metaclass."""
+    ns = Namespace()
+
+    if docstring is not None:
+        ns.__doc__ = docstring
+
+    for name, func, static in bindings:
+        ns[name] = func(self)
+
+    return ns
 
 # Provide a similar to PEP 3115 mechanism for class creation
 def __my_new_type__(meta, name,

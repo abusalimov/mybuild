@@ -20,9 +20,10 @@ from mylang.helpers import rule
 
 # Runtime intrinsics and internal auxiliary names.
 
-MY_NEW_TYPE    = '__my_new_type__'
-MY_CALL_ARGS   = '__my_call_args__'
-MY_EXEC_MODULE = '__my_exec_module__'
+MY_NEW_TYPE      = '__my_new_type__'
+MY_NEW_NAMESPACE = '__my_new_namespace__'
+MY_CALL_ARGS     = '__my_call_args__'
+MY_EXEC_MODULE   = '__my_exec_module__'
 
 DFL_TYPE_NAME  = '_'
 CLS_ARG        = 'cls'
@@ -366,9 +367,17 @@ def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
     emit_stmt(p, copy_loc(ast.Expr(value), value))
     return namefrags, colons
 
-@rule  # target1: ...
-def p_binding_simple(p, namefrags=2, colons=3):
+@rule  # target1: { ... }
+def p_binding_namespace(p, namefrags=2, colons=3):
     """binding_simple : nl_off namefrags colons nl_on stmtexpr"""
+    return namefrags, colons
+
+@rule  # target1: ...
+def p_binding_simple(p, namefrags=2, colons=3, body=-1):
+    """binding_simple : nl_off namefrags colons nl_on typebody"""
+    args = [ast.x_Name("self")] + list(body)
+    value = ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), args)
+    emit_stmt(p, ast.Expr(value))
     return namefrags, colons
 
 @rule  # : -> False,  :: -> True
