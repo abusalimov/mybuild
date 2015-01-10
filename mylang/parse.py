@@ -343,8 +343,7 @@ def p_typesuite(p, bindings=-1):
 
 @rule
 def p_typestmt(p, namefrags_colons=-1):
-    """typestmt : new_bblock binding_typedef
-       typestmt : new_bblock binding_simple"""
+    """typestmt : new_bblock binding"""
     bblock = pop_bblock(p)
 
     namefrags, colons = namefrags_colons
@@ -361,21 +360,28 @@ def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
                       colons=5, body=-1):
     # Here namefrags is used instead of pytest to work around
     # a reduce/reduce conflict with simple binding (pytest/namefrags).
-    """binding_typedef : nl_off namefrags namefrags mb_call colons nl_on typebody"""
+    """binding : nl_off namefrags namefrags mb_call colons nl_on typebody"""
     value = build_typedef(body, build_chain(metatype_builders),
                           namefrags, mb_call_builder)
     emit_stmt(p, copy_loc(ast.Expr(value), value))
     return namefrags, colons
 
-@rule  # target1: { ... }
-def p_binding_namespace(p, namefrags=2, colons=3):
-    """binding_simple : nl_off namefrags colons nl_on stmtexpr"""
+@rule  # target1: ...
+def p_binding_simple(p, namefrags=2, colons=3):
+    """binding : nl_off namefrags colons nl_on stmtexpr"""
     return namefrags, colons
 
-@rule  # target1: ...
-def p_binding_simple(p, namefrags=2, colons=3, body=-1):
-    """binding_simple : nl_off namefrags colons nl_on typebody"""
-    args = [ast.x_Name("self")] + list(body)
+@rule  # target1: { ... }
+def p_binding_namespace(p, namefrags=2, colons=3, body=-1):
+    """binding : nl_off namefrags colons nl_on typebody"""
+    module_level = p.parser.bblock.parent.is_global
+
+    if not module_level:
+        args = [ast.x_Name(SELF_ARG)]
+    else:
+        args = [ast.x_Const(None)]
+
+    args += list(body)
     value = ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), args)
     emit_stmt(p, ast.Expr(value))
     return namefrags, colons
