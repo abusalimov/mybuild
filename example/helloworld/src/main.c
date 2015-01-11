@@ -8,6 +8,6 @@
 #include <stdio.h>
 
 int main(void) {
-	printf("Hello from Mybuild v%s!\n", MYBUILD_VERSION);
+	printf("%s from Mybuild v%s!\n", GREETING, MYBUILD_VERSION);
 	return 0;
 }
