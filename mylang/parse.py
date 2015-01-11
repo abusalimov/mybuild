@@ -123,10 +123,6 @@ class BuildingBlock(object):
             self.depth = 0
 
     @property
-    def is_global(self):
-        return self.parent is None
-
-    @property
     def docstring_stmt(self):
         if (self.stmts and
             isinstance(self.stmts[0], ast.Expr) and
@@ -161,17 +157,8 @@ class BuildingBlock(object):
         self.make_returning()
         return self.parent.build_func_from(self.stmts, arguments, name)
 
-    def fold_into_binding(self, static=False):
-        module_level = self.parent.is_global
-
-        if module_level and static:
-            raise MySyntaxError("Unexpected static binding at module level")
-
-        if not module_level:
-            args = [ast.x_arg(CLS_ARG if static else SELF_ARG)]
-        else:
-            args = []
-
+    def fold_into_binding(self, is_static=False):
+        args = [ast.x_arg(CLS_ARG if is_static else SELF_ARG)]
         return self.fold_into_func(ast.x_arguments(args))
 
 
@@ -347,12 +334,13 @@ def p_typestmt(p, namefrags_colons=-1):
     bblock = pop_bblock(p)
 
     namefrags, colons = namefrags_colons
-    qualname = '.'.join(namefrag().id for namefrag, loc in namefrags)
+    namefrag_list = ast.List([set_loc(ast.Str(namefrag().id), loc)
+                              for namefrag, loc in namefrags], ast.Load())
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [ast.Str(qualname), func, ast.x_Const(is_static)]
+    binding_triple = [namefrag_list, func, ast.x_Const(is_static)]
     return set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])
 
 @rule  # metatype target(): { ... }
@@ -374,14 +362,8 @@ def p_binding_simple(p, namefrags=2, colons=3):
 @rule  # target1: { ... }
 def p_binding_namespace(p, namefrags=2, colons=3, body=-1):
     """binding : nl_off namefrags colons nl_on typebody"""
-    module_level = p.parser.bblock.parent.is_global
-
-    if not module_level:
-        args = [ast.x_Name(SELF_ARG)]
-    else:
-        args = [ast.x_Const(None)]
-
-    args += list(body)
+    is_static = (colons == '::')
+    args = [ast.x_Name(CLS_ARG if is_static else SELF_ARG)] + list(body)
     value = ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), args)
     emit_stmt(p, ast.Expr(value))
     return namefrags, colons
