@@ -9,6 +9,7 @@ __date__ = "2013-07-05"
 from _compat import *
 
 import functools
+import itertools
 import ply.yacc
 
 from mylang import lex
@@ -225,8 +226,8 @@ class AssigningTransformer(ResultingTransformer):
         return ast.Assign([ast.Name(self.name, ast.Store())], expr)
 
 
-def emit_stmt(p, stmt):
-    p.parser.bblock.append(stmt)
+def emit_stmt(p, *stmts):
+    p.parser.bblock.append(*stmts)
 
 def push_new_bblock(p):
     p.parser.bblock = BuildingBlock(p.parser.bblock)
@@ -314,34 +315,51 @@ def p_stmtexpr(p, value):
     emit_stmt(p, copy_loc(ast.Expr(value), value))
 
 @rule
-def p_typesuite(p, bindings=-1):
+def p_typesuite(p, bindings_list=-1):
     """typesuite : skipnl typestmts"""
-    if bindings and not isinstance(bindings[0], ast.Tuple):
+    if bindings_list and not isinstance(bindings_list[0], list):
         # We don't want a docstring to have location, because otherwise
         # CPython (debug) crashes with some lineno-related assertion failure.
         # That is why a builder is invoked directly, not through build_node.
-        doc_builder, doc_loc = bindings.pop(0)
+        doc_builder, doc_loc = bindings_list.pop(0)
         doc_str = doc_builder()
     else:
         doc_str = ast.x_Const(None)
 
+    bindings = list(itertools.chain.from_iterable(bindings_list))
     return doc_str, ast.List(bindings, ast.Load())
 
+def namefrags_to_ast_strs(namefrags):
+    return [set_loc(ast.Str(namefrag().id), loc) for namefrag, loc in namefrags]
+
+@rule  # target1: { ... }
+def p_typestmt_namespace(p, namefrags=3, colons=4, body=-1):
+    """typestmt : new_bblock nl_off namefrags colons nl_on typebody"""
+    bblock = pop_bblock(p)
+    emit_stmt(p, *bblock.stmts)
+
+    bindings = body[1].elts
+
+    namefrags_elts = namefrags_to_ast_strs(namefrags)
+    for binding_tuple in bindings:
+        namefrag_list = binding_tuple.elts[0]
+        namefrag_list.elts[:0] = namefrags_elts
+
+    return bindings
 
 @rule
-def p_typestmt(p, namefrags_colons=-1):
+def p_typestmt(p, namefrags_colons=2):
     """typestmt : new_bblock binding"""
     bblock = pop_bblock(p)
 
     namefrags, colons = namefrags_colons
-    namefrag_list = ast.List([set_loc(ast.Str(namefrag().id), loc)
-                              for namefrag, loc in namefrags], ast.Load())
+    namefrag_list = ast.List(namefrags_to_ast_strs(namefrags), ast.Load())
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
     binding_triple = [namefrag_list, func, ast.x_Const(is_static)]
-    return set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])
+    return [set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])]
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
@@ -359,14 +377,6 @@ def p_binding_simple(p, namefrags=2, colons=3):
     """binding : nl_off namefrags colons nl_on stmtexpr"""
     return namefrags, colons
 
-@rule  # target1: { ... }
-def p_binding_namespace(p, namefrags=2, colons=3, body=-1):
-    """binding : nl_off namefrags colons nl_on typebody"""
-    is_static = (colons == '::')
-    args = [ast.x_Name(CLS_ARG if is_static else SELF_ARG)] + list(body)
-    value = ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), args)
-    emit_stmt(p, ast.Expr(value))
-    return namefrags, colons
 
 @rule  # : -> False,  :: -> True
 def p_colons(p, colons):
