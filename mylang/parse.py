@@ -396,12 +396,6 @@ def p_stub(p, builder):
 
 
 @rule_wloc
-def p_myatom_closure(p, closure):
-    """myatom : LBRACE RBRACE"""
-    return lambda: ast.x_Name('XXX')
-    raise NotImplementedError
-
-@rule_wloc
 def p_myatom_typedef(p, metatype, body):
     """myatom : pytest typebody"""
     return lambda: build_typedef(body, metatype)
