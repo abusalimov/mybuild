@@ -86,25 +86,25 @@ def build_chain(builder_wlocs, expr=None):
     return expr
 
 
-def groupby_namefrag(bindings):
+def groupby_name(bindings):
     """
-    Groups bindings by the first namefrag. Namefrag lists in the resulting
-    bindings don't contain the common ones.
+    Groups bindings by the first name fragment. The qualname in the resulting
+    bindings don't contain the first name fragment.
 
     Returns:
-        A list of (common_namefrag, loc, [bindings])
+        A list of (common_name, loc, [bindings])
     """
     groups = []
     binding_group = []
     prev_name, prev_loc = bindings[0][0][0]
 
-    for namefrags, func, static in bindings:
-        name, loc = namefrags[0]
+    for qualname, func, static in bindings:
+        name, loc = qualname[0]
         if name != prev_name:
             groups.append((prev_name, prev_loc, binding_group))
             prev_name = name; prev_loc = loc
             binding_group = []
-        binding = (namefrags[1:], func, static)
+        binding = (qualname[1:], func, static)
         binding_group.append(binding)
     groups.append((prev_name, prev_loc, binding_group))
 
@@ -115,12 +115,12 @@ def fold_into_namespace_recursive(bindings, location):
     keywords  = []
 
     if len(bindings[0][0]) is 0:
-        namefrags, func, static = bindings[0]
+        qualname, func, static = bindings[0]
         if len(bindings) is not 1:
             raise MySyntaxError('namespace already has this item', location)
         return ast.x_Call(ast.x_Name(func.id), [ast.x_Name(SELF_ARG)])
 
-    for name, loc, group in groupby_namefrag(bindings):
+    for name, loc, group in groupby_name(bindings):
         arg = fold_into_namespace_recursive(group, loc)
         keyword = set_loc(ast.keyword(name, arg), loc)
         keywords.append(keyword)
@@ -137,7 +137,7 @@ def fold_into_namespace(p, bindings, location):
 
 def fold_bindings(p, bindings):
     """
-    Folds bindings so that each namefrag matches a correponding namespace.
+    Folds bindings so that each name matches a correponding namespace.
 
     Returns:
         An AST structure: [(name, func, is_static)*].
@@ -147,7 +147,7 @@ def fold_bindings(p, bindings):
     sorted_body = sorted(bindings,
                          key=lambda binding: [name for name, loc in binding[0]])
 
-    for name, loc, group in groupby_namefrag(sorted_body):
+    for name, loc, group in groupby_name(sorted_body):
         keyword = set_loc(ast.Str(name), loc)
         func = fold_into_namespace(p, group, loc)
         triple = [keyword, func, ast.x_Const(False)]
@@ -156,20 +156,20 @@ def fold_bindings(p, bindings):
     return ast.List(binding_asts, ast.Load())
 
 
-def build_typedef(p, body, metatype, namefrags=None, call_builder=None):
+def build_typedef(p, body, metatype, qualname=None, call_builder=None):
     # metatype { ... } ->
     # __my_new_type__(metatype, '_', <module>, [...])
     #
-    # metatype namefrags { ... } ->
-    # __my_new_type__(metatype, 'namefrags', <module>, [...])
+    # metatype qualname { ... } ->
+    # __my_new_type__(metatype, 'qualname', <module>, [...])
     #
-    # metatype namefrags(...) { ... } ->
-    # __my_new_type__(metatype, 'namefrags', <module>, [...],
+    # metatype qualname(...) { ... } ->
+    # __my_new_type__(metatype, 'qualname', <module>, [...],
     #                 *__my_call_args__(...))
     assert len(body) == 2, "body must be a tuple of (doc_str, bindings)"
 
-    if namefrags is not None:
-        name = '.'.join(namefrag for namefrag, loc in namefrags)
+    if qualname is not None:
+        name = '.'.join(name for name, loc in qualname)
     else:
         name = DFL_TYPE_NAME
 
@@ -419,47 +419,47 @@ def p_typesuite(p, bindings_list=-1):
 
 
 @rule  # target1: { ... }
-def p_typestmt_namespace(p, namefrags=3, colons=4, body=-1):
-    """typestmt : new_bblock nl_off namefrags colons nl_on typebody"""
+def p_typestmt_namespace(p, qualname=3, colons=4, body=-1):
+    """typestmt : new_bblock nl_off qualname colons nl_on typebody"""
     bblock = pop_bblock(p)
     emit_stmt(p, *bblock.stmts)
 
     bindings = body[1]
 
     for binding_tuple in bindings:
-        namefrag_list = binding_tuple[0]
-        namefrag_list[:0] = namefrags
+        binding_qualname = binding_tuple[0]
+        binding_qualname[:0] = qualname
 
     return bindings
 
 @rule
-def p_typestmt(p, namefrags_colons=2):
+def p_typestmt(p, qualname_colons=2):
     """typestmt : new_bblock binding"""
     bblock = pop_bblock(p)
 
-    namefrags, colons = namefrags_colons
+    qualname, colons = qualname_colons
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [namefrags, func, ast.x_Const(is_static)]
+    binding_triple = [qualname, func, ast.x_Const(is_static)]
     return [binding_triple]
 
 @rule  # metatype target(): { ... }
-def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
+def p_binding_typedef(p, metatype_builders=2, qualname=3, mb_call_builder=4,
                       colons=5, body=-1):
-    # Here namefrags is used instead of pytest to work around
-    # a reduce/reduce conflict with simple binding (pytest/namefrags).
-    """binding : nl_off namefrags namefrags mb_call colons nl_on typebody"""
+    # Here qualname is used instead of pytest to work around
+    # a reduce/reduce conflict with simple binding (pytest/qualname).
+    """binding : nl_off qualname qualname mb_call colons nl_on typebody"""
     value = build_typedef(p, body, build_chain(metatype_builders),
-                          namefrags, mb_call_builder)
+                          qualname, mb_call_builder)
     emit_stmt(p, copy_loc(ast.Expr(value), value))
-    return namefrags, colons
+    return qualname, colons
 
 @rule  # target1: ...
-def p_binding_simple(p, namefrags=2, colons=3):
-    """binding : nl_off namefrags colons nl_on stmtexpr"""
-    return namefrags, colons
+def p_binding_simple(p, qualname=2, colons=3):
+    """binding : nl_off qualname colons nl_on stmtexpr"""
+    return qualname, colons
 
 
 @rule  # : -> False,  :: -> True
@@ -495,9 +495,9 @@ def p_myatom_typedef(p, metatype, body):
     return lambda: build_typedef(p, body, metatype)
 
 @rule_wloc
-def p_myatom_typedef_named(p, metatype, namefrags, mb_call_builder, body):
-    """myatom : pytest namefrags mb_call typebody"""
-    return lambda: build_typedef(p, body, metatype, namefrags, mb_call_builder)
+def p_myatom_typedef_named(p, metatype, qualname, mb_call_builder, body):
+    """myatom : pytest qualname mb_call typebody"""
+    return lambda: build_typedef(p, body, metatype, qualname, mb_call_builder)
 
 
 @rule_wloc
@@ -650,7 +650,7 @@ def p_testlist_list(p, l_el, el=-1):
 @rule
 def p_list_head(p, el):
     """
-    namefrags          :  name
+    qualname           :  name
 
     typestmts_plus     :  string
     typestmts_plus     :  typestmt
@@ -664,7 +664,7 @@ def p_list_head(p, el):
 @rule
 def p_list_tail(p, l, el=-1):
     """
-    namefrags          :  namefrags       PERIOD     name
+    qualname           :  qualname       PERIOD     name
 
     typestmts_plus     :  typestmts_plus  stmtdelim  typestmt
     arguments_plus     :  arguments_plus  COMMA      argument
