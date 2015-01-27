@@ -64,26 +64,9 @@ def __my_call_args__(*args, **kwargs):
     return args, kwargs
 
 
-def construct_ns(namefrags, func, obj=None):
-    def construct_ns_recurse(nf):
-        if len(nf) == 0:
-            return func(obj)
+def __my_new_namespace__(**kwargs):
+    return Namespace(**kwargs)
 
-        return Namespace(**{ nf[0]: construct_ns_recurse(nf[1:]) })
-    return construct_ns_recurse(namefrags[1:])
-
-
-def __my_new_namespace__(self, docstring, bindings):
-    """Create a class object dynamically using the appropriate metaclass."""
-    ns = Namespace()
-
-    if docstring is not None:
-        ns.__doc__ = docstring
-
-    for name, func, static in bindings:
-        ns[name[0]] = construct_ns(name, func, self)
-
-    return ns
 
 # Provide a similar to PEP 3115 mechanism for class creation
 def __my_new_type__(meta, name,
@@ -106,12 +89,11 @@ my_new_type = __my_new_type__
 
 
 def my_exec_body(ns, delegate, bindings=[]):
-    for namefrags, func, static in bindings:
-        if namefrags is None:
-            namefrags = [delegate.default_binding_name]
-        func.__name__ = namefrags[-1]
-        ns[namefrags[0]] = delegate.create_binding(namefrags[0],
-            partial(construct_ns, namefrags, func), static)
+    for name, func, static in bindings:
+        if name is None:
+            name = delegate.default_binding_name
+        func.__name__ = name
+        ns[name] = delegate.create_binding(name, func, static)
 
 
 def my_prepare_type(meta, name, bases=(), kwds={}):
