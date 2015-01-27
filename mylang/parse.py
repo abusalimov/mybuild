@@ -74,6 +74,16 @@ def build_chain(builder_wlocs, expr=None):
         expr = build_node(builder_wloc, expr)
     return expr
 
+# TODO: remove it
+def bindings_to_ast(bindings):
+    tmp = []
+    for binding in bindings:
+        loc = binding[0][0][1]
+        namefrag_list = namefrags_to_ast_strs(binding[0])
+        binding[0] = ast.List(namefrag_list, ast.Load())
+        tmp.append(set_loc(ast.Tuple(binding, ast.Load()), loc))
+    return ast.List(tmp, ast.Load())
+
 def build_typedef(body, metatype, namefrags=None, call_builder=None):
     # metatype { ... } ->
     # __my_new_type__(metatype, '_', <module>, [...])
@@ -84,14 +94,18 @@ def build_typedef(body, metatype, namefrags=None, call_builder=None):
     # metatype namefrags(...) { ... } ->
     # __my_new_type__(metatype, 'namefrags', <module>, [...],
     #                 *__my_call_args__(...))
-    assert len(body) == 2, "body must be a tuple of (doc_str, bindings_list)"
+    assert len(body) == 2, "body must be a tuple of (doc_str, bindings)"
 
     if namefrags is not None:
         name = '.'.join(namefrag().id for namefrag, loc in namefrags)
     else:
         name = DFL_TYPE_NAME
 
-    args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME)] + list(body)
+    doc_str, bindings = body
+    bindings = bindings_to_ast(bindings)
+
+    args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME),
+            doc_str, bindings]
 
     starargs = None
     if call_builder is not None:
@@ -275,9 +289,10 @@ def p_exec_start(p, docstring_bindings=-1):
                   ast.Assign([ast.Name(_MODULE_NAME, ast.Store())],
                              ast.x_Name('__name__')))
 
-    doc_str, bindings_list = docstring_bindings
+    doc_str, bindings = docstring_bindings
+    bindings = bindings_to_ast(bindings)
 
-    bblock.append(ast.Return(bindings_list))
+    bblock.append(ast.Return(bindings))
 
     suite_func = ast.x_FunctionDef(_MODULE_EXEC, ast.x_arguments(),
                                    bblock.stmts,
@@ -296,13 +311,13 @@ def p_exec_start(p, docstring_bindings=-1):
 @rule
 def p_typebody(p, docstring_bindings=2, typeret_func=-1):
     """typebody : LBRACE typesuite RBRACE typeret"""
-    doc_str, bindings_list = docstring_bindings
+    doc_str, bindings = docstring_bindings
 
     if typeret_func is not None:
-        binding_triple = [ast.x_Const(None), typeret_func, ast.x_Const(None)]
-        bindings_list.elts.append(ast.Tuple(binding_triple, ast.Load()))
+        binding_triple = (ast.x_Const(None), typeret_func, ast.x_Const(None))
+        bindings.append(binding_triple)
 
-    return doc_str, bindings_list
+    return doc_str, bindings
 
 @rule
 def p_typeret(p):
@@ -327,7 +342,7 @@ def p_typesuite(p, bindings_list=-1):
         doc_str = ast.x_Const(None)
 
     bindings = list(itertools.chain.from_iterable(bindings_list))
-    return doc_str, ast.List(bindings, ast.Load())
+    return doc_str, bindings
 
 def namefrags_to_ast_strs(namefrags):
     return [set_loc(ast.Str(namefrag().id), loc) for namefrag, loc in namefrags]
@@ -338,12 +353,11 @@ def p_typestmt_namespace(p, namefrags=3, colons=4, body=-1):
     bblock = pop_bblock(p)
     emit_stmt(p, *bblock.stmts)
 
-    bindings = body[1].elts
+    bindings = body[1]
 
-    namefrags_elts = namefrags_to_ast_strs(namefrags)
     for binding_tuple in bindings:
-        namefrag_list = binding_tuple.elts[0]
-        namefrag_list.elts[:0] = namefrags_elts
+        namefrag_list = binding_tuple[0]
+        namefrag_list[:0] = namefrags
 
     return bindings
 
@@ -353,13 +367,12 @@ def p_typestmt(p, namefrags_colons=2):
     bblock = pop_bblock(p)
 
     namefrags, colons = namefrags_colons
-    namefrag_list = ast.List(namefrags_to_ast_strs(namefrags), ast.Load())
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [namefrag_list, func, ast.x_Const(is_static)]
-    return [set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])]
+    binding_triple = [namefrags, func, ast.x_Const(is_static)]
+    return [binding_triple]
 
 @rule  # metatype target(): { ... }
 def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
