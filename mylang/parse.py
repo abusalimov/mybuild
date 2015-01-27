@@ -66,8 +66,18 @@ def rule_wloc(func):
 
 # AST fragments builders.
 
+def name_builder(name):
+    def builder(expr=None):
+        if expr is not None:
+            return ast.Attribute(expr, name, ast.Load())
+        else:
+            return ast.x_Name(name)
+    return builder
+
 def build_node(builder_wloc, expr=None):
     builder, loc = builder_wloc
+    if not callable(builder):
+        builder = name_builder(builder)
     return set_loc(builder(expr) if expr is not None else builder(), loc)
 
 def build_chain(builder_wlocs, expr=None):
@@ -159,7 +169,7 @@ def build_typedef(p, body, metatype, namefrags=None, call_builder=None):
     assert len(body) == 2, "body must be a tuple of (doc_str, bindings)"
 
     if namefrags is not None:
-        name = '.'.join(namefrag().id for namefrag, loc in namefrags)
+        name = '.'.join(namefrag for namefrag, loc in namefrags)
     else:
         name = DFL_TYPE_NAME
 
@@ -408,10 +418,6 @@ def p_typesuite(p, bindings_list=-1):
     return doc_str, bindings
 
 
-def namefrags_to_strs(namefrags):
-    return [(namefrag().id, loc) for namefrag, loc in namefrags]
-
-
 @rule  # target1: { ... }
 def p_typestmt_namespace(p, namefrags=3, colons=4, body=-1):
     """typestmt : new_bblock nl_off namefrags colons nl_on typebody"""
@@ -422,7 +428,7 @@ def p_typestmt_namespace(p, namefrags=3, colons=4, body=-1):
 
     for binding_tuple in bindings:
         namefrag_list = binding_tuple[0]
-        namefrag_list[:0] = namefrags_to_strs(namefrags)
+        namefrag_list[:0] = namefrags
 
     return bindings
 
@@ -436,8 +442,7 @@ def p_typestmt(p, namefrags_colons=2):
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [namefrags_to_strs(namefrags),
-                        func, ast.x_Const(is_static)]
+    binding_triple = [namefrags, func, ast.x_Const(is_static)]
     return [binding_triple]
 
 @rule  # metatype target(): { ... }
@@ -588,12 +593,7 @@ def p_argument_kw(p, key, value=3):
 def p_trailer_attr_or_name(p, name=-1):  # x.attr or name
     """trailer : PERIOD ID
        name    : ID"""
-    def builder(expr=None):
-        if expr is not None:
-            return ast.Attribute(expr, name, ast.Load())
-        else:
-            return ast.x_Name(name)
-    return builder
+    return name
 
 @rule_wloc
 def p_trailer_item(p, item=2):  # x[item]
