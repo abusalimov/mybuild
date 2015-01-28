@@ -121,11 +121,11 @@ def groupby_name(bindings):
 def fold_into_namespace_recursive(bindings, location):
     keywords  = []
 
-    assert(len(bindings) is not 0)
+    assert(len(bindings))
 
-    if len(bindings[0].qualname) is 0:
+    if not len(bindings[0].qualname):
         func = bindings[0].func
-        if len(bindings) is not 1:
+        if len(bindings) != 1:
             raise MySyntaxError('namespace already has this item', location)
         return ast.x_Call(ast.x_Name(func.id), [ast.x_Name(SELF_ARG)])
 
