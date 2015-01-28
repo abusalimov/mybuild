@@ -58,12 +58,15 @@ class CcTool(WafBasedTool):
         return dict(cc=Namespace(defines={}))
 
     def build(self, module, ctx):
+        use = []
         for name in module.cc.defines:
             ctx.define(name, module.cc.defines[name])
+        for m in module.depends:
+            use.append(ctx.instance_map[m]._name)
         if module.is_program:
-            ctx.program(source=module.files, target=module._name)
+            ctx.program(source=module.files, target=module._name, use=use)
         else:
-            ctx.objects(source=module.files, target=module._name)
+            ctx.objects(source=module.files, target=module._name, use=use)
 
 tool = Namespace(cc=CcTool())
 

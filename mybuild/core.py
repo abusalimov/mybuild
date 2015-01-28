@@ -200,6 +200,8 @@ class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
     tools = []
+    depends = []
+    is_program = False
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)
@@ -213,8 +215,8 @@ class Module(ModuleBase):
                     setattr(self, attr, value)
 
     def _post_init(self):
-        for tool in self.tools:
-            tool.initialize_module(self)
+        for dep in self.depends:
+            self._add_constraint(dep)
 
     def _add_constraint(self, mslice, condition=True):
         self._constraints.append((mslice(), condition))

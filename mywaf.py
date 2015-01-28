@@ -103,6 +103,7 @@ def mybuild(ctx, conf_module, recurse_name=None):
         (see MybuildInstanceAccessor).
     """
     instance_map = ctx.my_resolve(conf_module)
+    setattr(ctx, 'instance_map', instance_map)
     return ctx.my_recurse(sorted(itervalues(instance_map), key=str))
 
 
@@ -132,19 +133,19 @@ def print_reason(rgraph, reason, depth):
         print ('  ' * depth, reason)
         if not reason.follow:
             return
-  
+
         literal = None
         if reason.literal is not None:
             literal = ~reason.literal
         else:
             literal = reason.cause_literals[0]
-  
+
         assert literal in rgraph.violation_graphs
-  
+
         print('---dead branch {0}---------'.format(literal))
         reason_generator = traversal(rgraph.violation_graphs[literal])
         for reason in reason_generator:
-            print_reason(rgraph, reason[0], reason[1])   
+            print_reason(rgraph, reason[0], reason[1])
         print('---------dead branch {0}---'.format(literal))
 
 
