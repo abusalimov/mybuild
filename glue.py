@@ -60,7 +60,10 @@ class CcTool(WafBasedTool):
     def build(self, module, ctx):
         for name in module.cc.defines:
             ctx.define(name, module.cc.defines[name])
-        ctx.program(source=module.files, target=module._name)
+        if module.is_program:
+            ctx.program(source=module.files, target=module._name)
+        else:
+            ctx.objects(source=module.files, target=module._name)
 
 tool = Namespace(cc=CcTool())
 
