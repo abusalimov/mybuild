@@ -10,7 +10,6 @@ from _compat import *
 
 import functools
 import itertools
-from operator import itemgetter
 from collections import namedtuple
 import ply.yacc
 
@@ -19,6 +18,8 @@ from mylang import x_ast as ast
 from mylang.location import Fileinfo
 from mylang.location import Location
 from mylang.helpers import rule
+
+from util.operator import getter
 
 
 # Runtime intrinsics and internal auxiliary names.
@@ -67,7 +68,12 @@ def rule_wloc(func):
 
 # AST fragments builders.
 
-Binding = namedtuple("Binding", ["qualname", "func", "is_static"])
+class Binding(namedtuple('Binding', 'qualname, name_locs, func, is_static')):
+    """docstring for Binding"""
+    __slots__ = ()
+
+    def __str__(self):
+        return '.'.join(self.qualname)
 
 def name_builder(name):
     def builder(expr=None):
@@ -89,47 +95,44 @@ def build_chain(builder_wlocs, expr=None):
     return expr
 
 
-def groupby_name(bindings):
+def groupby_name(bindings, tier=0):
     """
-    Groups bindings by the first name fragment. The qualname in the resulting
-    bindings don't contain the first name fragment.
+    Groups bindings by the name fragment specified by tier.
 
-    Returns:
-        A list of (common_name, loc, [binding*])
+    Yields:
+        (name, [binding*]) tuples.
     """
-    groups = []
-
-    for key, group in itertools.groupby(bindings, key=lambda b: b.qualname[0][0]):
-        group_list = list(group)
-        loc = group_list[0].qualname[0][1]
-        group = [Binding(qualname[1:], func, static)
-                for qualname, func, static in group_list]
-        groups.append((key, loc, group))
-
-    return groups
+    def name_at_tier(binding):
+        return binding.qualname[tier]
+    for name, group in itertools.groupby(bindings, key=name_at_tier):
+        yield name, list(group)
 
 
-def fold_into_namespace_recursive(bindings, location):
+def build_namespace_recursive(bindings, tier):
     keywords  = []
 
-    assert(len(bindings))
+    assert bindings, "A group must not be empty"
 
-    if not len(bindings[0].qualname):
-        func = bindings[0].func
-        if len(bindings) != 1:
-            raise MySyntaxError('namespace already has this item', location)
-        return ast.x_Call(ast.x_Name(func.id), [ast.x_Name(SELF_ARG)])
+    if len(bindings[0].qualname) == tier:
+        if len(bindings) > 1:
+            loc = bindings[1].name_locs[-1]
+            raise MySyntaxError('Namespace element repeated', loc)
 
-    for name, loc, group in groupby_name(bindings):
-        arg = fold_into_namespace_recursive(group, loc)
-        keyword = set_loc(ast.keyword(name, arg), loc)
+        return ast.x_Call(bindings[0].func, [ast.x_Name(SELF_ARG)])
+
+    for name, group in groupby_name(bindings, tier):
+        value_ast = build_namespace_recursive(group, tier+1)
+        loc = group[0].name_locs[tier]
+        keyword = set_loc(ast.keyword(name, value_ast), loc)
         keywords.append(keyword)
 
     return ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), keywords=keywords)
 
 
-def fold_into_namespace(p, bindings, location):
-    stmt = ast.Expr(fold_into_namespace_recursive(bindings, location))
+def fold_into_namespace(p, bindings):
+    if len(bindings) == 1:
+        return bindings[0].func
+    stmt = ast.Expr(build_namespace_recursive(bindings, 1))
     bblock = BuildingBlock(p.parser.bblock)
     bblock.append(stmt)
     return bblock.fold_into_binding()
@@ -144,13 +147,12 @@ def fold_bindings(p, bindings):
     """
     binding_asts = []
 
-    sorted_body = sorted(bindings,
-                         key=lambda binding: [name for name, loc in binding[0]])
+    for name, group in groupby_name(sorted(bindings, key=getter.qualname)):
+        func = fold_into_namespace(p, group)
+        loc = group[0].name_locs[0]
+        name_str = set_loc(ast.Str(name), loc)
 
-    for name, loc, group in groupby_name(sorted_body):
-        keyword = set_loc(ast.Str(name), loc)
-        func = fold_into_namespace(p, group, loc)
-        triple = [keyword, func, ast.x_Const(False)]
+        triple = [name_str, func, ast.x_Const(False)]
         binding_asts.append(ast.Tuple(triple, ast.Load()))
 
     return ast.List(binding_asts, ast.Load())
@@ -384,13 +386,7 @@ def p_exec_start(p, docstring_bindings=-1):
 @rule
 def p_typebody(p, docstring_bindings=2, typeret_func=-1):
     """typebody : LBRACE typesuite RBRACE typeret"""
-    doc_str, bindings = docstring_bindings
-
-    if typeret_func is not None:
-        binding = Binding(ast.x_Const(None), typeret_func, ast.x_Const(None))
-        bindings.append(binding)
-
-    return doc_str, bindings
+    return docstring_bindings
 
 @rule
 def p_typeret(p):
@@ -419,15 +415,18 @@ def p_typesuite(p, bindings_list=-1):
 
 
 @rule  # target1: { ... }
-def p_typestmt_namespace(p, qualname=3, colons=4, body=-1):
+def p_typestmt_namespace(p, qualname_wlocs=3, colons=4, body=-1):
     """typestmt : new_bblock nl_off qualname colons nl_on typebody"""
     bblock = pop_bblock(p)
     emit_stmt(p, *bblock.stmts)
+
+    qualname, name_locs = map(tuple, zip(*qualname_wlocs))
 
     bindings = body[1]
 
     for binding in bindings:
         binding.qualname[:0] = qualname
+        binding.name_locs[:0] = name_locs
 
     return bindings
 
@@ -436,12 +435,14 @@ def p_typestmt(p, qualname_colons=2):
     """typestmt : new_bblock binding"""
     bblock = pop_bblock(p)
 
-    qualname, colons = qualname_colons
+    qualname_wlocs, colons = qualname_colons
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = Binding(qualname, func, ast.x_Const(is_static))
+    qualname, name_locs = map(list, zip(*qualname_wlocs))
+    binding_triple = Binding(qualname, name_locs,
+                             func, ast.x_Const(is_static))
     return [binding_triple]
 
 @rule  # metatype target(): { ... }
