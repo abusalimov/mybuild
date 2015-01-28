@@ -95,25 +95,16 @@ def groupby_name(bindings):
     bindings don't contain the first name fragment.
 
     Returns:
-        A list of (common_name, loc, [bindings])
+        A list of (common_name, loc, [binding*])
     """
     groups = []
-    binding_group = []
 
-    if len(bindings) is 0:
-        return[]
-
-    prev_name, prev_loc = bindings[0].qualname[0]
-
-    for qualname, func, static in bindings:
-        name, loc = qualname[0]
-        if name != prev_name:
-            groups.append((prev_name, prev_loc, binding_group))
-            prev_name = name; prev_loc = loc
-            binding_group = []
-        binding = Binding(qualname[1:], func, static)
-        binding_group.append(binding)
-    groups.append((prev_name, prev_loc, binding_group))
+    for key, group in itertools.groupby(bindings, key=lambda b: b.qualname[0][0]):
+        group_list = list(group)
+        loc = group_list[0].qualname[0][1]
+        group = [Binding(qualname[1:], func, static)
+                for qualname, func, static in group_list]
+        groups.append((key, loc, group))
 
     return groups
 
