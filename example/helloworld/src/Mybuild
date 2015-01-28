@@ -1,4 +1,10 @@
+module pybuild_pretty: {
+	tools:: [tool.cc]
+	files: ["pybuild_pretty.c"]
+}
+
 module hello: {
+	is_program : True
 	tools:: [tool.cc]
 	files: ["main.c"]
 
@@ -7,4 +13,6 @@ module hello: {
 		MYBUILD_VERSION: MYBUILD_VERSION
 		GREETING: "Hello"
 	}
+
+	depends: [pybuild_pretty]
 }

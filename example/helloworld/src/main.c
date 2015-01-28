@@ -7,7 +7,10 @@
 
 #include <stdio.h>
 
+extern void print_pybuild_pretty(void);
+
 int main(void) {
-	printf("%s from Mybuild v%s!\n", GREETING, MYBUILD_VERSION);
+	print_pybuild_pretty();
+	printf("\n%s from Pybuild v%s!\n", GREETING, MYBUILD_VERSION);
 	return 0;
 }
