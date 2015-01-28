@@ -11,6 +11,7 @@ from _compat import *
 import functools
 import itertools
 from operator import itemgetter
+from collections import namedtuple
 import ply.yacc
 
 from mylang import lex
@@ -66,6 +67,8 @@ def rule_wloc(func):
 
 # AST fragments builders.
 
+Binding = namedtuple("Binding", ["qualname", "func", "is_static"])
+
 def name_builder(name):
     def builder(expr=None):
         if expr is not None:
@@ -100,7 +103,7 @@ def groupby_name(bindings):
     if len(bindings) is 0:
         return[]
 
-    prev_name, prev_loc = bindings[0][0][0]
+    prev_name, prev_loc = bindings[0].qualname[0]
 
     for qualname, func, static in bindings:
         name, loc = qualname[0]
@@ -108,7 +111,7 @@ def groupby_name(bindings):
             groups.append((prev_name, prev_loc, binding_group))
             prev_name = name; prev_loc = loc
             binding_group = []
-        binding = (qualname[1:], func, static)
+        binding = Binding(qualname[1:], func, static)
         binding_group.append(binding)
     groups.append((prev_name, prev_loc, binding_group))
 
@@ -120,8 +123,8 @@ def fold_into_namespace_recursive(bindings, location):
 
     assert(len(bindings) is not 0)
 
-    if len(bindings[0][0]) is 0:
-        qualname, func, static = bindings[0]
+    if len(bindings[0].qualname) is 0:
+        func = bindings[0].func
         if len(bindings) is not 1:
             raise MySyntaxError('namespace already has this item', location)
         return ast.x_Call(ast.x_Name(func.id), [ast.x_Name(SELF_ARG)])
@@ -393,8 +396,8 @@ def p_typebody(p, docstring_bindings=2, typeret_func=-1):
     doc_str, bindings = docstring_bindings
 
     if typeret_func is not None:
-        binding_triple = (ast.x_Const(None), typeret_func, ast.x_Const(None))
-        bindings.append(binding_triple)
+        binding = Binding(ast.x_Const(None), typeret_func, ast.x_Const(None))
+        bindings.append(binding)
 
     return doc_str, bindings
 
@@ -432,9 +435,8 @@ def p_typestmt_namespace(p, qualname=3, colons=4, body=-1):
 
     bindings = body[1]
 
-    for binding_tuple in bindings:
-        binding_qualname = binding_tuple[0]
-        binding_qualname[:0] = qualname
+    for binding in bindings:
+        binding.qualname[:0] = qualname
 
     return bindings
 
@@ -448,7 +450,7 @@ def p_typestmt(p, qualname_colons=2):
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [qualname, func, ast.x_Const(is_static)]
+    binding_triple = Binding(qualname, func, ast.x_Const(is_static))
     return [binding_triple]
 
 @rule  # metatype target(): { ... }
