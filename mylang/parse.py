@@ -96,6 +96,10 @@ def groupby_name(bindings):
     """
     groups = []
     binding_group = []
+
+    if len(bindings) is 0:
+        return[]
+
     prev_name, prev_loc = bindings[0][0][0]
 
     for qualname, func, static in bindings:
@@ -113,6 +117,8 @@ def groupby_name(bindings):
 
 def fold_into_namespace_recursive(bindings, location):
     keywords  = []
+
+    assert(len(bindings) is not 0)
 
     if len(bindings[0][0]) is 0:
         qualname, func, static = bindings[0]
@@ -664,7 +670,7 @@ def p_list_head(p, el):
 @rule
 def p_list_tail(p, l, el=-1):
     """
-    qualname           :  qualname       PERIOD     name
+    qualname           :  qualname        PERIOD     name
 
     typestmts_plus     :  typestmts_plus  stmtdelim  typestmt
     arguments_plus     :  arguments_plus  COMMA      argument
