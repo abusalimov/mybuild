@@ -24,15 +24,17 @@ _logging.addLevelName(_logging.DUMP, 'DUMP')
 
 logging_defaults = dict(
     level=_logging.DEBUG,
-    filemode='w',
     format='%(levelname)-8s%(name)s:\t%(message)s',
 )
 
 def init_logging(filename_or_stream, **kwargs):
     init_dict = dict(logging_defaults, **kwargs)
 
-    is_string = isinstance(filename_or_stream, str)
-    init_dict['filename' if is_string else 'stream'] = filename_or_stream
+    if isinstance(filename_or_stream, str):
+        init_dict['filename'] = filename_or_stream
+        init_dict['filemode'] = 'w'
+    else:
+        init_dict['stream'] = filename_or_stream
 
     _logging.basicConfig(**init_dict)
 
