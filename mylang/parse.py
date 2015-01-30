@@ -356,15 +356,15 @@ def p_exec_start(p, docstring_bindings=-1):
     # of returning as normal.
     # Likewise any auxiliary function is defined local to the __suite.
     #
+    doc_str, bindings = docstring_bindings
+    binding_list = fold_bindings(p, bindings)
+
     bblock = pop_bblock(p)
 
     bblock.insert(0,
                   ast.Global(['__name__']),
                   ast.Assign([ast.Name(_MODULE_NAME, ast.Store())],
                              ast.x_Name('__name__')))
-
-    doc_str, bindings = docstring_bindings
-    binding_list = fold_bindings(p, bindings)
 
     bblock.append(ast.Return(binding_list))
 
