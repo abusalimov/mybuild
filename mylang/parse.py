@@ -202,14 +202,13 @@ class BuildingBlock(object):
 
     def __init__(self, parent=None):
         super(BuildingBlock, self).__init__()
+        self.parent = parent
         self.stmts = []
         self.aux_cnt = 0
 
         if parent is not None:
-            self.parent = parent
             self.depth = parent.depth + 1
         else:
-            self.parent = self
             self.depth = 0
 
     @property
