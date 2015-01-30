@@ -1,20 +1,18 @@
 
 export ROOT_DIR       := .
-export BUILD_DIR      := $(ROOT_DIR)/build/
-export CONF_DIR       := $(ROOT_DIR)/conf
 
-export RM     := rm -f
-export MKDIR  := mkdir -p
 export WAF    := $(ROOT_DIR)/waf
 
 
-PHONY: all clean
+.PHONY: all build
 
-all:
-	
+all: build
 
 config:
 	$(WAF) configure
-		
+
+build:
+	$(WAF) build
+
 clean:
-	$(RM) $(BUILD_DIR) 
+	$(WAF) clean
