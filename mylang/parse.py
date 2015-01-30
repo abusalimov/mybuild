@@ -100,7 +100,7 @@ def groupby_name(bindings, tier=0):
     Groups bindings by the name fragment specified by tier.
 
     Yields:
-        (name, [binding*]) tuples.
+        (name, [binding(s)...]) tuples.
     """
     def name_at_tier(binding):
         return binding.qualname[tier]

@@ -13,7 +13,7 @@ from _compat import _calculate_meta
 
 from util.prop import cached_property
 from util.prop import cached_class_property
-from util.namespace import *
+from util.namespace import Namespace
 
 from functools import partial
 

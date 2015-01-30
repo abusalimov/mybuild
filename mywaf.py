@@ -102,8 +102,7 @@ def mybuild(ctx, conf_module, recurse_name=None):
         The namespace root wrapped by a module instance accessor
         (see MybuildInstanceAccessor).
     """
-    instance_map = ctx.my_resolve(conf_module)
-    setattr(ctx, 'instance_map', instance_map)
+    instance_map = ctx.instance_map = ctx.my_resolve(conf_module)
     return ctx.my_recurse(sorted(itervalues(instance_map), key=str))
 
 

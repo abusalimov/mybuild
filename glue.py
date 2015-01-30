@@ -16,7 +16,7 @@ from mybuild.binding import mydsl
 from mybuild.binding import pydsl
 
 from util.operator import attr
-from util.namespace import *
+from util.namespace import Namespace
 
 
 class LoaderMixin(object):
