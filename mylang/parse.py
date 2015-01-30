@@ -129,16 +129,16 @@ def build_namespace_recursive(bindings, tier):
     return ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), keywords=keywords)
 
 
-def fold_into_namespace(bblock, bindings):
+def fold_into_namespace(p, bindings):
     if len(bindings) == 1 and len(bindings[0].qualname) == 1:
         return bindings[0].func
     stmt = ast.Expr(build_namespace_recursive(bindings, 1))
-    binding_bblock = BuildingBlock(bblock)
-    binding_bblock.append(stmt)
-    return binding_bblock.fold_into_binding()
+    bblock = BuildingBlock(p.parser.bblock)
+    bblock.append(stmt)
+    return bblock.fold_into_binding()
 
 
-def fold_bindings(bblock, bindings):
+def fold_bindings(p, bindings):
     """
     Folds bindings so that each name matches a correponding namespace.
 
@@ -148,7 +148,7 @@ def fold_bindings(bblock, bindings):
     binding_asts = []
 
     for name, group in groupby_name(sorted(bindings, key=getter.qualname)):
-        func = fold_into_namespace(bblock, group)
+        func = fold_into_namespace(p, group)
         loc = group[0].name_locs[0]
         name_str = set_loc(ast.Str(name), loc)
 
@@ -176,7 +176,7 @@ def build_typedef(p, body, metatype, qualname=None, call_builder=None):
         name = DFL_TYPE_NAME
 
     doc_str, bindings = body
-    binding_list = fold_bindings(p.parser.bblock, bindings)
+    binding_list = fold_bindings(p, bindings)
 
     args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME),
             doc_str, binding_list]
@@ -364,7 +364,7 @@ def p_exec_start(p, docstring_bindings=-1):
                              ast.x_Name('__name__')))
 
     doc_str, bindings = docstring_bindings
-    binding_list = fold_bindings(bblock, bindings)
+    binding_list = fold_bindings(p, bindings)
 
     bblock.append(ast.Return(binding_list))
 
