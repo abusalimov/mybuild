@@ -130,7 +130,7 @@ def build_namespace_recursive(bindings, tier):
 
 
 def fold_into_namespace(bblock, bindings):
-    if len(bindings) == 1:
+    if len(bindings) == 1 and len(bindings[0].qualname) == 1:
         return bindings[0].func
     stmt = ast.Expr(build_namespace_recursive(bindings, 1))
     binding_bblock = BuildingBlock(bblock)
