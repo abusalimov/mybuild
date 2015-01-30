@@ -13,6 +13,9 @@ from _compat import _calculate_meta
 
 from util.prop import cached_property
 from util.prop import cached_class_property
+from util.namespace import Namespace
+
+from functools import partial
 
 
 builtin_names = [
@@ -31,6 +34,7 @@ builtin_names = [
     'False', 'True', 'None',
 
     # Mylang-specific
+    '__my_new_namespace__',
     '__my_new_type__',
     '__my_call_args__',
     '__my_exec_module__',
@@ -60,10 +64,14 @@ def __my_call_args__(*args, **kwargs):
     return args, kwargs
 
 
+def __my_new_namespace__(**kwargs):
+    return Namespace(**kwargs)
+
+
 # Provide a similar to PEP 3115 mechanism for class creation
-def my_new_type(meta, name,
-                module=None, docstring=None, bindings=[],
-                bases=(), kwds={}):
+def __my_new_type__(meta, name,
+                    module=None, docstring=None, bindings=[],
+                    bases=(), kwds={}):
     """Create a class object dynamically using the appropriate metaclass."""
     meta, ns = my_prepare_type(meta, name, bases, kwds)
 
@@ -77,7 +85,7 @@ def my_new_type(meta, name,
 
     return meta(name, bases, ns, **kwds)
 
-__my_new_type__ = my_new_type
+my_new_type = __my_new_type__
 
 
 def my_exec_body(ns, delegate, bindings=[]):
@@ -128,7 +136,7 @@ class MyModuleDelegate(MyDelegate):
     __slots__ = ()
 
     def create_binding(self, name, func, static):
-        return func()
+        return func(None)
 
 
 def my_ns_delegate(meta, ns):

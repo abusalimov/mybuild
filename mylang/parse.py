@@ -9,6 +9,8 @@ __date__ = "2013-07-05"
 from _compat import *
 
 import functools
+import itertools
+from collections import namedtuple
 import ply.yacc
 
 from mylang import lex
@@ -17,12 +19,15 @@ from mylang.location import Fileinfo
 from mylang.location import Location
 from mylang.helpers import rule
 
+from util.operator import getter
+
 
 # Runtime intrinsics and internal auxiliary names.
 
-MY_NEW_TYPE    = '__my_new_type__'
-MY_CALL_ARGS   = '__my_call_args__'
-MY_EXEC_MODULE = '__my_exec_module__'
+MY_NEW_TYPE      = '__my_new_type__'
+MY_NEW_NAMESPACE = '__my_new_namespace__'
+MY_CALL_ARGS     = '__my_call_args__'
+MY_EXEC_MODULE   = '__my_exec_module__'
 
 DFL_TYPE_NAME  = '_'
 CLS_ARG        = 'cls'
@@ -63,8 +68,25 @@ def rule_wloc(func):
 
 # AST fragments builders.
 
+class Binding(namedtuple('Binding', 'qualname, name_locs, func, is_static')):
+    """docstring for Binding"""
+    __slots__ = ()
+
+    def __str__(self):
+        return '.'.join(self.qualname)
+
+def name_builder(name):
+    def builder(expr=None):
+        if expr is not None:
+            return ast.Attribute(expr, name, ast.Load())
+        else:
+            return ast.x_Name(name)
+    return builder
+
 def build_node(builder_wloc, expr=None):
     builder, loc = builder_wloc
+    if not callable(builder):
+        builder = name_builder(builder)
     return set_loc(builder(expr) if expr is not None else builder(), loc)
 
 def build_chain(builder_wlocs, expr=None):
@@ -72,24 +94,92 @@ def build_chain(builder_wlocs, expr=None):
         expr = build_node(builder_wloc, expr)
     return expr
 
-def build_typedef(body, metatype, namefrags=None, call_builder=None):
+
+def groupby_name(bindings, tier=0):
+    """
+    Groups bindings by the name fragment specified by tier.
+
+    Yields:
+        (name, [binding(s)...]) tuples.
+    """
+    def name_at_tier(binding):
+        return binding.qualname[tier]
+    for name, group in itertools.groupby(bindings, key=name_at_tier):
+        yield name, list(group)
+
+
+def build_namespace_recursive(bindings, tier):
+    keywords  = []
+
+    assert bindings, "A group must not be empty"
+
+    if len(bindings[0].qualname) == tier:
+        if len(bindings) > 1:
+            loc = bindings[1].name_locs[-1]
+            raise MySyntaxError('Namespace element repeated', loc)
+
+        return ast.x_Call(bindings[0].func, [ast.x_Name(SELF_ARG)])
+
+    for name, group in groupby_name(bindings, tier):
+        value_ast = build_namespace_recursive(group, tier+1)
+        loc = group[0].name_locs[tier]
+        keyword = set_loc(ast.keyword(name, value_ast), loc)
+        keywords.append(keyword)
+
+    return ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), keywords=keywords)
+
+
+def fold_into_namespace(p, bindings):
+    if len(bindings) == 1 and len(bindings[0].qualname) == 1:
+        return bindings[0].func
+    stmt = ast.Expr(build_namespace_recursive(bindings, 1))
+    bblock = BuildingBlock(p.parser.bblock)
+    bblock.append(stmt)
+    return bblock.fold_into_binding()
+
+
+def fold_bindings(p, bindings):
+    """
+    Folds bindings so that each name matches a correponding namespace.
+
+    Returns:
+        An AST structure: [(name, func, is_static)*].
+    """
+    binding_asts = []
+
+    for name, group in groupby_name(sorted(bindings, key=getter.qualname)):
+        func = fold_into_namespace(p, group)
+        loc = group[0].name_locs[0]
+        name_str = set_loc(ast.Str(name), loc)
+
+        triple = [name_str, func, ast.x_Const(False)]
+        binding_asts.append(ast.Tuple(triple, ast.Load()))
+
+    return ast.List(binding_asts, ast.Load())
+
+
+def build_typedef(p, body, metatype, qualname=None, call_builder=None):
     # metatype { ... } ->
     # __my_new_type__(metatype, '_', <module>, [...])
     #
-    # metatype namefrags { ... } ->
-    # __my_new_type__(metatype, 'namefrags', <module>, [...])
+    # metatype qualname { ... } ->
+    # __my_new_type__(metatype, 'qualname', <module>, [...])
     #
-    # metatype namefrags(...) { ... } ->
-    # __my_new_type__(metatype, 'namefrags', <module>, [...],
+    # metatype qualname(...) { ... } ->
+    # __my_new_type__(metatype, 'qualname', <module>, [...],
     #                 *__my_call_args__(...))
-    assert len(body) == 2, "body must be a tuple of (doc_str, bindings_list)"
+    assert len(body) == 2, "body must be a tuple of (doc_str, bindings)"
 
-    if namefrags is not None:
-        name = '.'.join(namefrag().id for namefrag, loc in namefrags)
+    if qualname is not None:
+        name = '.'.join(name for name, loc in qualname)
     else:
         name = DFL_TYPE_NAME
 
-    args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME)] + list(body)
+    doc_str, bindings = body
+    binding_list = fold_bindings(p, bindings)
+
+    args = [metatype, ast.Str(name), ast.x_Name(_MODULE_NAME),
+            doc_str, binding_list]
 
     starargs = None
     if call_builder is not None:
@@ -113,17 +203,13 @@ class BuildingBlock(object):
     def __init__(self, parent=None):
         super(BuildingBlock, self).__init__()
         self.parent = parent
-
         self.stmts = []
         self.aux_cnt = 0
+
         if parent is not None:
             self.depth = parent.depth + 1
         else:
             self.depth = 0
-
-    @property
-    def is_global(self):
-        return self.parent is None
 
     @property
     def docstring_stmt(self):
@@ -160,17 +246,8 @@ class BuildingBlock(object):
         self.make_returning()
         return self.parent.build_func_from(self.stmts, arguments, name)
 
-    def fold_into_binding(self, static=False):
-        module_level = self.parent.is_global
-
-        if module_level and static:
-            raise MySyntaxError("Unexpected static binding at module level")
-
-        if not module_level:
-            args = [ast.x_arg(CLS_ARG if static else SELF_ARG)]
-        else:
-            args = []
-
+    def fold_into_binding(self, is_static=False):
+        args = [ast.x_arg(CLS_ARG if is_static else SELF_ARG)]
         return self.fold_into_func(ast.x_arguments(args))
 
 
@@ -237,8 +314,8 @@ class AssigningTransformer(ResultingTransformer):
         return ast.Assign([ast.Name(self.name, ast.Store())], expr)
 
 
-def emit_stmt(p, stmt):
-    p.parser.bblock.append(stmt)
+def emit_stmt(p, *stmts):
+    p.parser.bblock.append(*stmts)
 
 def push_new_bblock(p):
     p.parser.bblock = BuildingBlock(p.parser.bblock)
@@ -279,6 +356,9 @@ def p_exec_start(p, docstring_bindings=-1):
     # of returning as normal.
     # Likewise any auxiliary function is defined local to the __suite.
     #
+    doc_str, bindings = docstring_bindings
+    binding_list = fold_bindings(p, bindings)
+
     bblock = pop_bblock(p)
 
     bblock.insert(0,
@@ -286,9 +366,7 @@ def p_exec_start(p, docstring_bindings=-1):
                   ast.Assign([ast.Name(_MODULE_NAME, ast.Store())],
                              ast.x_Name('__name__')))
 
-    doc_str, bindings_list = docstring_bindings
-
-    bblock.append(ast.Return(bindings_list))
+    bblock.append(ast.Return(binding_list))
 
     suite_func = ast.x_FunctionDef(_MODULE_EXEC, ast.x_arguments(),
                                    bblock.stmts,
@@ -307,13 +385,7 @@ def p_exec_start(p, docstring_bindings=-1):
 @rule
 def p_typebody(p, docstring_bindings=2, typeret_func=-1):
     """typebody : LBRACE typesuite RBRACE typeret"""
-    doc_str, bindings_list = docstring_bindings
-
-    if typeret_func is not None:
-        binding_triple = [ast.x_Const(None), typeret_func, ast.x_Const(None)]
-        bindings_list.elts.append(ast.Tuple(binding_triple, ast.Load()))
-
-    return doc_str, bindings_list
+    return docstring_bindings
 
 @rule
 def p_typeret(p):
@@ -326,50 +398,68 @@ def p_stmtexpr(p, value):
     emit_stmt(p, copy_loc(ast.Expr(value), value))
 
 @rule
-def p_typesuite(p, bindings=-1):
+def p_typesuite(p, bindings_list=-1):
     """typesuite : skipnl typestmts"""
-    if bindings and not isinstance(bindings[0], ast.Tuple):
+    if bindings_list and not isinstance(bindings_list[0], list):
         # We don't want a docstring to have location, because otherwise
         # CPython (debug) crashes with some lineno-related assertion failure.
         # That is why a builder is invoked directly, not through build_node.
-        doc_builder, doc_loc = bindings.pop(0)
+        doc_builder, doc_loc = bindings_list.pop(0)
         doc_str = doc_builder()
     else:
         doc_str = ast.x_Const(None)
 
-    return doc_str, ast.List(bindings, ast.Load())
+    bindings = list(itertools.chain.from_iterable(bindings_list))
+    return doc_str, bindings
 
+
+@rule  # target1: { ... }
+def p_typestmt_namespace(p, qualname_wlocs=3, colons=4, body=-1):
+    """typestmt : new_bblock nl_off qualname colons nl_on typebody"""
+    bblock = pop_bblock(p)
+    emit_stmt(p, *bblock.stmts)
+
+    qualname, name_locs = map(tuple, zip(*qualname_wlocs))
+
+    bindings = body[1]
+
+    for binding in bindings:
+        binding.qualname[:0] = qualname
+        binding.name_locs[:0] = name_locs
+
+    return bindings
 
 @rule
-def p_typestmt(p, namefrags_colons=-1):
-    """typestmt : new_bblock binding_typedef
-       typestmt : new_bblock binding_simple"""
+def p_typestmt(p, qualname_colons=2):
+    """typestmt : new_bblock binding"""
     bblock = pop_bblock(p)
 
-    namefrags, colons = namefrags_colons
-    qualname = '.'.join(namefrag().id for namefrag, loc in namefrags)
+    qualname_wlocs, colons = qualname_colons
     is_static = (colons == '::')
 
     func = bblock.fold_into_binding(is_static)
 
-    binding_triple = [ast.Str(qualname), func, ast.x_Const(is_static)]
-    return set_loc(ast.Tuple(binding_triple, ast.Load()), namefrags[0][1])
+    qualname, name_locs = map(list, zip(*qualname_wlocs))
+    binding_triple = Binding(qualname, name_locs,
+                             func, ast.x_Const(is_static))
+    return [binding_triple]
 
 @rule  # metatype target(): { ... }
-def p_binding_typedef(p, metatype_builders=2, namefrags=3, mb_call_builder=4,
+def p_binding_typedef(p, metatype_builders=2, qualname=3, mb_call_builder=4,
                       colons=5, body=-1):
-    # Here namefrags is used instead of pytest to work around
-    # a reduce/reduce conflict with simple binding (pytest/namefrags).
-    """binding_typedef : nl_off namefrags namefrags mb_call colons nl_on typebody"""
-    value = build_typedef(body, build_chain(metatype_builders),
-                          namefrags, mb_call_builder)
+    # Here qualname is used instead of pytest to work around
+    # a reduce/reduce conflict with simple binding (pytest/qualname).
+    """binding : nl_off qualname qualname mb_call colons nl_on typebody"""
+    value = build_typedef(p, body, build_chain(metatype_builders),
+                          qualname, mb_call_builder)
     emit_stmt(p, copy_loc(ast.Expr(value), value))
-    return namefrags, colons
+    return qualname, colons
 
 @rule  # target1: ...
-def p_binding_simple(p, namefrags=2, colons=3):
-    """binding_simple : nl_off namefrags colons nl_on stmtexpr"""
-    return namefrags, colons
+def p_binding_simple(p, qualname=2, colons=3):
+    """binding : nl_off qualname colons nl_on stmtexpr"""
+    return qualname, colons
+
 
 @rule  # : -> False,  :: -> True
 def p_colons(p, colons):
@@ -399,20 +489,14 @@ def p_stub(p, builder):
 
 
 @rule_wloc
-def p_myatom_closure(p, closure):
-    """myatom : LBRACE RBRACE"""
-    return lambda: ast.x_Name('XXX')
-    raise NotImplementedError
-
-@rule_wloc
 def p_myatom_typedef(p, metatype, body):
     """myatom : pytest typebody"""
-    return lambda: build_typedef(body, metatype)
+    return lambda: build_typedef(p, body, metatype)
 
 @rule_wloc
-def p_myatom_typedef_named(p, metatype, namefrags, mb_call_builder, body):
-    """myatom : pytest namefrags mb_call typebody"""
-    return lambda: build_typedef(body, metatype, namefrags, mb_call_builder)
+def p_myatom_typedef_named(p, metatype, qualname, mb_call_builder, body):
+    """myatom : pytest qualname mb_call typebody"""
+    return lambda: build_typedef(p, body, metatype, qualname, mb_call_builder)
 
 
 @rule_wloc
@@ -508,12 +592,7 @@ def p_argument_kw(p, key, value=3):
 def p_trailer_attr_or_name(p, name=-1):  # x.attr or name
     """trailer : PERIOD ID
        name    : ID"""
-    def builder(expr=None):
-        if expr is not None:
-            return ast.Attribute(expr, name, ast.Load())
-        else:
-            return ast.x_Name(name)
-    return builder
+    return name
 
 @rule_wloc
 def p_trailer_item(p, item=2):  # x[item]
@@ -570,7 +649,7 @@ def p_testlist_list(p, l_el, el=-1):
 @rule
 def p_list_head(p, el):
     """
-    namefrags          :  name
+    qualname           :  name
 
     typestmts_plus     :  string
     typestmts_plus     :  typestmt
@@ -584,7 +663,7 @@ def p_list_head(p, el):
 @rule
 def p_list_tail(p, l, el=-1):
     """
-    namefrags          :  namefrags       PERIOD     name
+    qualname           :  qualname        PERIOD     name
 
     typestmts_plus     :  typestmts_plus  stmtdelim  typestmt
     arguments_plus     :  arguments_plus  COMMA      argument

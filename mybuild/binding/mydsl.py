@@ -17,17 +17,20 @@ from mybuild.binding import pydsl
 from util.deco import class_from_constructor
 
 
-class MyDslModuleMeta(pydsl.PyDslModuleMeta):
-    __my_new__ = class_from_constructor
+class MyDslModuleMeta(core.ModuleMeta):
 
+    def _prepare_optypes(cls):
+        return []
 
-class MyDslModuleBase(extend(pydsl.PyDslModuleBase,
+class MyDslModuleBase(extend(core.Module,
                              metaclass=MyDslModuleMeta, internal=True)):
     pass
 
+MyDslModuleMeta._base_type = MyDslModuleBase
 
-module  = core.new_module_type('MyDslModule',  MyDslModuleBase, core.Module)
-project = core.new_module_type('MyDslProject', MyDslModuleBase, core.Project)
+
+module  = MyDslModuleMeta
+project = None
 
 option = core.Optype
 

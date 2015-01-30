@@ -63,8 +63,12 @@ class ModuleMetaBase(type):
     def _internal(cls):
         return not hasattr(cls, '_options')
 
+    _base_type = object  # Overridden later to workaround bootstrapping issues.
+
     def __new__(mcls, name, bases, attrs, **kwargs):
         """Suppresses any redundant arguments."""
+        if not any(issubclass(base, mcls._base_type) for base in bases):
+            bases += (mcls._base_type,)
         return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
 
     def mro(cls):
@@ -183,6 +187,8 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
     def __repr__(self):
         return repr(self._optuple)
 
+ModuleMetaBase._base_type = ModuleBase
+
 
 def new_module_type(name, *bases):
     if not bases:
@@ -193,7 +199,9 @@ def new_module_type(name, *bases):
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
-    # tools = cumulative_tuple_property(attr.__tools, '_add_tool')
+    tools = []
+    depends = []
+    is_program = False
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)
@@ -201,12 +209,14 @@ class Module(ModuleBase):
 
         self._constraints = []  # [(optuple, condition)]
 
-    def _post_init(self):
         for tool in self.tools:
-            tool.initialize_module(self)
+            for attr, value in iteritems(tool.create_namespaces(self)):
+                if not hasattr(self, attr):
+                    setattr(self, attr, value)
 
-    def _add_tool(self, tool):
-        self.__dict__.update(tool.create_namespaces(self))
+    def _post_init(self):
+        for dep in self.depends:
+            self._add_constraint(dep)
 
     def _add_constraint(self, mslice, condition=True):
         self._constraints.append((mslice(), condition))
