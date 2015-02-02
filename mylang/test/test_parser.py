@@ -36,7 +36,7 @@ class ASTComparator(object):
             return False
 
         if isinstance(node_a, ast.AST):
-            for k, v in vars(node_a).iteritems():
+            for k, v in iteritems(vars(node_a)):
                 if k in ('lineno', 'col_offset', 'ctx'):
                     continue
                 if not self.compare(v, getattr(node_b, k)):
@@ -44,8 +44,7 @@ class ASTComparator(object):
             return True
 
         if isinstance(node_a, list):
-            return all(itertools.starmap(self.compare,
-                                        itertools.izip(node_a, node_b)))
+            return all(itertools.starmap(self.compare, zip(node_a, node_b)))
 
         if isinstance(node_a, str):
 
