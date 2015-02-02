@@ -74,10 +74,10 @@ try:
         global __name__
         _module_ = __name__
 
-        def func(self):
+        def func_main(self):
             return __my_new_type__(module, 'main', _module_, None, [])
 
-        return [('main', func, False)]
+        return [('main', func_main, False)]
 
         pass
 except __my_exec_module__:
@@ -92,6 +92,128 @@ module main: {
         my_node = my_parse(my_source)
 
         self.assertIs(True, ASTComparator().compare(my_node, py_node))
+
+    def test_different_namespace_declaration(self):
+        my_source1 = """
+module main: {
+    a: {
+        b: {
+            c: 3
+            d: 1
+        }
+        e: 2
+    }
+
+    f: 3
+}
+"""
+        my_source2 = """
+module main: {
+    a.e: 2
+    f: 3
+    a.b.c: 3
+    a.b.d: 1
+}
+"""
+        my_node1 = my_parse(my_source1)
+        my_node2 = my_parse(my_source2)
+
+        self.assertIs(True, ASTComparator().compare(my_node1, my_node1))
+
+
+    def test_modules_and_types(self):
+        py_source = """
+try:
+    @__my_exec_module__
+    def _trampoline_():
+        global __name__
+        _module_ = __name__
+
+        def func_foo(self):
+
+            def func_files(self):
+                return ['foo.c']
+
+            return __my_new_type__(module, 'foo', _module_, None,
+                                   [('files', func_files, False)])
+
+        def func_bool(self):
+            return __my_new_type__(type, 'bool', _module_, None, [])
+
+        return [('bool', func_bool, False), ('foo', func_foo, False)]
+except __my_exec_module__:
+    pass
+"""
+        my_source = """
+module foo: {
+    files: ["foo.c"]
+}
+
+type bool: {
+}
+"""
+
+        py_node = ast.parse(py_source, mode='exec')
+        my_node = my_parse(my_source)
+
+        self.assertIs(True, ASTComparator().compare(my_node, py_node))
+        pass
+
+
+    # Tuples, lists, dictionaries, function calls.
+    def test_different_values(self):
+        py_source = """
+try:
+    @__my_exec_module__
+    def _trampoline_():
+        global __name__
+        _module_ = __name__
+
+        def func_call(self):
+            return func(s, d, f, x=0, y=1, z=2)
+
+        def func_list(self):
+            return [1, 2, 3, 4]
+
+        def func_dict(self):
+            return {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+
+        def func_empty(self):
+            return {}
+
+        def func_tuple(self):
+            return (1, 2, 3, 4)
+
+        return [('call', func_call, False), ('dict', func_dict, False),
+                ('empty_dict', func_empty, False), ('list', func_list, False),
+                ('tuple', func_tuple, False)]
+except __my_exec_module__:
+    pass
+"""
+
+        my_source = """
+call: func(s, d, f, x=0, y=1, z=2)
+list: [1, 2, 3, 4]
+dict: ["a":1, "b":2, "c":3, "d":4]
+empty_dict: [:]
+tuple: (1, 2, 3, 4)
+"""
+        py_node = ast.parse(py_source, mode='exec')
+        my_node = my_parse(my_source)
+
+        self.assertIs(True, ASTComparator().compare(my_node, py_node))
+
+
+    # TODO
+    def test_expression_computing_order(self):
+        py_source = """"""
+        my_source = """"""
+
+        py_node = ast.parse(py_source, mode='exec')
+        my_node = my_parse(my_source)
+
+        self.assertIs(True, ASTComparator().compare(my_node, py_node))
+        pass
 
 
 def suite():
