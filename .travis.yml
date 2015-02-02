@@ -8,9 +8,10 @@ python:
 
 # command to install dependencies
 install: true
-#  - pip install ply
+ - pip install ply
 
 # command to run tests
 script:
   - python -m mybuild.test.test_solver
+  - python -m mylang.test.test_parser
   - python -m test.module_tests_solver
