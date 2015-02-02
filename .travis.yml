@@ -7,8 +7,8 @@ python:
   - "pypy"
 
 # command to install dependencies
-install: true
- - pip install ply
+install:
+  - pip install ply
 
 # command to run tests
 script:
