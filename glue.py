@@ -25,12 +25,13 @@ class LoaderMixin(object):
     @property
     def defaults(self):
         return dict(super(LoaderMixin, self).defaults,
-                    module  = self.dsl.module,
+                    module       = self.dsl.module,
                     application  = self.dsl.application,
-                    project = self.dsl.project,
-                    option  = self.dsl.option,
-                    tool    = tool,
-                    ns      = Namespace,
+                    library      = self.dsl.library,
+                    project      = self.dsl.project,
+                    option       = self.dsl.option,
+                    tool         = tool,
+                    ns           = Namespace,
                     MYBUILD_VERSION=mybuild.__version__)
 
 
@@ -70,7 +71,16 @@ class CcAppTool(CcTool):
         ctx.program(source=module.files, target=module._name, use=self.use)
 
 
-tool = Namespace(cc=CcObjTool(), cc_app=CcAppTool())
+class CcLibTool(CcTool):
+    def build(self, module, ctx):
+        super(CcLibTool, self).build(module, ctx)
+        if module.isstatic:
+            ctx.stlib(source=module.files, target=module._name, use=self.use)
+        else:
+            ctx.shlib(source=module.files, target=module._name, use=self.use)
+
+
+tool = Namespace(cc=CcObjTool(), cc_app=CcAppTool(), cc_lib=CcLibTool())
 
 
 class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
@@ -82,11 +92,16 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
     class ApplicationCcModule(mybuild.core.Module):
         tools = [tool.cc_app]
 
+    class LibCcModule(mybuild.core.Module):
+        tools = [tool.cc_lib]
+        isstatic = True
+
     dsl = Namespace()
-    dsl.module = CcModule._meta_for_base(option_types=[])
-    dsl.application = ApplicationCcModule._meta_for_base(option_types=[])
-    dsl.option = mybuild.core.Optype
-    dsl.project = None
+    dsl.module       = CcModule._meta_for_base(option_types=[])
+    dsl.application  = ApplicationCcModule._meta_for_base(option_types=[])
+    dsl.library      = LibCcModule._meta_for_base(option_types=[])
+    dsl.option       = mybuild.core.Optype
+    dsl.project      = None
 
 
 class PyDslLoader(LoaderMixin, pyfile.PyFileLoader):
