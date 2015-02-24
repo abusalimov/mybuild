@@ -27,6 +27,7 @@ class LoaderMixin(object):
     def defaults(self):
         return dict(super(LoaderMixin, self).defaults,
                     module  = self.dsl.module,
+                    application  = self.dsl.application,
                     project = self.dsl.project,
                     option  = self.dsl.option,
                     tool    = tool,

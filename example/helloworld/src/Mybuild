@@ -3,8 +3,7 @@ module pybuild_pretty: {
 	files: ["pybuild_pretty.c"]
 }
 
-module hello: {
-	is_program : True
+application hello: {
 	tools:: [tool.cc]
 	files: ["main.c"]
 

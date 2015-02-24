@@ -113,6 +113,8 @@ module  = constructor_decorator(core.new_module_type('PyDslModule',
 project = constructor_decorator(core.new_module_type('PyDslProject',
                                 PyDslModuleBase, core.Project))
 
+application = None
+
 option = core.Optype
 
 

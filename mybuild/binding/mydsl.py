@@ -22,14 +22,26 @@ class MyDslModuleMeta(core.ModuleMeta):
     def _prepare_optypes(cls):
         return []
 
+class MyDslApplicationMeta(core.ModuleMeta):
+
+    def _prepare_optypes(cls):
+        return []
+
 class MyDslModuleBase(extend(core.Module,
                              metaclass=MyDslModuleMeta, internal=True)):
     pass
 
+class MyDslApplicationBase(extend(core.Application,
+                             metaclass=MyDslApplicationMeta, internal=True)):
+    pass
+
 MyDslModuleMeta._base_type = MyDslModuleBase
+MyDslApplicationMeta._base_type = MyDslApplicationBase
 
 
 module  = MyDslModuleMeta
+application  = MyDslApplicationMeta
+
 project = None
 
 option = core.Optype

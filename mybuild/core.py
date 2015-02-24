@@ -235,6 +235,10 @@ class CompositeModule(Module):
         self._add_constraint(mslice, condition)
 
 
+class Application(Module):
+    is_program = True
+
+
 class Project(CompositeModule):
     pass
 
