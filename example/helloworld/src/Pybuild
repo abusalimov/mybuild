@@ -1,9 +1,0 @@
-"""
-Example application consisting of a single main file.
-"""
-
-@module
-def main(self):
-    pass
-    # self.load('compiler_c')
-    # self.bld.program(source='main.c')
