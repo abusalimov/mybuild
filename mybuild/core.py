@@ -9,7 +9,6 @@ __date__ = "2012-09-15"
 
 __all__ = [
     "ModuleMetaBase",
-    "ModuleMeta",
     "ModuleBase",
     "Module",
     "CompositeModule",
@@ -65,10 +64,19 @@ class ModuleMetaBase(type):
 
     _base_type = object  # Overridden later to workaround bootstrapping issues.
 
-    def __new__(mcls, name, bases, attrs, **kwargs):
+    def _meta_for_base(cls, **default_kwargs):
+        default_kwargs.setdefault('metaclass', type(cls))
+        default_kwargs.setdefault('_base_type', cls)
+        def meta(name, bases, attrs, **kwargs):
+            return new_type(name, bases, attrs, **dict(default_kwargs, **kwargs))
+        return meta
+
+    def __new__(mcls, name, bases, attrs, _base_type=None, **kwargs):
         """Suppresses any redundant arguments."""
-        if not any(issubclass(base, mcls._base_type) for base in bases):
-            bases += (mcls._base_type,)
+        if _base_type is None:
+            _base_type = mcls._base_type
+        if not any(issubclass(base, _base_type) for base in bases):
+            bases += (_base_type,)
         return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
 
     def mro(cls):
@@ -83,7 +91,7 @@ class ModuleMetaBase(type):
 
         return new_mro
 
-    def __init__(cls, name, bases, attrs, option_types=None):
+    def __init__(cls, name, bases, attrs, option_types=None, **kwargs):
         """Real module classes must be created with 'option_types' keyword
         argument. By default produces internal classes."""
         super(ModuleMetaBase, cls).__init__(name, bases, attrs)
@@ -135,24 +143,6 @@ def filter_mtypes(types, with_internal=False):
                 (with_internal or not cls._internal))
 
 
-class ModuleMeta(ModuleMetaBase):
-    """Adds an optional 'internal' keyword argument.
-
-    Produces real modules by default, however subclasses must still pass
-    an 'option_types' keyword argument or provide a resonable implementation
-    of '_prepare_optypes' method."""
-
-    def __init__(cls, name, bases, attrs, internal=False, **kwargs):
-        """Keyword arguments are passed to '_prepare_optypes' method."""
-        super(ModuleMeta, cls).__init__(name, bases, attrs,
-                option_types=(None if internal else
-                              cls._prepare_optypes(**kwargs)))
-
-    def _prepare_optypes(cls, option_types):
-        """Always called with keyword arguments passed to the constructor."""
-        return option_types
-
-
 class ModuleBase(extend(metaclass=ModuleMetaBase)):
     """Base class for Mybuild modules."""
 
@@ -190,18 +180,11 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 ModuleMetaBase._base_type = ModuleBase
 
 
-def new_module_type(name, *bases):
-    if not bases:
-        bases = (ModuleBase,)
-    return new_type(name, bases, {}, metaclass=ModuleMeta, internal=True)
-
-
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
     tools = []
     depends = []
-    is_program = False
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)
@@ -233,10 +216,6 @@ class CompositeModule(Module):
 
     def _add_component(self, mslice, condition=True):
         self._add_constraint(mslice, condition)
-
-
-class Application(Module):
-    is_program = True
 
 
 class Project(CompositeModule):

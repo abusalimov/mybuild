@@ -1,10 +1,8 @@
 module pybuild_pretty: {
-	tools:: [tool.cc]
 	files: ["pybuild_pretty.c"]
 }
 
 application hello: {
-	tools:: [tool.cc]
 	files: ["main.c"]
 
 	cc.defines: {

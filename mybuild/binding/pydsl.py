@@ -16,8 +16,21 @@ from mybuild import core
 from util.deco import constructor_decorator
 
 
-class PyDslModuleMeta(core.ModuleMeta):
-    """Infers options from class constructor."""
+class PyDslModuleMeta(core.ModuleMetaBase):
+    """Infers options from class constructor.
+
+    Adds an optional 'internal' keyword argument.
+
+    Produces real modules by default, however subclasses must still pass
+    an 'option_types' keyword argument or provide a resonable implementation
+    of '_prepare_optypes' method.
+    """
+
+    def __init__(cls, name, bases, attrs, internal=False, **kwargs):
+        """Keyword arguments are passed to '_prepare_optypes' method."""
+        super(PyDslModuleMeta, cls).__init__(name, bases, attrs,
+                option_types=(None if internal else
+                              cls._prepare_optypes(**kwargs)))
 
     def _prepare_optypes(cls):
         """Converts a constructor argspec into a list of Optype objects."""
@@ -108,9 +121,13 @@ class PyDslModuleBase(extend(core.ModuleBase,
     consider  = _consider  = core.Module._discover
 
 
-module  = constructor_decorator(core.new_module_type('PyDslModule',
+def new_module_type(name, *bases):
+    return new_type(name, bases, {}, metaclass=core.ModuleMetaBase, internal=True)
+
+
+module  = constructor_decorator(new_module_type('PyDslModule',
                                 PyDslModuleBase, core.Module))
-project = constructor_decorator(core.new_module_type('PyDslProject',
+project = constructor_decorator(new_module_type('PyDslProject',
                                 PyDslModuleBase, core.Project))
 
 application = None

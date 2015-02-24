@@ -12,7 +12,6 @@ from nsloader import myfile
 from nsloader import pyfile
 
 import mybuild
-from mybuild.binding import mydsl
 from mybuild.binding import pydsl
 
 from util.operator import attr
@@ -35,15 +34,6 @@ class LoaderMixin(object):
                     MYBUILD_VERSION=mybuild.__version__)
 
 
-class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
-    FILENAME = 'Mybuild'
-    dsl = mydsl
-
-
-class PyDslLoader(LoaderMixin, pyfile.PyFileLoader):
-    FILENAME = 'Pybuild'
-    dsl = pydsl
-
 class WafBasedTool(mybuild.core.Tool):
     waf_tools = []
 
@@ -52,6 +42,7 @@ class WafBasedTool(mybuild.core.Tool):
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
+
 class CcTool(WafBasedTool):
     waf_tools = ['compiler_c']
 
@@ -59,15 +50,46 @@ class CcTool(WafBasedTool):
         return dict(cc=Namespace(defines={}))
 
     def build(self, module, ctx):
-        use = []
+        self.use = []
         for name in module.cc.defines:
             ctx.define(name, module.cc.defines[name])
-        for m in module.depends:
-            use.append(ctx.instance_map[m]._name)
-        if module.is_program:
-            ctx.program(source=module.files, target=module._name, use=use)
-        else:
-            ctx.objects(source=module.files, target=module._name, use=use)
 
-tool = Namespace(cc=CcTool())
+        for m in module.depends:
+            self.use.append(ctx.instance_map[m]._name)
+
+
+class CcObjTool(CcTool):
+    def build(self, module, ctx):
+        super(CcObjTool, self).build(module, ctx)
+        ctx.objects(source=module.files, target=module._name, use=self.use)
+
+
+class CcAppTool(CcTool):
+    def build(self, module, ctx):
+        super(CcAppTool, self).build(module, ctx)
+        ctx.program(source=module.files, target=module._name, use=self.use)
+
+
+tool = Namespace(cc=CcObjTool(), cc_app=CcAppTool())
+
+
+class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
+    FILENAME = 'Mybuild'
+
+    class CcModule(mybuild.core.Module):
+        tools = [tool.cc]
+
+    class ApplicationCcModule(mybuild.core.Module):
+        tools = [tool.cc_app]
+
+    dsl = Namespace()
+    dsl.module = CcModule._meta_for_base(option_types=[])
+    dsl.application = ApplicationCcModule._meta_for_base(option_types=[])
+    dsl.option = mybuild.core.Optype
+    dsl.project = None
+
+
+class PyDslLoader(LoaderMixin, pyfile.PyFileLoader):
+    FILENAME = 'Pybuild'
+    dsl = pydsl
 
