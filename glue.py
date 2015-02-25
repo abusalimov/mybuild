@@ -46,47 +46,47 @@ class WafBasedTool(mybuild.core.Tool):
 class CcTool(WafBasedTool):
     waf_tools = ['compiler_c']
 
+    def __init__(self):
+        super(CcTool, self).__init__()
+        self.build_kwargs = {}
+
     def create_namespaces(self, module):
         return dict(cc=Namespace(defines=Namespace()))
 
     def define(self, key, val):
+        assert('defines' in self.build_kwargs)
         format_str = '{0}=\"{1}\"' if isinstance(val, str) else '{0}={1}'
-        self.defines.append(format_str.format(key, val))
+        self.build_kwargs['defines'].append(format_str.format(key, val))
 
     def build(self, module, ctx):
-        self.use = []
-        self.defines = []
+        self.build_kwargs['use'] = [m._name for m in module.depends]
+        self.build_kwargs['source'] = module.files
+        self.build_kwargs['target'] = module._name
+        self.build_kwargs['defines'] = []
 
         for k, v in iteritems(module.cc.defines.__dict__):
             self.define(k, v)
-
-        for m in module.depends:
-            self.use.append(ctx.instance_map[m]._name)
 
 
 class CcObjTool(CcTool):
     def build(self, module, ctx):
         super(CcObjTool, self).build(module, ctx)
-        ctx.objects(source=module.files, target=module._name,
-                    use=self.use, defines=self.defines)
+        ctx.objects(**self.build_kwargs)
 
 
 class CcAppTool(CcTool):
     def build(self, module, ctx):
         super(CcAppTool, self).build(module, ctx)
-        ctx.program(source=module.files, target=module._name,
-                    use=self.use, defines=self.defines)
+        ctx.program(**self.build_kwargs)
 
 
 class CcLibTool(CcTool):
     def build(self, module, ctx):
         super(CcLibTool, self).build(module, ctx)
         if module.isstatic:
-            ctx.stlib(source=module.files, target=module._name,
-                    use=self.use, defines=self.defines)
+            ctx.stlib(**self.build_kwargs)
         else:
-            ctx.shlib(source=module.files, target=module._name,
-                    use=self.use, defines=self.defines)
+            ctx.shlib(**self.build_kwargs)
 
 
 tool = Namespace(cc=CcObjTool(), cc_app=CcAppTool(), cc_lib=CcLibTool())
