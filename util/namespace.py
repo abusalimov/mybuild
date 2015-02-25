@@ -11,6 +11,7 @@ class Namespace(object):
     __slots__ = '__doc__', '__dict__', '__weakref__'
 
     def __init__(self, **kwargs):
+        super(Namespace, self).__init__()
         self.__dict__.update(kwargs)
 
     def __iter__(self):
