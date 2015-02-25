@@ -35,19 +35,21 @@ class LoaderMixin(object):
 
 
 class WafBasedTool(mybuild.core.Tool):
-    waf_tools = []
+    def __init__(self):
+        super(WafBasedTool, self).__init__()
+        self.waf_tools = []
 
     def options(self, module, ctx):
         ctx.load(self.waf_tools)
+
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
 
 class CcTool(WafBasedTool):
-    waf_tools = ['compiler_c']
-
     def __init__(self):
         super(CcTool, self).__init__()
+        self.waf_tools.append('compiler_c')
         self.build_kwargs = {}
 
     def create_namespaces(self, module):
