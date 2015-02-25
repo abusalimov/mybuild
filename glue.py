@@ -31,7 +31,6 @@ class LoaderMixin(object):
                     project      = self.dsl.project,
                     option       = self.dsl.option,
                     tool         = tool,
-                    ns           = Namespace,
                     MYBUILD_VERSION=mybuild.__version__)
 
 

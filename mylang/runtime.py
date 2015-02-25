@@ -65,7 +65,7 @@ def __my_call_args__(*args, **kwargs):
 
 
 def __my_new_namespace__(**kwargs):
-    return Namespace(**kwargs)
+    return MyNamespace(**kwargs)
 
 
 # Provide a similar to PEP 3115 mechanism for class creation
@@ -115,6 +115,9 @@ def my_prepare_type(meta, name, bases=(), kwds={}):
         ns = {}
 
     return meta, ns
+
+class MyNamespace(Namespace):
+    __slots__ = '__doc__'
 
 
 class MyDelegate(object):
