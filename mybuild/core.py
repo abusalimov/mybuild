@@ -202,6 +202,7 @@ class Module(ModuleBase):
 
         self._constraints = []  # [(optuple, condition)]
 
+        self.tools = [tool() for tool in self.tools]
         for tool in self.tools:
             for attr, value in iteritems(tool.create_namespaces(self)):
                 if not hasattr(self, attr):

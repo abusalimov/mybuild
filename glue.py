@@ -95,20 +95,20 @@ class CcLibTool(CcTool):
             ctx.shlib(**self.build_kwargs)
 
 
-tool = Namespace(cc=CcObjTool(), cc_app=CcAppTool(), cc_lib=CcLibTool())
+tool = Namespace(cc=CcObjTool, cc_app=CcAppTool, cc_lib=CcLibTool)
 
 
 class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
     FILENAME = 'Mybuild'
 
     class CcModule(mybuild.core.Module):
-        tools = [CcObjTool()]
+        tools = [CcObjTool]
 
     class ApplicationCcModule(mybuild.core.Module):
-        tools = [CcAppTool()]
+        tools = [CcAppTool]
 
     class LibCcModule(mybuild.core.Module):
-        tools = [CcLibTool()]
+        tools = [CcLibTool]
 
         @cached_property
         def isstatic(self):
