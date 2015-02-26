@@ -35,6 +35,7 @@ from util.operator import getter
 from util.operator import invoker
 from util.operator import instanceof
 from util.prop import default_class_property
+from util.prop import cached_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -183,8 +184,17 @@ ModuleMetaBase._base_type = ModuleBase
 class Module(ModuleBase):
     """Provides a data necessary for Context."""
 
-    tools = []
-    depends = []
+    @cached_property
+    def tools(self):
+        return []
+
+    @cached_property
+    def depends(self):
+        return []
+
+    @cached_property
+    def files(self):
+        return []
 
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple)

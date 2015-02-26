@@ -16,6 +16,7 @@ from mybuild.binding import pydsl
 
 from util.operator import attr
 from util.namespace import Namespace
+from util.prop import cached_property
 
 
 class LoaderMixin(object):
@@ -98,14 +99,18 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
     FILENAME = 'Mybuild'
 
     class CcModule(mybuild.core.Module):
-        tools = [tool.cc]
+        tools = [CcObjTool()]
 
     class ApplicationCcModule(mybuild.core.Module):
-        tools = [tool.cc_app]
+        tools = [CcAppTool()]
 
     class LibCcModule(mybuild.core.Module):
-        tools = [tool.cc_lib]
-        isstatic = True
+        tools = [CcLibTool()]
+
+        @cached_property
+        def isstatic(self):
+            return True
+
 
     dsl = Namespace()
     dsl.module       = CcModule._meta_for_base(option_types=[])
