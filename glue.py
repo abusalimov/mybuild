@@ -58,8 +58,11 @@ class CcTool(WafBasedTool):
 
     def define(self, key, val):
         assert('defines' in self.build_kwargs)
-        format_str = '{0}=\"{1}\"' if isinstance(val, str) else '{0}={1}'
-        self.build_kwargs['defines'].append(format_str.format(key, val))
+        if isinstance(val, str):
+            import json
+            val = json.dumps(val).replace("\\u0007", "\a") \
+                                 .replace("\\u000b", "\v")
+        self.build_kwargs['defines'].append('{0}={1}'.format(key, val))
 
     def build(self, module, ctx):
         self.build_kwargs['use'] = [m._name for m in module.depends]
