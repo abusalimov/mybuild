@@ -20,6 +20,7 @@ from mylang.location import Location
 from mylang.helpers import rule
 
 from util.operator import getter
+from util.collections import OrderedDict
 
 
 # Runtime intrinsics and internal auxiliary names.
@@ -97,16 +98,21 @@ def build_chain(builder_wlocs, expr=None):
 
 def groupby_name(bindings, tier=0):
     """
-    Groups bindings by the name fragment specified by tier.
+    Groups bindings by the name fragment specified by tier. Input bindings
+    can be not sorted. The order of the bindings remains initial in scope of
+    its group.
 
     Yields:
         (name, [binding(s)...]) tuples.
     """
-    def name_at_tier(binding):
-        return binding.qualname[tier]
-    for name, group in itertools.groupby(bindings, key=name_at_tier):
-        yield name, list(group)
-
+    res = OrderedDict()
+    for binding in bindings:
+        name_at_tier = binding.qualname[tier]
+        if name_at_tier in res:
+            res[name_at_tier].append(binding)
+        else:
+            res[name_at_tier] = [binding]
+    return res
 
 def build_namespace_recursive(bindings, tier):
     keywords  = []
@@ -120,7 +126,7 @@ def build_namespace_recursive(bindings, tier):
 
         return ast.x_Call(bindings[0].func, [ast.x_Name(SELF_ARG)])
 
-    for name, group in groupby_name(bindings, tier):
+    for name, group in iteritems(groupby_name(bindings, tier)):
         value_ast = build_namespace_recursive(group, tier+1)
         loc = group[0].name_locs[tier]
         keyword = set_loc(ast.keyword(name, value_ast), loc)
@@ -132,8 +138,8 @@ def build_namespace_recursive(bindings, tier):
 def fold_into_namespace(p, bindings):
     if len(bindings) == 1 and len(bindings[0].qualname) == 1:
         return bindings[0].func
-    stmt = ast.Expr(build_namespace_recursive(bindings, 1))
     bblock = BuildingBlock(p.parser.bblock)
+    stmt = ast.Expr(build_namespace_recursive(bindings, 1))
     bblock.append(stmt)
     return bblock.fold_into_binding()
 
@@ -147,7 +153,7 @@ def fold_bindings(p, bindings):
     """
     binding_asts = []
 
-    for name, group in groupby_name(sorted(bindings, key=getter.qualname)):
+    for name, group in iteritems(groupby_name(bindings)):
         func = fold_into_namespace(p, group)
         loc = group[0].name_locs[0]
         name_str = set_loc(ast.Str(name), loc)
