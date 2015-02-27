@@ -125,7 +125,7 @@ def build_namespace_recursive(bindings, tier):
             loc = bindings[1].name_locs[-1]
             raise MySyntaxError('Namespace element repeated', loc)
 
-        return ast.x_Call(bindings[0].func, [ast.x_Name(SELF_ARG)])
+        return bindings[0].func
 
     for name, group in iteritems(groupby_name(bindings, tier)):
         value_ast = build_namespace_recursive(group, tier+1)
@@ -136,10 +136,24 @@ def build_namespace_recursive(bindings, tier):
     return ast.x_Call(ast.x_Name(MY_NEW_NAMESPACE), keywords=keywords)
 
 
+def assign_funcs_to_variables(bblock, bindings):
+    for binding in bindings:
+        var = bblock.new_aux_var_name(binding.qualname[-1])
+        value = ast.x_Call(binding.func, [ast.x_Name(SELF_ARG)])
+
+        transformer = AssigningTransformer(var)
+        stmt = transformer.transform_expr(value)
+        bblock.append(stmt)
+
+        yield Binding(binding.qualname, binding.name_locs,
+                      ast.x_Name(var), binding.is_static)
+
+
 def fold_into_namespace(p, bindings):
     if len(bindings) == 1 and len(bindings[0].qualname) == 1:
         return bindings[0].func
     bblock = BuildingBlock(p.parser.bblock)
+    bindings = list(assign_funcs_to_variables(bblock, bindings))
     stmt = ast.Expr(build_namespace_recursive(bindings, 1))
     bblock.append(stmt)
     return bblock.fold_into_binding()
