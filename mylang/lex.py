@@ -79,7 +79,7 @@ def t_NUMBER(t):
 # String literal
 def t_STRING(t):
     r'\"([^\\\n]|(\\.))*?\"'
-    t.value = t.value[1:-1].decode("string_escape")
+    t.value = str(t.value[1:-1].encode().decode("unicode_escape"))
     return t
 
 def t_error(t):
