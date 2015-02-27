@@ -36,6 +36,7 @@ SELF_ARG       = 'self'
 
 _RESULT_TMP    = '<tmp>'
 _AUX_NAME_FMT  = '<aux-{0}-{1}>'
+_AUX_VAR_NAME_FMT  = '<aux-{0}-{1}>'
 _MODULE_EXEC   = '<trampoline>'
 _MODULE_NAME   = '<module>'
 
@@ -211,6 +212,7 @@ class BuildingBlock(object):
         self.parent = parent
         self.stmts = []
         self.aux_cnt = 0
+        self.aux_var_cnt = 0
 
         if parent is not None:
             self.depth = parent.depth + 1
@@ -236,6 +238,11 @@ class BuildingBlock(object):
     def make_assigning(self, name=_RESULT_TMP):
         AssigningTransformer(name).modify_stmts_list(self.stmts)
         return ast.x_Name(name)
+
+    def new_aux_var_name(self, name):
+        cnt = self.aux_var_cnt
+        self.aux_var_cnt = cnt + 1
+        return _AUX_VAR_NAME_FMT.format(name, cnt)
 
     def new_aux_name(self):
         cnt = self.aux_cnt
