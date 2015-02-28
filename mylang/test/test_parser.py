@@ -57,7 +57,6 @@ class ASTComparator(object):
                 return True
 
             else:
-                # print(node_a, node_b)
                 return False
 
         return node_a == node_b
@@ -203,15 +202,65 @@ tuple: (1, 2, 3, 4)
         self.assertIs(True, ASTComparator().compare(my_node, py_node))
 
 
-    # TODO
     def test_expression_computing_order(self):
-        py_source = """"""
-        my_source = """"""
+        my_source1 = """
+module food: {
+    fruits.purple: [plum]
+    fruits: {
+        yellow: [orange, tangerine, peach]
+    }
+    fruits.red: [apple]
+}
+"""
+        my_source2 = """
+module food: {
+    fruits: {
+        purple: [plum]
+        yellow: [orange, tangerine, peach]
+        red: [apple]
+    }
+}
+"""
+        py_source = """
+try:
+    @__my_exec_module__
+    def _main_():
+        global __name__
+        _module_ = __name__
+
+        def func_food(self):
+
+            def func_purple(self):
+                return [plum]
+
+            def func_yellow(self):
+                return [orange, tangerine, peach]
+
+            def func_red(self):
+                return [apple]
+
+            def func_fruits(self):
+                var_purple = func_purple(self)
+                var_yellow = func_yellow(self)
+                var_red    = func_red(self)
+                return __my_new_namespace__(purple=var_purple,
+                                            yellow=var_yellow,
+                                            red=var_red)
+            return __my_new_type__(module, 'food', _module_, None,
+                                   [('fruits', func_fruits, False)])
+        return [('food', func_food, False)]
+
+        pass
+except __my_exec_module__:
+    pass
+"""
 
         py_node = ast.parse(py_source, mode='exec')
-        my_node = my_parse(my_source)
+        my_node1 = my_parse(my_source1)
+        my_node2 = my_parse(my_source2)
 
-        self.assertIs(True, ASTComparator().compare(my_node, py_node))
+        self.assertIs(True, ASTComparator().compare(my_node1, my_node2))
+        self.assertIs(True, ASTComparator().compare(my_node1, py_node))
         pass
 
 
