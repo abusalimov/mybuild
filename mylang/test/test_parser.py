@@ -139,7 +139,7 @@ try:
         def func_bool(self):
             return __my_new_type__(type, 'bool', _module_, None, [])
 
-        return [('bool', func_bool, False), ('foo', func_foo, False)]
+        return [('foo', func_foo, False), ('bool', func_bool, False)]
 except __my_exec_module__:
     pass
 """
@@ -183,8 +183,8 @@ try:
         def func_tuple(self):
             return (1, 2, 3, 4)
 
-        return [('call', func_call, False), ('dict', func_dict, False),
-                ('empty_dict', func_empty, False), ('list', func_list, False),
+        return [('call', func_call, False), ('list', func_list, False),
+                ('dict', func_dict, False), ('empty_dict', func_empty, False),
                 ('tuple', func_tuple, False)]
 except __my_exec_module__:
     pass
