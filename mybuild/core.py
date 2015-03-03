@@ -188,8 +188,17 @@ class Module(ModuleBase):
     def tools(self):
         return []
 
+    # TODO: remove it as redundant
     @cached_property
     def depends(self):
+        return []
+
+    @cached_property
+    def build_depends(self):
+        return []
+
+    @cached_property
+    def runtime_depends(self):
         return []
 
     @cached_property
@@ -209,7 +218,11 @@ class Module(ModuleBase):
                     setattr(self, attr, value)
 
     def _post_init(self):
+        # TODO: remove it as redundant
         for dep in self.depends:
+            self._add_constraint(dep)
+
+        for dep in self.build_depends:
             self._add_constraint(dep)
 
     def _add_constraint(self, mslice, condition=True):
