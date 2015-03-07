@@ -36,6 +36,7 @@ from util.operator import invoker
 from util.operator import instanceof
 from util.prop import default_class_property
 from util.prop import cached_property
+from util.prop import cached_class_property
 from util.misc import InstanceBoundTypeMixin
 
 
@@ -201,6 +202,14 @@ class Module(ModuleBase):
     def runtime_depends(self):
         return []
 
+    @cached_class_property
+    def provides(cls):
+        return [cls]
+
+    @cached_class_property
+    def default_provider(cls):
+        return None
+
     @cached_property
     def files(self):
         return []
@@ -224,6 +233,12 @@ class Module(ModuleBase):
 
         for dep in self.build_depends:
             self._add_constraint(dep)
+
+        for interface in self.provides:
+            self._discover(interface)
+
+        if self.default_provider is not None:
+            self._discover(self.default_provider)
 
     def _add_constraint(self, mslice, condition=True):
         self._constraints.append((mslice(), condition))
