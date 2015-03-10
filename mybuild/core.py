@@ -489,6 +489,10 @@ class Optype(object):
         return cls.of_type(str, default)
 
     @classmethod
+    def int(cls, default=Ellipsis):
+        return cls.of_type(int, default)
+
+    @classmethod
     def of_type(cls, types, default=Ellipsis):
         ret = cls(_check_func=instanceof(types))
 
