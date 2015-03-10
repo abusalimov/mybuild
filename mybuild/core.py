@@ -249,6 +249,14 @@ class Module(ModuleBase):
     _constrain = _add_constraint
 
 
+class InterfaceModule(Module):
+    provides = []
+    default_provider = None
+
+    def __init__(self, optuple, container=None):
+        super(InterfaceModule,self).__init__(optuple, container)
+
+
 class CompositeModule(Module):
 
     # components = cumulative_sequence_property(attr.__components)
