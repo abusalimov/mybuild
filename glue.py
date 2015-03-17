@@ -65,7 +65,6 @@ class CcTool(WafBasedTool):
         self.build_kwargs['defines'].append('{0}={1}'.format(key, val))
 
     def build(self, module, ctx):
-        self.build_kwargs['use'] = [m._name for m in module.depends]
         self.build_kwargs['source'] = module.files
         self.build_kwargs['target'] = module._name
         self.build_kwargs['defines'] = []
@@ -83,6 +82,11 @@ class CcObjTool(CcTool):
 class CcAppTool(CcTool):
     def build(self, module, ctx):
         super(CcAppTool, self).build(module, ctx)
+
+        use = [instance._name for instance in ctx.instance_map \
+               if instance._name != module._name]
+
+        self.build_kwargs['use'] = use
 
         ctx(features='c cprogram', **self.build_kwargs)
 
