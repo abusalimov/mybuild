@@ -74,8 +74,8 @@ def mybuild_project(module):
     def decorator(func):
         @functools.wraps(func)
         def decorated(ctx):
-            ctx.mybuild(module)
-            return func(ctx)
+            func(ctx)
+            return ctx.mybuild(module)
         return decorated
     return decorator
 
@@ -237,4 +237,8 @@ def selftest(ctx):
 # def process_ext(self, node):
 #     self.create_compiled_task('ext2o', node)
 
+from waflib import TaskGen
 
+@TaskGen.extension('.S','.asm','.ASM','.spp','.SPP')
+def asm_hook(self,node):
+    return self.create_compiled_task('c',node)

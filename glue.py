@@ -65,9 +65,25 @@ class CcTool(WafBasedTool):
         self.build_kwargs['defines'].append('{0}={1}'.format(key, val))
 
     def build(self, module, ctx):
-        self.build_kwargs['source'] = module.files
+        sources = []
+        headers = []
+        objects = []
+
+        for fname in module.files:
+            if re.match('.*\.o', fname):
+                objects.append(fname)
+            elif re.match('.*\.h', fname):
+                headers.append(fname)
+            elif re.match('.*\.[cS]', fname):
+                sources.append(fname)
+            else:
+                raise Exception('File extension is not suported '+ fname)
+
+
+        self.build_kwargs['source'] = sources
         self.build_kwargs['target'] = module._name
         self.build_kwargs['defines'] = []
+        self.build_kwargs['includes'] = ctx.env.includes
 
         for k, v in iteritems(module.cc.defines.__dict__):
             self.define(k, v)
