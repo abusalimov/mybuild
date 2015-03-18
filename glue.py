@@ -50,7 +50,7 @@ class WafBasedTool(mybuild.core.Tool):
 class CcTool(WafBasedTool):
     def __init__(self):
         super(CcTool, self).__init__()
-        self.waf_tools.append('compiler_c')
+        self.waf_tools += ['gcc', 'c', 'ar']
         self.build_kwargs = {}
 
     def create_namespaces(self, module):
@@ -77,22 +77,23 @@ class CcTool(WafBasedTool):
 class CcObjTool(CcTool):
     def build(self, module, ctx):
         super(CcObjTool, self).build(module, ctx)
-        ctx.objects(**self.build_kwargs)
+        ctx(features='c', **self.build_kwargs)
 
 
 class CcAppTool(CcTool):
     def build(self, module, ctx):
         super(CcAppTool, self).build(module, ctx)
-        ctx.program(**self.build_kwargs)
+
+        ctx(features='c cprogram', **self.build_kwargs)
 
 
 class CcLibTool(CcTool):
     def build(self, module, ctx):
         super(CcLibTool, self).build(module, ctx)
         if module.isstatic:
-            ctx.stlib(**self.build_kwargs)
+            ctx(features='c stlib', **self.build_kwargs)
         else:
-            ctx.shlib(**self.build_kwargs)
+            ctx(features='c shlib', **self.build_kwargs)
 
 
 tool = Namespace(cc=CcObjTool, cc_app=CcAppTool, cc_lib=CcLibTool)
