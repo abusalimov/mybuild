@@ -54,6 +54,7 @@ class NodeContainer(object):
         return ("<{cls.__name__}: {literals}>"
                 .format(cls=type(self), literals=list(self.literals)))
 
+
 class Rgraph(object):
     """
     Rgraph or Reason graph
@@ -73,6 +74,10 @@ class Rgraph(object):
 
         for reason in solution.reasons:
             self.fill_data(reason)
+
+        for literal in solution.literals:
+            for reason in literal.imply_reasons:
+                self.fill_data(reason)
 
         self.find_shortest_ways()
 
@@ -104,71 +109,75 @@ class Rgraph(object):
         the shortest way to the initial nodes. Parent is the previous node in
         the shortest way.
         """
-
         queue = []
         used = set()
 
-        def push(node):
-            heapq.heappush(queue, (node.length, node))
-
-        def pop():
-            node = heapq.heappop(queue)[1]
-            if node in used:
-                return pop()
-            used.add(node)
-            return node
-
-        for node in self.initial.therefore:
-            node.length = 0
-            node.parent = node
-            push(node)
+        def update(node, parent):
+            length = 0 if node == parent else parent.length + 1
+            node.length = length
+            node.parent = parent
+            heapq.heappush(queue, (length, node))
             for container in node.containers:
-                push(container)
+                heapq.heappush(queue, (container.length, container))
 
         heapq.heapify(queue)
 
+        for node in self.initial.therefore:
+            update(node, node)
+
         while queue:
-            try:
-                node = pop()
-            except IndexError:
+            length, node = heapq.heappop(queue)
+
+            if node in used:
                 continue
+            used.add(node)
 
             for cons in node.therefore:
-                if cons.length > node.length + 1:
-                    cons.length = node.length + 1
-                    cons.parent = node
-                    push(cons)
-                    for container in cons.containers:
-                        push(container)
+                if cons.length > length + 1:
+                    update(cons, node)
 
         logger.debug('Lengths for shortest ways to {0}'.format(self))
         for node in itervalues(self.nodes):
             logger.debug('{0}: length {1}'.format(node, node.length))
 
-def way_to(source_graph, nodes):
+    def make_bare_copy(self):
+        """
+        Returns rgraph with same nodes but without any reason
+        """
+        cls = type(self)
+        new = cls.__new__(cls)
+
+        new.nodes = {}
+        new.violation_graphs = {}
+
+        for literals, node in iteritems(self.nodes):
+            new.nodes[literals.copy()] = NodeContainer(node.literals.copy())
+
+        for literals, node in iteritems(new.nodes):
+            if len(literals) > 1:
+                new.update_containers(node)
+
+        new.initial = new.nodes[frozenset()]
+
+        return new
+
+
+def path_to(source_graph, nodes):
     """
     Fills rgraph copy with reasons of shortest way to violation literals
     or violation branch
     """
     def fill(branch, node):
-        if node.length == 0:
-            if not node.members:
-                branch.fill_data(node.becauseof[source_graph.initial])
-            else:
-                for member in node.members:
-                    fill(branch, member)
-            return;
-
-        if not node.members:
-            fill(branch, node.parent)
-            branch.fill_data(node.becauseof[node.parent])
-            return
-        else:
+        if node.members:
             for member in node.members:
                 fill(branch, member)
-            return
+        elif node.length == 0:
+            branch.fill_data(node.becauseof[source_graph.initial])
+        else:
+            fill(branch, node.parent)
+            branch.fill_data(node.becauseof[node.parent])
 
-    copy = branch_copy(source_graph)
+    copy = source_graph.make_bare_copy()
     for node in nodes:
         if node.length == float("+inf"):
             raise Exception('No way to {0}'.format(node))
@@ -176,87 +185,60 @@ def way_to(source_graph, nodes):
 
     return copy
 
-def shorten_branch(trunk, branch, rgraph_branch, violation_nodes):
-    min_length = float("+inf")
-    min_node = None
-    #try to find shortest way to violation nodes
-    for node in violation_nodes:
-        length = rgraph_branch.nodes[frozenset([node[True]])].length + \
-                rgraph_branch.nodes[frozenset([node[False]])].length
-        if length < min_length:
-            min_length = length
-            min_node = node
 
-    if min_node is not None:
-        nodes = set()
-        nodes.add(rgraph_branch.nodes[frozenset([min_node[True]])])
-        nodes.add(rgraph_branch.nodes[frozenset([min_node[False]])])
-        return way_to(rgraph_branch, nodes)
+def shorten_graph(rgraph, violation_nodes):
+    def weight(node):
+        return rgraph.nodes[frozenset([node[True]])].length + \
+               rgraph.nodes[frozenset([node[False]])].length
 
-    if rgraph_branch.initial.length != float("+inf"):
-        return way_to(rgraph_branch, set([rgraph_branch.initial]))
+    min_length = weight(min(violation_nodes, key = weight))
 
-    #Actually, it can't be, otherwise how we get violation?
-    raise Exception('No ways to some violation branch or violation nodes {0} '
-                    'in branch {1}'.format(violation_nodes, branch))
+    nodes = filter(lambda node: min_length == weight(node), violation_nodes)
 
-def branch_copy(branch):
-    """
-    Returns rgraph with same nodes but without any reason
-    """
-    cls = type(branch)
-    new = cls.__new__(cls)
-
-    new.nodes = {}
-    for literals, node in iteritems(branch.nodes):
-        new.nodes[literals.copy()] = NodeContainer(node.literals.copy())
-    for literals, node in iteritems(new.nodes):
-        if len(literals) > 1:
-            new.update_containers(node)
-
-    new.violation_graphs = {}
-    new.initial = new.nodes[frozenset()]
-
-    return new
-
-def get_violation_nodes(solution):
-    violation_nodes = set()
-    literals = solution.literals
-    nodes = solution.nodes
+    literals = set()
     for node in nodes:
-        if node[False] in literals and node[True] in literals:
-            violation_nodes.add(node)
-    return violation_nodes
+        literals.add(rgraph.nodes[frozenset([node[False]])])
+        literals.add(rgraph.nodes[frozenset([node[True]])])
 
-def create_rgraph_branch(trunk, branch, parent_rgraph):
+    if literals:
+        return path_to(rgraph, literals)
+
+    return path_to(rgraph, [rgraph.initial])
+
+
+def prepare_rgraph_branch(trunk, branch):
     solution = branch.flatten()
-    #TODO move to solver
+    # TODO move to solver
     for gen_literal in branch.gen_literals:
         solution.reasons.add(Reason(gen_literal))
+
     for literal in solution.literals:
-        for reason in literal.imply_reasons:
-            if (literal not in trunk.dead_branches or
-                literal in branch.gen_literals):
-                solution.reasons.add(reason)
-    rgraph = Rgraph(solution)
-    return shorten_branch(trunk, branch, rgraph, get_violation_nodes(branch))
+        for reason in literal.imply_reasons[:]:
+            if (literal in trunk.dead_branches and
+                literal not in branch.gen_literals):
+                literal.imply_reasons.remove(reason)
 
-def get_rgraph_way(rgraph, literals):
-    nodes = set()
-    for literal in literals:
-        nodes.add(rgraph.nodes[frozenset([literal])])
-    rgraph_way = way_to(rgraph, nodes)
-    rgraph_way.violation_graphs = rgraph.violation_graphs
-    return rgraph_way
+    return solution
 
-def get_rgraph(trunk):
-    rgraph = Rgraph(trunk)
-    for literal in trunk.literals:
-        for reason in literal.imply_reasons:
-            rgraph.fill_data(reason)
-    #It will better if this function will run just one time, but adding reasons
-    #to trunk it ruins flatten()
-    rgraph.find_shortest_ways()
+
+def get_violation_nodes(solution):
+    def is_violation(node):
+        literals = solution.literals
+        return node[False] in literals and node[True] in literals
+
+    return filter(is_violation, solution.nodes)
+
+
+def get_error_rgraph(solution, is_short=True):
+    def build_rgraph(branch):
+        rgraph = Rgraph(branch)
+        if is_short:
+            violation_nodes = list(get_violation_nodes(branch))
+            rgraph = shorten_graph(rgraph, violation_nodes)
+        return rgraph
+
+    trunk = solution.trunk
+    rgraph = build_rgraph(trunk)
 
     branchmap = {}
     for literal, branch in iteritems(trunk.dead_branches):
@@ -268,24 +250,15 @@ def get_rgraph(trunk):
             rgraph.violation_graphs[literal] = rgraph_branch
             continue
 
-        rgraph_branch = create_rgraph_branch(trunk, branch, rgraph)
+        branch_solution = prepare_rgraph_branch(trunk, branch)
+        rgraph_branch = build_rgraph(branch_solution)
         rgraph_branch.violation_graphs = rgraph.violation_graphs
+
         branchmap[frozenset(branch.gen_literals)] = rgraph_branch
         rgraph.violation_graphs[literal] = rgraph_branch
 
     return rgraph
 
-def get_error_rgraph(solution_error):
-    solution = solution_error.trunk
-    rgraph = get_rgraph(solution)
-
-    violation_nodes = get_violation_nodes(solution)
-    literals = set()
-    for node in violation_nodes:
-        literals.add(node[False])
-        literals.add(node[True])
-    # print 'violation_nodes:', violation_nodes
-    return get_rgraph_way(rgraph, literals)
 
 def traverse_error_graph(rgraph):
     """
