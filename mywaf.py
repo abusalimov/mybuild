@@ -116,8 +116,7 @@ def my_resolve(ctx, conf_module):
             instance_map = resolve(conf_module)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
-            reason_generator = traversal(e.rgraph)
-            for reason, depth in reason_generator:
+            for reason, depth in traverse_error_rgraph(e.rgraph):
                 print_reason(e.rgraph, reason, depth)
             raise e
 

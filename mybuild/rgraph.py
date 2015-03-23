@@ -13,46 +13,53 @@ from collections import deque
 
 from mybuild.pgraph import Reason
 
-from util.operator import getter
-from util.operator import invoker
-
 import util, logging
 logger = util.get_extended_logger(__name__)
 
 
-class NodeContainer(object):
+class Rnode(object):
+    def __init__(self, literal, rgraph):
+        super(Rnode, self).__init__()
 
-    @property
-    def length(self):
-        if self.members:
-            return sum(r.length for r in self.members)
-        else:
-            return self._length
+        self.rgraph = rgraph
+        self.literal = literal
 
-    @length.setter
-    def length(self, value):
-        self._length = value
+        self.containers = set()
+        self.becauseof = {} # key = Container, value = Reason
 
-    def __init__(self, literals):
-        self.literals = frozenset(literals)
-        self.containers = set() #NodeContainrs set that contains nodes with
-                                #current node as member
-        self.members = set()    #Node set of nodes with one literal from
-                                #node.literals
-        self.therefore = {} #key = node, value = reason
-        self.becauseof = {} #key = node, value = reason
-        self._length = float("+inf")
+        self.length = float("+inf")
         self.parent = None
 
-    def __lt__(self, other):
-        return self.length < other.length
+    def __repr__(self):
+        return ("<{cls.__name__}: {literal}>"
+                .format(cls=type(self), literal=self.literal))
 
-    def compare_literals(self, literals):
-        return (set(literals) == self.literals)
+    def container(self):
+        return self.rgraph.containers[frozenset([self.literal])]
+
+class Container(object):
+    @property
+    def length(self):
+        return sum(member.length for member in self.members)
+
+    def __init__(self, literals, rgraph):
+        super(Container, self).__init__()
+
+        self.rgraph = rgraph
+
+        self.literals = frozenset(literals)
+        self.members = set()
+        self.therefore = {} # key = Rnode, value = Reason
 
     def __repr__(self):
         return ("<{cls.__name__}: {literals}>"
                 .format(cls=type(self), literals=list(self.literals)))
+
+    def update(self):
+        for literal in self.literals:
+            member = self.rgraph.nodes[literal]
+            self.members.add(member)
+            member.containers.add(self)
 
 
 class Rgraph(object):
@@ -60,81 +67,84 @@ class Rgraph(object):
     Rgraph or Reason graph
     """
     def __init__(self, solution):
-        self.initial = NodeContainer(set())
+        self.initial = Container(set(), self)
+
+        self.containers = {}
+        self.containers[frozenset()] = self.initial
+        self.containers[frozenset([None])] = self.initial
+
         self.nodes = {}
-        self.nodes[frozenset()] = self.initial
-        self.nodes[frozenset([None])] = self.initial
         self.violation_graphs = {}
 
-        logger.dump(solution)
+        # logger.dump(solution)
 
         for literal in solution.literals:
-            self.nodes[frozenset([literal])] = NodeContainer(frozenset([literal]))
-            self.nodes[frozenset([~literal])] = NodeContainer(frozenset([~literal]))
+            self.nodes[literal] = Rnode(literal, self)
+            self.nodes[~literal] = Rnode(~literal, self)
+
+            self.containers[frozenset([literal])] = \
+                                    Container(frozenset([literal]), self)
+            self.containers[frozenset([~literal])] = \
+                                    Container(frozenset([~literal]), self)
 
         for reason in solution.reasons:
-            self.fill_data(reason)
+            self.initialize_nodes(reason)
 
         for literal in solution.literals:
             for reason in literal.imply_reasons:
-                self.fill_data(reason)
+                self.initialize_nodes(reason)
 
-        self.find_shortest_ways()
+        for literals, container in iteritems(self.containers):
+            container.update()
 
-    def fill_data(self, reason):
-        if len(reason.cause_literals) > 1:
-            s = frozenset(reason.cause_literals)
-            if s not in self.nodes:
-                self.nodes[s] = NodeContainer(s)
-                self.update_containers(self.nodes[s])
+        self.find_shortest_paths()
 
-        cause_node = self.nodes[frozenset(reason.cause_literals)]
-        literal_node = self.nodes[frozenset([reason.literal])]
+    def initialize_nodes(self, reason):
+        cause_literals = frozenset(reason.cause_literals)
+        if cause_literals not in self.containers:
+            self.containers[cause_literals] = Container(cause_literals, self)
 
-        cause_node.therefore[literal_node] = reason
-        literal_node.becauseof[cause_node] = reason
+        literal_node = self.nodes[reason.literal]
+        cause_container = self.containers[cause_literals]
 
+        literal_node.becauseof[cause_container] = reason
+        cause_container.therefore[literal_node] = reason
 
-    def update_containers(self, node):
-        for literal in node.literals:
-            member = self.nodes[frozenset([literal])]
-            node.members.add(member)
-            member.containers.add(node)
-
-    def find_shortest_ways(self):
+    def find_shortest_paths(self):
         """
-        This algorithm a common Dijkstra's algorithm with small modification,
-        length of node of more one reason is computed as sum of it's becauseof.
-        After function applying each node contains field length, the length of
-        the shortest way to the initial nodes. Parent is the previous node in
-        the shortest way.
+        Finds the shortest paths to each of the self.nodes using modified
+        Dijkstra's algorithm. The length of path to node is computed as
+        a sum of it's becauseof.
+        Output:
+            Rnode.length - length of the shortest path (inf if there is no one)
+            Rnode.parent - cause container (self for initials and None for ones
+                                            with infinite length)
         """
         queue = []
         used = set()
 
-        def update(node, parent):
+        def update_and_post(node, parent):
             length = 0 if node == parent else parent.length + 1
             node.length = length
             node.parent = parent
-            heapq.heappush(queue, (length, node))
             for container in node.containers:
                 heapq.heappush(queue, (container.length, container))
 
         heapq.heapify(queue)
 
-        for node in self.initial.therefore:
-            update(node, node)
+        for container in self.initial.therefore:
+            update_and_post(container, container)
 
         while queue:
-            length, node = heapq.heappop(queue)
+            length, container = heapq.heappop(queue)
 
-            if node in used:
+            if container in used:
                 continue
-            used.add(node)
+            used.add(container)
 
-            for cons in node.therefore:
+            for cons in container.therefore:
                 if cons.length > length + 1:
-                    update(cons, node)
+                    update_and_post(cons, container)
 
         logger.debug('Lengths for shortest ways to {0}'.format(self))
         for node in itervalues(self.nodes):
@@ -148,62 +158,65 @@ class Rgraph(object):
         new = cls.__new__(cls)
 
         new.nodes = {}
+        new.containers = {}
         new.violation_graphs = {}
 
-        for literals, node in iteritems(self.nodes):
-            new.nodes[literals.copy()] = NodeContainer(node.literals.copy())
+        for literal, node in iteritems(self.nodes):
+            new.nodes[literal] = Rnode(literal, new)
 
-        for literals, node in iteritems(new.nodes):
-            if len(literals) > 1:
-                new.update_containers(node)
+        for literals, container in iteritems(self.containers):
+            new.containers[literals] = Container(container.literals, new)
+            new.containers[literals].update()
 
-        new.initial = new.nodes[frozenset()]
+        new.initial = new.containers[frozenset()]
 
         return new
 
 
-def path_to(source_graph, nodes):
+def shorten_rgraph(rgraph, rnodes):
     """
-    Fills rgraph copy with reasons of shortest way to violation literals
-    or violation branch
+    Constructs rgraph containing the the most shortest paths to the rnodes
+    passed as argument.
     """
-    def fill(branch, node):
-        if node.members:
-            for member in node.members:
-                fill(branch, member)
-        elif node.length == 0:
-            branch.fill_data(node.becauseof[source_graph.initial])
-        else:
-            fill(branch, node.parent)
-            branch.fill_data(node.becauseof[node.parent])
+    def set_path(rgraph_copy, container):
+        for member in container.members:
+            if member.length == 0:
+                rgraph_copy.initialize_nodes(member.becauseof[rgraph.initial])
+            else:
+                set_path(rgraph_copy, member.parent)
+                rgraph_copy.initialize_nodes(member.becauseof[member.parent])
 
-    copy = source_graph.make_bare_copy()
-    for node in nodes:
+    rgraph_copy = rgraph.make_bare_copy()
+    for node in rnodes:
         if node.length == float("+inf"):
             raise Exception('No way to {0}'.format(node))
-        fill(copy, node)
+        set_path(rgraph_copy, node.container())
 
-    return copy
+    return rgraph_copy
 
 
-def shorten_graph(rgraph, violation_nodes):
-    def weight(node):
-        return rgraph.nodes[frozenset([node[True]])].length + \
-               rgraph.nodes[frozenset([node[False]])].length
+def shorten_error_rgraph(rgraph, violation_nodes):
+    """
+    Constructs rgraph containing only the most shortest paths to violation
+    nodes with smallest length.
+    """
+    def length(node):
+        return rgraph.nodes[node[True]].length + \
+               rgraph.nodes[node[False]].length
 
-    min_length = weight(min(violation_nodes, key = weight))
+    min_length = length(min(violation_nodes, key = length))
 
-    nodes = filter(lambda node: min_length == weight(node), violation_nodes)
+    nodes = filter(lambda node: min_length == length(node), violation_nodes)
 
-    literals = set()
+    rnodes = set()
     for node in nodes:
-        literals.add(rgraph.nodes[frozenset([node[False]])])
-        literals.add(rgraph.nodes[frozenset([node[True]])])
+        rnodes.add(rgraph.nodes[node[False]])
+        rnodes.add(rgraph.nodes[node[True]])
 
-    if literals:
-        return path_to(rgraph, literals)
+    if rnodes:
+        return shorten_rgraph(rgraph, rnodes)
 
-    return path_to(rgraph, [rgraph.initial])
+    return shorten_rgraph(rgraph, [rgraph.initial])
 
 
 def prepare_rgraph_branch(trunk, branch):
@@ -234,7 +247,7 @@ def get_error_rgraph(solution, is_short=True):
         rgraph = Rgraph(branch)
         if is_short:
             violation_nodes = list(get_violation_nodes(branch))
-            rgraph = shorten_graph(rgraph, violation_nodes)
+            rgraph = shorten_error_rgraph(rgraph, violation_nodes)
         return rgraph
 
     trunk = solution.trunk
@@ -260,7 +273,7 @@ def get_error_rgraph(solution, is_short=True):
     return rgraph
 
 
-def traverse_error_graph(rgraph):
+def traverse_error_rgraph(rgraph):
     """
     Traverses the input rgraph and yields tuples (reason, shift) in the reverse
     order. The reverse order is chosen in order to make output examination more
@@ -298,33 +311,37 @@ def traverse_error_graph(rgraph):
 
     def dfs(node, reason):
         is_visited = node in visited_nodes
+        container = node.container()
 
         if not is_visited:
             visited_nodes.add(node)
+            visited_containers.add(container)
             reason_list.append(reason)
 
-        if is_visited or not node.therefore:
+        if is_visited or not container.therefore:
             yield reason_list[:]
             reason_list[:] = []
             return
 
-        for cons in node.therefore:
-            for each in dfs(cons, node.therefore[cons]):
+        for cons, reason in iteritems(container.therefore):
+            for each in dfs(cons, reason):
                 yield each
-            for container in cons.containers:
-                process_container(container)
+            for cons_container in cons.containers:
+                post_traversal(cons_container)
 
-    def process_container(container):
+    def post_traversal(container):
         if container in visited_containers:
             return
-        visited_containers.add(container)
-        for ccons in container.therefore:
-            if ccons not in node_deque and ccons not in visited_nodes:
-                node_deque.appendleft((ccons, container.therefore[ccons]))
 
-    for node in rgraph.initial.therefore:
-        node_deque.append((node, rgraph.initial.therefore[node]))
-        process_container(node)
+        visited_containers.add(container)
+
+        for cons, reason in iteritems(container.therefore):
+            if cons not in node_deque and cons not in visited_nodes:
+                node_deque.appendleft((cons, reason))
+
+    for node, reason in iteritems(rgraph.initial.therefore):
+        node_deque.append((node, reason))
+        post_traversal(node.container())
 
     while node_deque:
         node, reason = node_deque.pop()
