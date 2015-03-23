@@ -287,42 +287,76 @@ def get_error_rgraph(solution_error):
     # print 'violation_nodes:', violation_nodes
     return get_rgraph_way(rgraph, literals)
 
-def traversal(rgraph):
+def traverse_error_graph(rgraph):
     """
-    Simple way to print reason graph. Nodes of more one reason are printed
-    in new line without offset. Returns generator of touples (reason, depth)
+    Traverses the input rgraph and yields tuples (reason, shift) in the reverse
+    order. The reverse order is chosen in order to make output examination more
+    natural to users.
+
+    In case input rgraph is shortened, the outermost level (shift is 0) helps to
+    answer WHICH module led to the violation, the rest ones tell HOW the
+    solver got this.
+
+    In case the rgraph is full, the outermost reasons may correspond
+    an alternative path to some node. So that this method is most useful in
+    case of shortened rgraph.
+
+    Examine the example:
+
+        Input:
+        A -> B
+            B -> C
+                C -> D
+            B -> D
+
+        Output:
+        D <- C
+            C <- B
+                B <- A
+        B <- D
+
+    Yields:
+        (reason, shift) pairs
     """
     node_deque = deque()
-    visited = set()
+    visited_nodes = set()
+    visited_containers = set()
+    reason_list = []
 
-    def dfs(node, reason, depth):
-        if node in visited:
-            yield (reason, depth)
+    def dfs(node, reason):
+        is_visited = node in visited_nodes
+
+        if not is_visited:
+            visited_nodes.add(node)
+            reason_list.append(reason)
+
+        if is_visited or not node.therefore:
+            yield reason_list[:]
+            reason_list[:] = []
             return
 
-        visited.add(node)
-        yield (reason, depth)
-        for cons in node.therefore:       
-            for each in dfs(cons, node.therefore[cons], depth + 1):
+        for cons in node.therefore:
+            for each in dfs(cons, node.therefore[cons]):
                 yield each
             for container in cons.containers:
                 process_container(container)
-        
 
     def process_container(container):
-        if container in visited:
+        if container in visited_containers:
             return
-        visited.add(container)
+        visited_containers.add(container)
         for ccons in container.therefore:
-            if ccons not in node_deque:
+            if ccons not in node_deque and ccons not in visited_nodes:
                 node_deque.appendleft((ccons, container.therefore[ccons]))
 
-    #node_deque contains touples (node, reason)
     for node in rgraph.initial.therefore:
         node_deque.append((node, rgraph.initial.therefore[node]))
         process_container(node)
 
     while node_deque:
         node, reason = node_deque.pop()
-        for each in dfs(node, reason, 0):
-            yield each
+        for chain in dfs(node, reason):
+            shift = 0
+            while chain:
+                yield chain.pop(), shift
+                shift += 1
