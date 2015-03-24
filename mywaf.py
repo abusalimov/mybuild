@@ -219,6 +219,41 @@ def selftest(ctx):
 
 from waflib import TaskGen
 
+@TaskGen.feature('module_header')
+def header_gen(self):
+    header = '''
+#ifndef {GUARD}
+#define {GUARD}
+
+{INCLUDES}
+
+{OPTIONS}
+
+#endif /* {GUARD} */
+'''
+    if 'includes' in self.__dict__:
+        include_list = map('#include <{0}>\n\n'.format, self.includes)
+        includes = ''.join(include_list)
+    else:
+        includes = ''
+
+    if 'options' in self.__dict__:
+        option_list = map('#define {0}\n\n'.format, self.options)
+        options = ''.join(option_list)
+    else:
+        options = ''
+
+    header = header.format(GUARD=self.guard, INCLUDES=includes, OPTIONS=options)
+
+    depth = len(self.name.split('.'))
+    self.target =  '{PREFIX}include/{PATH}'.format(PREFIX='../' * depth,
+                                                   PATH=self.output_header)
+
+    self.rule = lambda self: self.outputs[0].write(header)
+
+    self.ext_out = ['.h']
+
+
 @TaskGen.extension('.S', '.asm', '.ASM', '.spp', '.SPP')
 def asm_hook(self, node):
     return self.create_compiled_task('c', node)

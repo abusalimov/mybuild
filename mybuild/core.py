@@ -51,8 +51,10 @@ class ModuleMetaBase(type):
 
     @property
     def _fullname(cls):
-        if cls.__module__:
-            return cls.__module__ + '.' + cls.__name__
+        if cls.__module__ and cls.__module__ != '__main__':
+            quals = cls.__module__.split('.')
+            quals[-1] = cls.__name__
+            return '.'.join(quals)
         else:
             return cls.__name__
 
