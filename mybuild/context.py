@@ -161,8 +161,8 @@ class Context(object):
                         why_module_with_no_provider_must_not_be_included)
 
             module_atom.equivalent(providers_node,
-                    why_becauseof=why_module_provided_by_another,
-                    why_therefore=why_module_provides_another)
+                    why_becauseof=why_another_module_provides_this,
+                    why_therefore=why_module_must_be_provided_by_anything)
 
 
     def resolve(self, initial_module):
@@ -277,19 +277,24 @@ def why_module_implies_option(outcome, *causes):
 def why_module_can_have_at_most_one_provider(outcome, *causes):
     return 'module can have at most one provider: %s: %s' % (outcome, causes)
 def why_not_included_module_cannot_have_a_provider(outcome, *causes):
-    return 'not included module cannot have a provider: %s: %s' % (outcome, causes)
+    return 'not included module {0} cannot have a provider'.format(outcome)
 def why_module_with_no_provider_must_not_be_included(outcome, *causes):
-    return 'module with no provider must not be included: %s: %s' % (outcome, causes)
-def why_module_provides_another(outcome, *causes):
-    return 'module provides another: %s: %s' % (outcome, causes)
-def why_module_provided_by_another(outcome, *causes):
-    return 'module provided by another: %s: %s' % (outcome, causes)
+    return 'module {0} has no provider and cannot be included'.format(outcome)
+def why_another_module_provides_this(outcome, cause):
+    return 'module %s provided by %s' % (cause, outcome)
+
+def why_module_must_be_provided_by_anything(outcome, cause):
+    node, value = outcome
+    if value and not node._operands:
+            return 'Nothing provides {module}'.format(module=cause)
+    return 'module {module} must be provided by anything'.format(module=cause)
 
 def why_instance_implies_its_constraints(outcome, cause):
     node, value = outcome
-    what = ('enabled as a dependence' if value else
-            'disabled as a dependent')
-    fmt = '{node} is {what} of {cause.node}'
+    if value:
+        fmt = 'required by {cause.node}'
+    else:
+        fmt = '{node} disabled as a dependent of {cause.node}'
     return fmt.format(**locals())
 
 def why_inviable_instance_is_disabled(outcome, *_):
