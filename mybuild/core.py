@@ -191,6 +191,10 @@ class Module(ModuleBase):
     def tools(self):
         return []
 
+    @cached_property
+    def includes(self):
+        return []
+
     # TODO: remove it as redundant
     @cached_property
     def depends(self):

@@ -84,7 +84,8 @@ class CcTool(WafBasedTool):
             elif re.match('.*\.[cS]', fname):
                 sources.append(fname)
 
-        includes = [interpolate_string(s, ctx.env) for s in ctx.env.includes]
+        includes = ctx.env.includes + module.includes
+        includes = [interpolate_string(s, ctx.env) for s in includes]
 
         self.build_kwargs['source'] = sources
         self.build_kwargs['target'] = module._name
