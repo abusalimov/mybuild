@@ -155,8 +155,8 @@ def my_recurse(ctx, instances, name=None, mandatory=True):
     for instance in instances:
         node = ctx.root.find_node(instance._file)
 
-        ctx.pre_recurse(node)
         for tool in instance.tools:
+            ctx.pre_recurse(node)
             try:
                 user_function = getattr(tool, name, None)
                 if user_function is None:
