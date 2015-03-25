@@ -111,9 +111,9 @@ class CcLibTool(CcTool):
     def build(self, module, ctx):
         super(CcLibTool, self).build(module, ctx)
         if module.isstatic:
-            ctx(features='c stlib', **self.build_kwargs)
+            ctx(features='c cstlib', **self.build_kwargs)
         else:
-            ctx(features='c shlib', **self.build_kwargs)
+            ctx(features='c cshlib', **self.build_kwargs)
 
 
 tool = Namespace(cc=CcObjTool, cc_app=CcAppTool, cc_lib=CcLibTool)
