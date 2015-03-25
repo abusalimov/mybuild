@@ -48,6 +48,14 @@ class WafBasedTool(mybuild.core.Tool):
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
+def interpolate_string(string, env):
+    pattern = re.compile('.*\${(\w+)}.*')
+    match = re.search(pattern, string)
+    while match:
+        res = match.group(1)
+        string = string.replace('${' + res + '}', env[res])
+        match = re.search(pattern, string)
+    return string
 
 class CcTool(WafBasedTool):
     def __init__(self):
@@ -75,6 +83,8 @@ class CcTool(WafBasedTool):
                 objects.append(fname)
             elif re.match('.*\.[cS]', fname):
                 sources.append(fname)
+
+        includes = [interpolate_string(s, ctx.env) for s in ctx.env.includes]
 
         self.build_kwargs['source'] = sources
         self.build_kwargs['target'] = module._name
