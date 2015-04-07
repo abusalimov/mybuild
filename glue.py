@@ -19,6 +19,7 @@ from mybuild.binding import pydsl
 from util.operator import attr
 from util.namespace import Namespace
 from util.prop import cached_property
+from util.misc import stringify
 
 
 class LoaderMixin(object):
@@ -69,9 +70,7 @@ class CcTool(WafBasedTool):
     def define(self, key, val):
         assert('defines' in self.build_kwargs)
         if isinstance(val, str):
-            import json
-            val = json.dumps(val).replace("\\u0007", "\a") \
-                                 .replace("\\u000b", "\v")
+            val = stringify(val)
         self.build_kwargs['defines'].append('{0}={1}'.format(key, val))
 
     def build(self, module, ctx):

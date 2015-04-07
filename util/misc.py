@@ -7,6 +7,7 @@ from __future__ import absolute_import
 from _compat import *
 
 from collections import namedtuple as _namedtuple
+import json as _json
 
 from util.collections import is_mapping
 
@@ -33,6 +34,12 @@ def to_dict(iterable_or_mapping, check_exclusive=False):
         raise ValueError('Item(s) with conflicting keys detected')
 
     return ret_dict
+
+
+def stringify(s):
+    return (_json.dumps(s)
+            .replace(r'\u0007', r'\a')
+            .replace(r'\u000b', r'\v'))
 
 
 if hasattr(0, 'bit_length'):
