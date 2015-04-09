@@ -49,14 +49,15 @@ class WafBasedTool(mybuild.core.Tool):
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
-def interpolate_string(string, env):
-    pattern = re.compile('.*\${(\w+)}.*')
-    match = re.search(pattern, string)
-    while match:
-        res = match.group(1)
-        string = string.replace('${' + res + '}', env[res])
-        match = re.search(pattern, string)
-    return string
+
+def interpolate_string(s, env):
+    """Bash-like string interpolation."""
+    while True:
+        expanded = _string.Template(s).substitute(env)
+        if expanded == s:
+            return s
+        s = expanded
+
 
 class CcTool(WafBasedTool):
     def __init__(self):

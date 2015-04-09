@@ -8,6 +8,7 @@ from _compat import *
 
 from collections import namedtuple as _namedtuple
 import json as _json
+import string as _string
 
 from util.collections import is_mapping
 
