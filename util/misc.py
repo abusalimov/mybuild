@@ -8,6 +8,7 @@ from _compat import *
 
 from collections import namedtuple as _namedtuple
 import json as _json
+import string as _string
 
 from util.collections import is_mapping
 
@@ -40,6 +41,10 @@ def stringify(s):
     return (_json.dumps(s)
             .replace(r'\u0007', r'\a')
             .replace(r'\u000b', r'\v'))
+
+def interpolate_string(s, env):
+    """Bash-like string interpolation."""
+    return _string.Template(s).substitute(env)
 
 
 if hasattr(0, 'bit_length'):

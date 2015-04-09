@@ -19,6 +19,7 @@ from mybuild.binding import pydsl
 from util.operator import attr
 from util.namespace import Namespace
 from util.prop import cached_property
+from util.misc import interpolate_string
 from util.misc import stringify
 
 
@@ -49,14 +50,6 @@ class WafBasedTool(mybuild.core.Tool):
     def configure(self, module, ctx):
         ctx.load(self.waf_tools)
 
-def interpolate_string(string, env):
-    pattern = re.compile('.*\${(\w+)}.*')
-    match = re.search(pattern, string)
-    while match:
-        res = match.group(1)
-        string = string.replace('${' + res + '}', env[res])
-        match = re.search(pattern, string)
-    return string
 
 class CcTool(WafBasedTool):
     def __init__(self):
