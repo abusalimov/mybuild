@@ -78,14 +78,12 @@ class Rgraph(object):
 
         # logger.dump(solution)
 
-        for literal in solution.literals:
-            self.nodes[literal] = Rnode(literal, self)
-            self.nodes[~literal] = Rnode(~literal, self)
+        for node in solution.nodes:
+            for literal in node:
+                self.nodes[literal] = Rnode(literal, self)
 
-            self.containers[frozenset([literal])] = \
-                                    Container(frozenset([literal]), self)
-            self.containers[frozenset([~literal])] = \
-                                    Container(frozenset([~literal]), self)
+                literal_set = frozenset([literal])
+                self.containers[literal_set] = Container(literal_set, self)
 
         for reason in solution.reasons:
             self.initialize_nodes(reason)
@@ -201,8 +199,7 @@ def shorten_error_rgraph(rgraph, violation_nodes):
     nodes with smallest length.
     """
     def length(node):
-        return rgraph.nodes[node[True]].length + \
-               rgraph.nodes[node[False]].length
+        return sum(rgraph.nodes[literal].length for literal in node)
 
     min_length = length(min(violation_nodes, key = length))
 
