@@ -137,7 +137,7 @@ class GenHeadersTool(WafBasedTool):
             opt_type = 'STRING'
         elif isinstance(value, bool):
             opt_type = 'BOOLEAN'
-            value = 1 if value else 0
+            value = int(value)
         elif isinstance(value, int):
             opt_type = 'NUMBER'
         else:
