@@ -109,7 +109,7 @@ class CcAppTool(CcTool):
     def build(self, module, ctx):
         super(CcAppTool, self).build(module, ctx)
 
-        use = [instance._name for instance in ctx.instance_map \
+        use = [instance._name for instance in ctx.instance_map
                if instance._name != module._name]
 
         self.build_kwargs['use'] = use
@@ -138,30 +138,27 @@ class GenHeadersTool(WafBasedTool):
                 headers.append(preproc_relative_path + fname)
         return headers
 
-    def get_option_string(self, mod_name, opt_name, value):
+    def get_option_string(self, mod_name, option, value):
         if isinstance(value, str):
-            opt_type = 'STRING'
+            type_str = 'STRING'
         elif isinstance(value, bool):
-            opt_type = 'BOOLEAN'
-            value = 1 if value else 0
+            value = int(value)
+            type_str = 'BOOLEAN'
         elif isinstance(value, int):
-            opt_type = 'NUMBER'
+            type_str = 'NUMBER'
         else:
-            raise Exception('Option with type {0} is not supported' \
-                            .format(type(value)))
+            raise TypeError("Option value '{}' of type '{}' is not supported"
+                            .format(value, type(value)))
 
-        fmt = 'OPTION_{TYPE}_{MOD}__{NAME} {VALUE}'
-
-        return fmt.format(TYPE=opt_type, MOD=mod_name, NAME=opt_name,
-                          VALUE=value)
+        return ('OPTION_{type_str}_{mod_name}__{option} {value}'
+                .format(**locals()))
 
     def get_options(self, module):
         options = []
 
-        options_dict = module._ModuleBase__optuple.__dict__
-        for opt_name, opt_val in iteritems(options_dict):
+        for option, value in module._optuple._iterpairs():
             mod_name = module._fullname.replace('.', '__')
-            options.append(self.get_option_string(mod_name, opt_name, opt_val))
+            options.append(self.get_option_string(mod_name, option, value))
 
         return options
 
