@@ -103,7 +103,7 @@ class CcAppTool(CcTool):
     def build(self, module, ctx):
         super(CcAppTool, self).build(module, ctx)
 
-        use = [instance._name for instance in ctx.instance_map \
+        use = [instance._name for instance in ctx.instance_map
                if instance._name != module._name]
 
         self.build_kwargs['use'] = use
@@ -141,7 +141,7 @@ class GenHeadersTool(WafBasedTool):
         elif isinstance(value, int):
             opt_type = 'NUMBER'
         else:
-            raise Exception('Option with type {0} is not supported' \
+            raise Exception('Option with type {0} is not supported'
                             .format(type(value)))
 
         fmt = 'OPTION_{TYPE}_{MOD}__{NAME} {VALUE}'
