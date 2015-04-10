@@ -71,9 +71,11 @@ class CcTool(WafBasedTool):
         objects = []
 
         for fname in module.files:
-            if re.match('.*\.o', fname):
+            if fname.endswith('.o'):
                 objects.append(fname)
-            elif re.match('.*\.[cS]', fname):
+            # elif fname.endswith('.lds.S'):
+            #     sources.append(fname)
+            elif fname.endswith('.c') or fname.endswith('.S'):
                 sources.append(fname)
 
         includes = ctx.env.includes + module.includes
@@ -99,14 +101,32 @@ class CcObjTool(CcTool):
         ctx(features='c', **self.build_kwargs)
 
 
-class CcAppTool(CcTool):
+class LdTool(WafBasedTool):
+    def __init__(self):
+        super(LdTool, self).__init__()
+        self.waf_tools += ['c']
+        self.build_kwargs = {}
+
+    def create_namespaces(self, module):
+        return dict(ld=Namespace(flags=[]))
+
+    def configure(self, module, ctx):
+        super(LdTool, self).configure(module, ctx)
+        ctx.find_program('ld', var='LINK_CC')
+        ctx.env.SHLIB_MARKER = ctx.env.STLIB_MARKER = None
+        self.build_kwargs['linkflags'] = module.ld.flags
+
+
+class CcAppTool(LdTool):
+
     def build(self, module, ctx):
-        super(CcAppTool, self).build(module, ctx)
+        # super(CcAppTool, self).build(module, ctx)
 
         use = [instance._name for instance in ctx.instance_map
                if instance._name != module._name]
 
         self.build_kwargs['use'] = use
+        self.build_kwargs['target'] = module._name
 
         ctx(features='c cprogram', **self.build_kwargs)
 
@@ -115,7 +135,7 @@ class CcLibTool(CcTool):
     def build(self, module, ctx):
         super(CcLibTool, self).build(module, ctx)
         if module.isstatic:
-            ctx(features='c cstlib', **self.build_kwargs)
+            ctx(features='c', **self.build_kwargs)
         else:
             ctx(features='c cshlib', **self.build_kwargs)
 
@@ -213,7 +233,7 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
         tools = [CcObjTool, GenHeadersTool]
 
     class ApplicationCcModule(mybuild.core.Module):
-        tools = [CcAppTool, GenHeadersTool]
+        tools = [CcAppTool]
 
     class LibCcModule(mybuild.core.Module):
         tools = [CcLibTool, GenHeadersTool]
@@ -228,6 +248,20 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
     dsl.application  = ApplicationCcModule._meta_for_base(option_types=[])
     dsl.library      = LibCcModule._meta_for_base(option_types=[])
     dsl.option       = mybuild.core.Optype
+    dsl.project      = None
+
+import sys
+sys.path.append("../mybuild-legacy-parser")
+import m2pfile
+
+class M2pDslLoader(LoaderMixin, m2pfile.MyFileLoader):
+    FILENAME = 'Mybuild'
+
+    dsl = Namespace()
+    dsl.module       = None
+    dsl.application  = None
+    dsl.library      = None
+    dsl.option       = None
     dsl.project      = None
 
 

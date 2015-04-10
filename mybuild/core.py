@@ -315,7 +315,7 @@ class OptupleBase(InstanceBoundTypeMixin):
         return self._type_hash() ^ tuple.__hash__(self)
 
     def __repr__(self):
-        options_str = ', '.join(starmap('{0}={1}'.format, self._iterpairs()))
+        options_str = ', '.join(starmap('{0}={1!r}'.format, self._iterpairs()))
         if options_str:
             options_str = options_str.join('()')
 

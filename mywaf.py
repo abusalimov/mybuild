@@ -22,6 +22,7 @@ import functools
 
 from glue import PyDslLoader
 from glue import MyDslLoader
+from glue import M2pDslLoader
 
 from nsimporter.hook import NamespaceImportHook
 
@@ -39,9 +40,20 @@ from test import module_tests_solver
 from mybuild.test import test_solver
 
 
+class M2pDslLoaderWithDefaults(M2pDslLoader):
+    """docstring for M2pDslLoaderWithDefaults"""
+
+    @property
+    def defaults(self):
+        defaults = dict(super(M2pDslLoaderWithDefaults, self).defaults)
+        defaults.update((ns, __import__(ns))
+                        for ns in self.importer.namespace_path)
+        return defaults
+
 namespace_importer = NamespaceImportHook(loaders={
     'Mybuild': MyDslLoader,
     'Pybuild': PyDslLoader,
+    'M2pbuild': M2pDslLoaderWithDefaults,
 })
 sys.meta_path.insert(0, namespace_importer)
 
@@ -257,3 +269,7 @@ def header_gen(self):
 @TaskGen.extension('.S', '.asm', '.ASM', '.spp', '.SPP')
 def asm_hook(self, node):
     return self.create_compiled_task('c', node)
+
+# @TaskGen.extension('.lds.S')
+# def preproc_hook(self, node):
+#     return self.create_compiled_task('c', node)

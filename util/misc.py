@@ -44,8 +44,14 @@ def stringify(s):
 
 def interpolate_string(s, env):
     """Bash-like string interpolation."""
-    return _string.Template(s).substitute(env)
-
+    while True:
+        expanded = _string.Template(s).substitute(env)
+        if expanded == s:
+            return s
+        s = expanded
+    # print s
+    # print expanded
+    # return expanded
 
 if hasattr(0, 'bit_length'):
     def single_set_bit(x):
