@@ -8,8 +8,6 @@ __date__ = "2013-08-07"
 
 from _compat import *
 
-import re
-
 from nsloader import myfile
 from nsloader import pyfile
 
@@ -79,9 +77,9 @@ class CcTool(WafBasedTool):
         objects = []
 
         for fname in module.files:
-            if re.match('.*\.o', fname):
+            if fname.endswith('.o'):
                 objects.append(fname)
-            elif re.match('.*\.[cS]', fname):
+            elif fname.endswith('.c') or fname.endswith('.S'):
                 sources.append(fname)
 
         includes = ctx.env.includes + module.includes
@@ -136,7 +134,7 @@ class GenHeadersTool(WafBasedTool):
         preproc_relative_path = '../../src/{0}/'.format(project_relative_path)
 
         for fname in module.files:
-            if re.match('.*\.h', fname):
+            if fname.endswith('.h'):
                 headers.append(preproc_relative_path + fname)
         return headers
 
