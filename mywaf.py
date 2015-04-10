@@ -74,8 +74,8 @@ def mybuild_project(module):
     def decorator(func):
         @functools.wraps(func)
         def decorated(ctx):
-            ctx.mybuild(module)
-            return func(ctx)
+            func(ctx)
+            return ctx.mybuild(module)
         return decorated
     return decorator
 
@@ -116,8 +116,7 @@ def my_resolve(ctx, conf_module):
             instance_map = resolve(conf_module)
         except SolveError as e:
             e.rgraph = get_error_rgraph(e)
-            reason_generator = traversal(e.rgraph)
-            for reason, depth in reason_generator:
+            for reason, depth in traverse_error_rgraph(e.rgraph):
                 print_reason(e.rgraph, reason, depth)
             raise e
 
@@ -156,8 +155,8 @@ def my_recurse(ctx, instances, name=None, mandatory=True):
     for instance in instances:
         node = ctx.root.find_node(instance._file)
 
-        ctx.pre_recurse(node)
         for tool in instance.tools:
+            ctx.pre_recurse(node)
             try:
                 user_function = getattr(tool, name, None)
                 if user_function is None:
@@ -218,23 +217,43 @@ def selftest(ctx):
     unittest.TextTestRunner(verbosity=waflogs.verbose).run(suite)
 
 
-# from waflib.Task import Task
-# from waflib.TaskGen import feature, extension, after_method
-# from waflib.Tools import ccroot
+from waflib import TaskGen
 
-# @after_method('process_source')
-# @feature('mylink')
-# def call_apply_link(self):
-#     print('linking' + str(self))
+@TaskGen.feature('module_header')
+def header_gen(self):
+    header = '''
+#ifndef {GUARD}
+#define {GUARD}
 
-# class mylink(ccroot.link_task):
-#     run_str = 'cat ${SRC} > ${TGT}'
+{INCLUDES}
 
-# class ext2o(Task):
-#     run_str = 'cp ${SRC} ${TGT}'
+{OPTIONS}
 
-# @extension('.c')
-# def process_ext(self, node):
-#     self.create_compiled_task('ext2o', node)
+#endif /* {GUARD} */
+'''
+    if 'includes' in self.__dict__:
+        include_list = map('#include <{0}>\n\n'.format, self.includes)
+        includes = ''.join(include_list)
+    else:
+        includes = ''
+
+    if 'options' in self.__dict__:
+        option_list = map('#define {0}\n\n'.format, self.options)
+        options = ''.join(option_list)
+    else:
+        options = ''
+
+    header = header.format(GUARD=self.guard, INCLUDES=includes, OPTIONS=options)
+
+    depth = len(self.name.split('.'))
+    self.target =  '{PREFIX}include/{PATH}'.format(PREFIX='../' * depth,
+                                                   PATH=self.output_header)
+
+    self.rule = lambda self: self.outputs[0].write(header)
+
+    self.ext_out = ['.h']
 
 
+@TaskGen.extension('.S', '.asm', '.ASM', '.spp', '.SPP')
+def asm_hook(self, node):
+    return self.create_compiled_task('c', node)

@@ -33,7 +33,8 @@ class Context(object):
 
     def __init__(self):
         super(Context, self).__init__()
-        self._domains = dict()  # {module: domain}, domain is optuple of sets
+        self._domains = dict()   # {module: domain}, domain is optuple of sets
+        self._providers = dict() # {module: provider}
         self._instantiation_queue = deque()
 
         self.pgraph = ContextPgraph(self)
@@ -73,6 +74,17 @@ class Context(object):
                     if option_domain is not domain_to_extend else (value,)
                     for option_domain in domain), origin)
 
+    def init_module_providers(self, module):
+        if module not in self._providers:
+            self._providers[module] = set()
+
+    def init_instance_providers(self, instance):
+        self.init_module_providers(type(instance))
+        for module in instance.provides:
+            # Just in case it is not discovered yet.
+            self.init_module_providers(module)
+            self._providers[module].add(instance)
+
     def instantiate(self, optuple, origin=None):
         g = self.pgraph
         node = g.node_for(optuple)
@@ -98,6 +110,8 @@ class Context(object):
                 if condition:
                     node.implies(g.node_for(constraint),
                                  why=why_instance_implies_its_constraints)
+
+            self.init_instance_providers(instance)
 
         self.instance_nodes.append(node)
 
@@ -132,11 +146,31 @@ class Context(object):
                         why_becauseof=why_option_implies_module,
                         why_therefore=why_module_implies_option)
 
+    def init_pgraph_providers(self):
+        g = self.pgraph
+        for module, providers in iteritems(self._providers):
+            module_atom = g.atom_for(module)
+
+            providers_node = AtMostOne(g,
+                    (g.node_for(instance._optuple) for instance in providers),
+                    why_one_operand_zero_implies_others_identity=
+                        why_module_can_have_at_most_one_provider,
+                    why_identity_implies_all_operands_identity=
+                        why_not_included_module_cannot_have_a_provider,
+                    why_all_operands_identity_implies_identity=
+                        why_module_with_no_provider_must_not_be_included)
+
+            module_atom.equivalent(providers_node,
+                    why_becauseof=why_another_module_provides_this,
+                    why_therefore=why_module_must_be_provided_by_anything)
+
+
     def resolve(self, initial_module):
         optuple = initial_module()
 
         self.discover_all(optuple)
         self.init_pgraph_domains()
+        self.init_pgraph_providers()
 
         solution = solve(self.pgraph, {self.pgraph.node_for(optuple): True})
 
@@ -171,7 +205,14 @@ class ModuleAtom(Atom):
         super(ModuleAtom, self).__init__()
         self.module = module
 
-        self[False].level = 0  # first of all, try not to build a module
+        # Firstly, to build a default provider since it might not be included
+        # explicitly
+        is_default = any(module == interface.default_provider
+                         for interface in module.provides)
+        if is_default:
+            self[True].level = 0
+
+        self[False].level = 1  # then, try not to build a module
 
     def __repr__(self):
         return repr(self.module)
@@ -190,7 +231,7 @@ class OptionValueAtom(Atom):
         if is_default:
             # Whenever possible prefer default option value,
             # but do it after a stage of disabling modules.
-            self[True].level = 1
+            self[True].level = 2
 
     def __repr__(self):
         return repr(self.module(**{self.option: self.value}))
@@ -233,11 +274,27 @@ def why_option_implies_module(outcome, *causes):
 def why_module_implies_option(outcome, *causes):
     return 'module implies option: %s: %s' % (outcome, causes)
 
+def why_module_can_have_at_most_one_provider(outcome, *causes):
+    return 'module can have at most one provider: %s: %s' % (outcome, causes)
+def why_not_included_module_cannot_have_a_provider(outcome, *causes):
+    return 'not included module {0} cannot have a provider'.format(outcome)
+def why_module_with_no_provider_must_not_be_included(outcome, *causes):
+    return 'module {0} has no provider and cannot be included'.format(outcome)
+def why_another_module_provides_this(outcome, cause):
+    return 'module %s provided by %s' % (cause, outcome)
+
+def why_module_must_be_provided_by_anything(outcome, cause):
+    node, value = outcome
+    if value and not node._operands:
+            return 'Nothing provides {module}'.format(module=cause)
+    return 'module {module} must be provided by anything'.format(module=cause)
+
 def why_instance_implies_its_constraints(outcome, cause):
     node, value = outcome
-    what = ('enabled as a dependence' if value else
-            'disabled as a dependent')
-    fmt = '{node} is {what} of {cause.node}'
+    if value:
+        fmt = 'required by {cause.node}'
+    else:
+        fmt = '{node} disabled as a dependent of {cause.node}'
     return fmt.format(**locals())
 
 def why_inviable_instance_is_disabled(outcome, *_):
