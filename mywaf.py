@@ -94,7 +94,7 @@ def mybuild(ctx, conf_module, recurse_name=None):
     enabled module.
 
     Args:
-        conf_module (mybuild.core.Module): the configuration to resolve.
+        conf_module (mybuild.model.Module): the configuration to resolve.
         recurse_name (str): Name of method to invoke on each resolved module.
             Defaults to the name of current context.
 

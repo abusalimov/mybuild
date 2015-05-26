@@ -13,6 +13,7 @@ from _compat import *
 import inspect
 
 from mybuild import core
+from mybuild import model
 from util.deco import constructor_decorator
 
 
@@ -117,8 +118,8 @@ class PyDslModuleBase(extend(core.ModuleBase,
         return repr(self._optuple)
 
     # XXX
-    constrain = core.Module._constrain
-    consider  = _consider  = core.Module._discover
+    constrain = model.Module._constrain
+    consider  = _consider  = model.Module._discover
 
 
 def new_module_type(name, *bases):
@@ -126,9 +127,9 @@ def new_module_type(name, *bases):
 
 
 module  = constructor_decorator(new_module_type('PyDslModule',
-                                PyDslModuleBase, core.Module))
+                                PyDslModuleBase, model.Module))
 project = constructor_decorator(new_module_type('PyDslProject',
-                                PyDslModuleBase, core.Project))
+                                PyDslModuleBase, model.Project))
 
 application = None
 library = None

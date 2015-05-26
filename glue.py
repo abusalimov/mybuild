@@ -36,7 +36,7 @@ class LoaderMixin(object):
                     MYBUILD_VERSION=mybuild.__version__)
 
 
-class WafBasedTool(mybuild.core.Tool):
+class WafBasedTool(mybuild.model.Tool):
     def __init__(self):
         super(WafBasedTool, self).__init__()
         self.waf_tools = []
@@ -212,13 +212,13 @@ tool = Namespace(cc=CcObjTool, cc_app=CcAppTool, cc_lib=CcLibTool,
 class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
     FILENAME = 'Config'
 
-    class CcModule(mybuild.core.Module):
+    class CcModule(mybuild.model.Module):
         tools = [CcObjTool, GenHeadersTool]
 
-    class ApplicationCcModule(mybuild.core.Module):
+    class ApplicationCcModule(mybuild.model.Module):
         tools = [CcAppTool, GenHeadersTool]
 
-    class LibCcModule(mybuild.core.Module):
+    class LibCcModule(mybuild.model.Module):
         tools = [CcLibTool, GenHeadersTool]
 
         @cached_property
@@ -227,10 +227,11 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
 
 
     dsl = Namespace()
-    dsl.module       = CcModule._meta_for_base(option_types=[])
-    dsl.application  = ApplicationCcModule._meta_for_base(option_types=[])
-    dsl.library      = LibCcModule._meta_for_base(option_types=[])
-    dsl.option       = mybuild.core.Optype
+    dsl.module       = CcModule._meta_for_object_type(option_types=[])
+    dsl.application  = ApplicationCcModule._meta_for_object_type(
+                               option_types=[])
+    dsl.library      = LibCcModule._meta_for_object_type(option_types=[])
+    dsl.option       = mybuild.model.Optype
     dsl.project      = None
 
 
