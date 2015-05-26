@@ -94,3 +94,69 @@ class InstanceBoundTypeMixin(object):
     def __hash__(self):
         return self._type_hash()
 
+
+class BaseObjectTypeMeta(type):
+    """Makes classes inherit a certain base type instead of the 'object'."""
+
+    _object_type = object
+
+    @classmethod
+    def _default_object_type(mcls, object_type):
+        """Set the base type to a given one.
+
+        Suitable for use as a decorator.
+        """
+        if not issubclass(object_type, mcls._object_type):
+            raise TypeError("Metaclass '{mcls}' has already got "
+                            "a base type '{mcls._object_type}' registered "
+                            "that belongs to a different type hierarchy "
+                            "than '{object_type}'".format(**locals()))
+
+        mcls._object_type = object_type
+
+        return object_type
+
+    def __new__(mcls, name, bases, attrs, object_type=None, **kwargs):
+        if object_type is None:
+            object_type = mcls._object_type
+
+        if not any(issubclass(base, object_type) for base in bases):
+            # Neither of bases extend the default object type, so we need to
+            # add it explicitly.
+            #
+            # The way we do it can actually hide some potential errors,
+            # like when the original bases would produce an inconsistent MRO,
+            # but this would only probably happen in case the object type we
+            # add has itself a complex type hierarchy.
+            bases = (tuple(base for base in bases
+                           if not issubclass(object_type, base)) +
+                     (object_type,))
+
+        return super(BaseObjectTypeMeta, mcls).__new__(mcls,
+                                                       name, bases, attrs,
+                                                       **kwargs)
+
+    def __init__(cls, name, bases, attrs, object_type=None, **kwargs):
+        super(BaseObjectTypeMeta, cls).__init__(name, bases, attrs, **kwargs)
+
+    def _meta_for_object_type(cls, **base_kwargs):
+        default_kwargs = dict(metaclass=type(cls), object_type=cls)
+        base_kwargs = dict(default_kwargs, **base_kwargs)
+
+        def meta(name, bases, attrs, **kwargs):
+            kwargs = dict(base_kwargs, **kwargs)
+            return new_type(name, bases, attrs, **kwargs)
+
+        return meta
+
+
+class ConsumeKwargsMeta(type):
+    """Suppress any metaclass keyword arguments.
+
+    Assumed to be the last one in the metaclass MRO before the 'type' type.
+    """
+
+    def __new__(mcls, name, bases, attrs, **kwargs):
+        return super(ConsumeKwargsMeta, mcls).__new__(mcls, name, bases, attrs)
+    def __init__(cls, name, bases, attrs, **kwargs):
+        super(ConsumeKwargsMeta, cls).__init__(name, bases, attrs)

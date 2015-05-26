@@ -38,9 +38,11 @@ from util.prop import default_class_property
 from util.prop import cached_property
 from util.prop import cached_class_property
 from util.misc import InstanceBoundTypeMixin
+from util.misc import BaseObjectTypeMeta
+from util.misc import ConsumeKwargsMeta
 
 
-class ModuleMetaBase(type):
+class ModuleMetaBase(BaseObjectTypeMeta, ConsumeKwargsMeta):
     """Metaclass of Mybuild modules."""
 
     _opmake  = property(attrgetter('_options._make'))
@@ -66,23 +68,6 @@ class ModuleMetaBase(type):
     def _internal(cls):
         return not hasattr(cls, '_options')
 
-    _base_type = object  # Overridden later to workaround bootstrapping issues.
-
-    def _meta_for_base(cls, **default_kwargs):
-        default_kwargs.setdefault('metaclass', type(cls))
-        default_kwargs.setdefault('_base_type', cls)
-        def meta(name, bases, attrs, **kwargs):
-            return new_type(name, bases, attrs, **dict(default_kwargs, **kwargs))
-        return meta
-
-    def __new__(mcls, name, bases, attrs, _base_type=None, **kwargs):
-        """Suppresses any redundant arguments."""
-        if _base_type is None:
-            _base_type = mcls._base_type
-        if not any(issubclass(base, _base_type) for base in bases):
-            bases += (_base_type,)
-        return super(ModuleMetaBase, mcls).__new__(mcls, name, bases, attrs)
-
     def mro(cls):
         new_mro = super(ModuleMetaBase, cls).mro()
 
@@ -98,7 +83,7 @@ class ModuleMetaBase(type):
     def __init__(cls, name, bases, attrs, option_types=None, **kwargs):
         """Real module classes must be created with 'option_types' keyword
         argument. By default produces internal classes."""
-        super(ModuleMetaBase, cls).__init__(name, bases, attrs)
+        super(ModuleMetaBase, cls).__init__(name, bases, attrs, **kwargs)
 
         if option_types is not None:
             if not cls._internal:
@@ -147,6 +132,7 @@ def filter_mtypes(types, with_internal=False):
                 (with_internal or not cls._internal))
 
 
+@ModuleMetaBase._default_object_type
 class ModuleBase(extend(metaclass=ModuleMetaBase)):
     """Base class for Mybuild modules."""
 
@@ -180,8 +166,6 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 
     def __repr__(self):
         return repr(self._optuple)
-
-ModuleMetaBase._base_type = ModuleBase
 
 
 class Module(ModuleBase):
