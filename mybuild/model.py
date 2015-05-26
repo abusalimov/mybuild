@@ -100,19 +100,8 @@ class InterfaceModule(Module):
     provides = []
     default_provider = None
 
-    def __init__(self, optuple, container=None):
-        super(InterfaceModule,self).__init__(optuple, container)
 
-
-class CompositeModule(Module):
-
-    # components = cumulative_sequence_property(attr.__components)
-
-    def _add_component(self, mslice, condition=True):
-        self._add_constraint(mslice, condition)
-
-
-class Project(CompositeModule):
+class Project(Module):
     pass
 
 

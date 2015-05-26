@@ -22,11 +22,21 @@ def raises(exception, func, *args, **kwargs):
 def hasnext(it):
     return not raises(StopIteration, next, it)
 
-def pop_iter(s, pop=None, pop_meth='pop'):
+
+def pop_iter(collection, pop=None, pop_meth='pop'):
     if pop is None:
-        pop = getattr(s, pop_meth)
-    while s:
+        pop = getattr(collection, pop_meth)
+    while collection:
         yield pop()
+
+def attr_chain_iter(obj, attr, with_self=False):
+    if obj is not None and not with_self:
+        obj = getattr(obj, attr)
+
+    while obj is not None:
+        yield obj
+        obj = getattr(obj, attr)
+
 
 def send_next_iter(it, first=None):
     it = iter(it)

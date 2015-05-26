@@ -25,6 +25,7 @@ from operator import attrgetter
 import sys
 
 from util.collections import OrderedDict
+from util.itertools import attr_chain_iter
 from util.itertools import unique_values
 from util.operator import attr
 from util.operator import getter
@@ -130,7 +131,9 @@ def filter_mtypes(types, with_internal=False):
 class ModuleBase(extend(metaclass=ModuleMetaBase)):
     """Base class for Mybuild modules."""
 
-    _optuple = property(getter.__optuple)  # read-only even for subtypes
+    # Properties set by the constructor; read-only even for subtypes.
+    _optuple   = property(getter.__optuple)
+    _container = property(getter.__container)
 
     # These properties default to corresponding class attributes,
     # however instance can override them by setting custom values.
@@ -148,15 +151,18 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
                             .format(**locals()))
         return super(ModuleBase, cls).__new__(cls)
 
-    def __init__(self, optuple):
+    def __init__(self, optuple, container=None):
         super(ModuleBase, self).__init__()
 
         if not isinstance(self, optuple._module):
             raise TypeError('Optuple of incompatible module type')
         if not optuple._complete:
             raise ValueError('Incomplete optuple')
+        if self in attr_chain_iter(container, attr._container):
+            raise ValueError('Containment loop')
 
-        self.__optuple  = optuple
+        self.__optuple   = optuple
+        self.__container = container
 
     def __repr__(self):
         return repr(self._optuple)
