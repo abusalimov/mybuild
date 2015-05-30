@@ -5,6 +5,8 @@ Property descriptors.
 
 from _compat import *
 
+import weakref as _weakref
+from collections import defaultdict as _defaultdict
 from functools import partial as _partial
 
 
@@ -176,25 +178,97 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
     ...               .format(**locals()))
     ...         return 17
     ...
+    >>> class D(C):
+    ...     pass
+    ...
     >>> x = C()
     >>> x.cached
     Accessing C.cached
     17
     >>> C.cached
     17
-    >>> y = C()
+    >>> y = D()
     >>> y.cached
+    Accessing D.cached
     17
     >>> y.cached = 42
     >>> y.cached
     42
     """
 
+    @property
+    def _cls_cache(self):
+        return self.__cls_caches[self.attr]
+
+    def __init__(self, fget, attr=None):
+        super(cached_class_property, self).__init__(fget, attr)
+        self.__cls_caches = _defaultdict(_weakref.WeakKeyDictionary)
+
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
-        ret = super(cached_class_property, self).__get__(obj, objtype)
-        setattr(objtype, self.attr, ret)
+
+        try:
+            ret = self._cls_cache[objtype]
+        except KeyError:
+            ret = self._cls_cache[objtype] = \
+                    super(cached_class_property, self).__get__(obj, objtype)
+
+        return ret
+
+
+class lazy_const_class_property(default_class_property, _func_deco_with_attr):
+    """Non-data descriptor.
+
+    Delegates to a getter only the first time a property is accessed. However,
+    unlike cached_class_property, it caches the result in a __dict__ of the
+    class defining the property (even if called on some subclass), replacing
+    the descriptor completely.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @lazy_const_class_property
+    ...     def lazy_const(cls):
+    ...         print("Accessing {cls.__name__}.lazy_const"
+    ...               .format(**locals()))
+    ...         return 17
+    ...
+    >>> class D(C):
+    ...     pass
+    ...
+    >>> x = D()
+    >>> x.lazy_const
+    Accessing C.lazy_const
+    17
+    >>> D.lazy_const == C.lazy_const == C.__dict__['lazy_const'] == 17
+    True
+    """
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+
+        # Instead of invoking a getter on the given class, find a base that
+        # actually holds the descriptor object and invoke on that class.
+        for base in objtype.__mro__:
+            try:
+                descr = base.__dict__[self.attr]
+            except KeyError:
+                continue
+            if descr is self:
+                break
+        else:
+            # This could only happen when invoking the descriptor manually,
+            # or maybe on some really exotic setups.
+            raise AttributeError("'{self.__class__.__name__}' descriptor "
+                                 "'{self.attr}' "
+                                 "of '{objtype.__name__}' objects must be "
+                                 "attached to the class or to some its base"
+                                 .format(**locals()))
+
+        ret = super(lazy_const_class_property, self).__get__(obj, base)
+        setattr(base, self.attr, ret)
         return ret
 
 
