@@ -140,20 +140,20 @@ class default_class_property(_func_deco):
 
     >>> class C(object):
     ...     @default_class_property
-    ...     def prop(cls):
-    ...         print("Accessing {cls.__name__}.prop"
+    ...     def cls_prop(cls):
+    ...         print("Accessing {cls.__name__}.cls_prop"
     ...               .format(**locals()))
     ...         return 17
     ...
-    >>> C.prop
-    Accessing C.prop
+    >>> C.cls_prop
+    Accessing C.cls_prop
     17
     >>> x = C()
-    >>> x.prop
-    Accessing C.prop
+    >>> x.cls_prop
+    Accessing C.cls_prop
     17
-    >>> x.prop = 42
-    >>> x.prop
+    >>> x.cls_prop = 42
+    >>> x.cls_prop
     42
     """
 
@@ -173,8 +173,8 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
 
     >>> class C(object):
     ...     @cached_class_property
-    ...     def cached(cls):
-    ...         print("Accessing {cls.__name__}.cached"
+    ...     def cls_cached(cls):
+    ...         print("Accessing {cls.__name__}.cls_cached"
     ...               .format(**locals()))
     ...         return 17
     ...
@@ -182,17 +182,17 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
     ...     pass
     ...
     >>> x = C()
-    >>> x.cached
-    Accessing C.cached
+    >>> x.cls_cached
+    Accessing C.cls_cached
     17
-    >>> C.cached
+    >>> C.cls_cached
     17
     >>> y = D()
-    >>> y.cached
-    Accessing D.cached
+    >>> y.cls_cached
+    Accessing D.cls_cached
     17
-    >>> y.cached = 42
-    >>> y.cached
+    >>> y.cls_cached = 42
+    >>> y.cls_cached
     42
     """
 
