@@ -10,17 +10,17 @@ from functools import partial as _partial
 
 class _func_deco(object):
 
-    def __init__(self, func):
+    def __init__(self, fget):
         super(_func_deco, self).__init__()
-        self.func = func
+        self.fget = fget
 
 
 class _func_deco_with_attr(_func_deco):
 
-    def __init__(self, func, attr=None):
-        super(_func_deco_with_attr, self).__init__(func)
+    def __init__(self, fget, attr=None):
+        super(_func_deco_with_attr, self).__init__(fget)
         if attr is None:
-            attr = func.__name__
+            attr = fget.__name__
         self.attr = attr
 
 
@@ -54,13 +54,13 @@ class class_instance_method(_func_deco):
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
-        return _partial(self.func, objtype, obj)
+        return _partial(self.fget, objtype, obj)
 
 
 class default_property(_func_deco):
     """Non-data descriptor.
 
-    Delegates to func everytime a property is accessed unless someone
+    Delegates to a getter every time a property is accessed unless someone
     explicitly overrides it by setting a new value.
 
     Usage example:
@@ -92,17 +92,17 @@ class default_property(_func_deco):
     def __get__(self, obj, objtype=None):
         if obj is None:
             raise AttributeError("'{self.__class__.__name__}' descriptor "
-                                 "'{self.func.__name__}' "
+                                 "'{self.fget.__name__}' "
                                  "of '{objtype.__name__}' objects is not "
                                  "accessible as a class attribute"
                                  .format(**locals()))
-        return self.func(obj)
+        return self.fget(obj)
 
 
 class cached_property(default_property, _func_deco_with_attr):
     """Non-data descriptor.
 
-    Delegates to func only the first time a property is accessed.
+    Delegates to a getter only the first time a property is accessed.
 
     Usage example:
 
@@ -132,7 +132,7 @@ class cached_property(default_property, _func_deco_with_attr):
 class default_class_property(_func_deco):
     """Non-data descriptor.
 
-    Calls func on an instance type everytime a property is accessed.
+    Calls a getter on an instance type every time a property is accessed.
 
     Usage example:
 
@@ -158,13 +158,14 @@ class default_class_property(_func_deco):
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
-        return self.func(objtype)
+        return self.fget(objtype)
 
 
 class cached_class_property(default_class_property, _func_deco_with_attr):
     """Non-data descriptor.
 
-    Delegates to func only the first time a property is accessed.
+    Delegates to a getter only the first time a property is accessed and
+    memorizes the result replacing the descriptor in the class __dict__.
 
     Usage example:
 
