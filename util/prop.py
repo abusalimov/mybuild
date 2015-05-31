@@ -217,7 +217,7 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
         return ret
 
 
-class lazy_const_class_property(default_class_property, _func_deco_with_attr):
+class cached_static_property(default_class_property, _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to a getter only the first time a property is accessed. However,
@@ -228,9 +228,9 @@ class lazy_const_class_property(default_class_property, _func_deco_with_attr):
     Usage example:
 
     >>> class C(object):
-    ...     @lazy_const_class_property
-    ...     def lazy_const(cls):
-    ...         print("Accessing {cls.__name__}.lazy_const"
+    ...     @cached_static_property
+    ...     def static_cached(cls):
+    ...         print("Accessing {cls.__name__}.static_cached"
     ...               .format(**locals()))
     ...         return 17
     ...
@@ -238,10 +238,10 @@ class lazy_const_class_property(default_class_property, _func_deco_with_attr):
     ...     pass
     ...
     >>> x = D()
-    >>> x.lazy_const
-    Accessing C.lazy_const
+    >>> x.static_cached
+    Accessing C.static_cached
     17
-    >>> D.lazy_const == C.lazy_const == C.__dict__['lazy_const'] == 17
+    >>> D.static_cached == C.static_cached == C.__dict__['static_cached'] == 17
     True
     """
 
@@ -267,7 +267,7 @@ class lazy_const_class_property(default_class_property, _func_deco_with_attr):
                                  "attached to the class or to some its base"
                                  .format(**locals()))
 
-        ret = super(lazy_const_class_property, self).__get__(obj, base)
+        ret = super(cached_static_property, self).__get__(obj, base)
         setattr(base, self.attr, ret)
         return ret
 
