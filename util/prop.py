@@ -231,7 +231,7 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
         return self.__cls_caches[self.attr]
 
     def __init__(self, *args, **kwargs):
-        super(cached_class_property_mixin, self).__init__(*args, **kwargs)
+        super(cached_class_property, self).__init__(*args, **kwargs)
         self.__cls_caches = _defaultdict(_weakref.WeakKeyDictionary)
 
     def __get__(self, obj, objtype=None):
@@ -242,7 +242,7 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
             ret = self._cls_cache[objtype]
         except KeyError:
             ret = self._cls_cache[objtype] = \
-                    (super(cached_class_property_mixin, self)
+                    (super(cached_class_property, self)
                      .__get__(obj, objtype))
 
         if self.use_getattr:
@@ -337,7 +337,7 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
                                  "attached to the class or to some its base"
                                  .format(**locals()))
 
-        ret = super(cached_static_property_mixin, self).__get__(obj, base)
+        ret = super(cached_static_property, self).__get__(obj, base)
         setattr(base, self.attr, ret)
         if self.use_getattr:
             ret = getattr(objtype, self.attr)
