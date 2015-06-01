@@ -103,38 +103,6 @@ class default_property(_func_deco):
         return self.fget(obj)
 
 
-class cached_property(default_property, _func_deco_with_attr):
-    """Non-data descriptor.
-
-    Delegates to a getter only the first time a property is accessed.
-
-    Usage example:
-
-    >>> class C(object):
-    ...     @cached_property
-    ...     def cached(self):
-    ...         print("Accessing {cls.__name__}.cached".format(cls=type(self)))
-    ...         return 17
-    ...
-    >>> x = C()
-    >>> x.cached
-    Accessing C.cached
-    17
-    >>> x.cached
-    17
-    >>> x.cached = 42
-    >>> x.cached
-    42
-    """
-
-    def __get__(self, obj, objtype=None):
-        ret = super(cached_property, self).__get__(obj, objtype)
-        setattr(obj, self.attr, ret)
-        if self.use_getattr:
-            ret = getattr(obj, self.attr)  # may involve overloaded __getattr__
-        return ret
-
-
 class default_class_property(_func_deco):
     """Non-data descriptor.
 
@@ -165,6 +133,38 @@ class default_class_property(_func_deco):
         if objtype is None:
             objtype = type(obj)
         return self.fget(objtype)
+
+
+class cached_property(default_property, _func_deco_with_attr):
+    """Non-data descriptor.
+
+    Delegates to a getter only the first time a property is accessed.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @cached_property
+    ...     def cached(self):
+    ...         print("Accessing {cls.__name__}.cached".format(cls=type(self)))
+    ...         return 17
+    ...
+    >>> x = C()
+    >>> x.cached
+    Accessing C.cached
+    17
+    >>> x.cached
+    17
+    >>> x.cached = 42
+    >>> x.cached
+    42
+    """
+
+    def __get__(self, obj, objtype=None):
+        ret = super(cached_property, self).__get__(obj, objtype)
+        setattr(obj, self.attr, ret)
+        if self.use_getattr:
+            ret = getattr(obj, self.attr)  # may involve overloaded __getattr__
+        return ret
 
 
 class cached_class_property(default_class_property, _func_deco_with_attr):
