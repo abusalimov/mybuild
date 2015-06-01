@@ -127,12 +127,54 @@ class default_class_property(_func_deco):
     >>> x.cls_prop = 42
     >>> x.cls_prop
     42
+    >>> C.cls_prop
+    Accessing C.cls_prop
+    17
+    >>> C.cls_prop = 123
+    >>> C.cls_prop
+    123
     """
 
     def __get__(self, obj, objtype=None):
         if objtype is None:
             objtype = type(obj)
         return self.fget(objtype)
+
+
+class default_static_property(_func_deco):
+    """Non-data descriptor.
+
+    Calls a getter function without any arguments every time a property is
+    accessed.
+
+    Usage example:
+
+    >>> class C(object):
+    ...     @default_static_property
+    ...     def static_prop():
+    ...         print("Accessing static_prop")
+    ...         return 17
+    ...
+    >>> C.static_prop
+    Accessing static_prop
+    17
+    >>> x = C()
+    >>> x.static_prop
+    Accessing static_prop
+    17
+    >>> x.static_prop = 42
+    >>> x.static_prop
+    42
+    >>> C.static_prop
+    Accessing static_prop
+    17
+    >>> C.static_prop = 123
+    >>> C.static_prop
+    123
+    """
+
+    def __get__(self, obj, objtype=None):
+        return self.fget()
 
 
 class cached_property(default_property, _func_deco_with_attr):
@@ -258,7 +300,7 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
         return ret
 
 
-class cached_static_property(default_class_property, _func_deco_with_attr):
+class cached_static_property(default_static_property, _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to a getter only the first time a property is accessed. However,
@@ -270,8 +312,8 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
 
     >>> class C(object):
     ...     @cached_static_property
-    ...     def static_cached(cls):
-    ...         print("Accessing {cls.__name__}.static_cached"
+    ...     def static_cached():
+    ...         print("Accessing static_cached"
     ...               .format(**locals()))
     ...         return 17
     ...
@@ -280,7 +322,7 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
     ...
     >>> x = D()
     >>> x.static_cached
-    Accessing C.static_cached
+    Accessing static_cached
     17
     >>> D.static_cached == C.static_cached == C.__dict__['static_cached'] == 17
     True
@@ -290,10 +332,10 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
 
     >>> class E(object):
     ...     @cached_static_property
-    ...     def static_cached(cls):
-    ...         print("Accessing {cls.__name__}.static_cached"
+    ...     def static_cached():
+    ...         print("Accessing static_cached"
     ...               .format(**locals()))
-    ...         return cls.compute()
+    ...         return E.compute()
     ...
     ...     class compute(object):
     ...         def __get__(self, obj, objtype):
@@ -307,7 +349,7 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
     ...
     >>> z = F()
     >>> z.static_cached
-    Accessing E.static_cached
+    Accessing static_cached
     Accessing compute descriptor on 'F' object
     42
     >>> z.static_cached
