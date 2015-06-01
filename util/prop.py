@@ -163,7 +163,75 @@ class default_class_property(_func_deco):
         return self.fget(objtype)
 
 
-class cached_class_property(default_class_property, _func_deco_with_attr):
+class cached_class_property_mixin(object):
+    @property
+    def _cls_cache(self):
+        return self.__cls_caches[self.attr]
+
+    def __init__(self, *args, **kwargs):
+        super(cached_class_property_mixin, self).__init__(*args, **kwargs)
+        self.__cls_caches = _defaultdict(_weakref.WeakKeyDictionary)
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+
+        try:
+            ret = self._cls_cache[objtype]
+        except KeyError:
+            ret = self._cls_cache[objtype] = \
+                    (super(cached_class_property_mixin, self)
+                     .__get__(obj, objtype))
+
+        return ret
+
+
+class cached_static_property_mixin(object):
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+
+        # Instead of invoking a getter on the given class, find a base that
+        # actually holds the descriptor object and invoke on that class.
+        for base in objtype.__mro__:
+            try:
+                descr = base.__dict__[self.attr]
+            except KeyError:
+                continue
+            if descr is self:
+                break
+        else:
+            # This could only happen when invoking the descriptor manually,
+            # or maybe on some really exotic setups.
+            raise AttributeError("'{self.__class__.__name__}' descriptor "
+                                 "'{self.attr}' "
+                                 "of '{objtype.__name__}' objects must be "
+                                 "attached to the class or to some its base"
+                                 .format(**locals()))
+
+        ret = super(cached_static_property_mixin, self).__get__(obj, base)
+        setattr(base, self.attr, ret)
+        return ret
+
+
+class transparent_property_mixin(object):
+
+    def __get__(self, obj, objtype=None):
+        ret = super(transparent_property_mixin, self) .__get__(obj, objtype)
+
+        try:
+            ret_get = type(ret).__get__
+        except AttributeError:
+            return ret
+        else:
+            return ret_get(ret, obj, objtype)
+
+
+class cached_class_property(transparent_property_mixin,
+                            cached_class_property_mixin,
+                            default_class_property,
+                            _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to a getter only the first time a property is accessed and
@@ -176,6 +244,10 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
     ...     def cls_cached(cls):
     ...         print("Accessing {cls.__name__}.cls_cached"
     ...               .format(**locals()))
+    ...         return cls.compute()
+    ...
+    ...     @classmethod
+    ...     def compute(cls):
     ...         return 17
     ...
     >>> class D(C):
@@ -194,30 +266,32 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
     >>> y.cls_cached = 42
     >>> y.cls_cached
     42
+
+    This property also respects inner descriptors, if any:
+
+    >>> class E(C):
+    ...     class compute(object):
+    ...         def __get__(self, obj, objtype):
+    ...             print("Accessing {self.__class__.__name__} descriptor "
+    ...                   "on '{objtype.__name__}' object"
+    ...                   .format(**locals()))
+    ...             return 17
+    ...
+    >>> z = E()
+    >>> z.cls_cached
+    Accessing E.cls_cached
+    Accessing compute descriptor on 'E' object
+    17
+    >>> z.cls_cached
+    Accessing compute descriptor on 'E' object
+    17
     """
 
-    @property
-    def _cls_cache(self):
-        return self.__cls_caches[self.attr]
 
-    def __init__(self, fget, attr=None):
-        super(cached_class_property, self).__init__(fget, attr)
-        self.__cls_caches = _defaultdict(_weakref.WeakKeyDictionary)
-
-    def __get__(self, obj, objtype=None):
-        if objtype is None:
-            objtype = type(obj)
-
-        try:
-            ret = self._cls_cache[objtype]
-        except KeyError:
-            ret = self._cls_cache[objtype] = \
-                    super(cached_class_property, self).__get__(obj, objtype)
-
-        return ret
-
-
-class cached_static_property(default_class_property, _func_deco_with_attr):
+class cached_static_property(transparent_property_mixin,
+                             cached_static_property_mixin,
+                             default_class_property,
+                             _func_deco_with_attr):
     """Non-data descriptor.
 
     Delegates to a getter only the first time a property is accessed. However,
@@ -243,33 +317,35 @@ class cached_static_property(default_class_property, _func_deco_with_attr):
     17
     >>> D.static_cached == C.static_cached == C.__dict__['static_cached'] == 17
     True
+
+    This property also respects inner descriptors, if any:
+
+    >>> class E(object):
+    ...     @cached_static_property
+    ...     def static_cached(cls):
+    ...         print("Accessing {cls.__name__}.static_cached"
+    ...               .format(**locals()))
+    ...         return cls.compute()
+    ...
+    ...     class compute(object):
+    ...         def __get__(self, obj, objtype):
+    ...             print("Accessing {self.__class__.__name__} descriptor "
+    ...                   "on '{objtype.__name__}' object"
+    ...                   .format(**locals()))
+    ...             return 42
+    ...
+    >>> class F(E):
+    ...     pass
+    ...
+    >>> z = F()
+    >>> z.static_cached
+    Accessing E.static_cached
+    Accessing compute descriptor on 'F' object
+    42
+    >>> z.static_cached
+    Accessing compute descriptor on 'F' object
+    42
     """
-
-    def __get__(self, obj, objtype=None):
-        if objtype is None:
-            objtype = type(obj)
-
-        # Instead of invoking a getter on the given class, find a base that
-        # actually holds the descriptor object and invoke on that class.
-        for base in objtype.__mro__:
-            try:
-                descr = base.__dict__[self.attr]
-            except KeyError:
-                continue
-            if descr is self:
-                break
-        else:
-            # This could only happen when invoking the descriptor manually,
-            # or maybe on some really exotic setups.
-            raise AttributeError("'{self.__class__.__name__}' descriptor "
-                                 "'{self.attr}' "
-                                 "of '{objtype.__name__}' objects must be "
-                                 "attached to the class or to some its base"
-                                 .format(**locals()))
-
-        ret = super(cached_static_property, self).__get__(obj, base)
-        setattr(base, self.attr, ret)
-        return ret
 
 
 if __name__ == '__main__':
