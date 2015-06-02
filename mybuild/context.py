@@ -40,13 +40,12 @@ class Context(object):
         self.pgraph = ContextPgraph(self)
         self.instance_nodes = list()
 
-    def domain_for(self, module):
+    def domain_for(self, mtype):
         try:
-            domain = self._domains[module]
+            domain = self._domains[mtype]
         except KeyError:
-            domain = self._domains[module] = \
-                module._opmake(set(optype._values)
-                               for optype in module._optypes)
+            domain = self._domains[mtype] = \
+                mtype._opmake(set(optype._values) for optype in mtype._optypes)
             self.post_product(domain)
 
         return domain
@@ -61,7 +60,7 @@ class Context(object):
             self.post(optuple, origin)
 
     def post_discover(self, optuple, origin=None):
-        domain = self.domain_for(optuple._module)
+        domain = self.domain_for(optuple._mtype)
 
         logger.debug("discover %s (posted by %s)", optuple, origin)
         for value, domain_to_extend in optuple._zipwith(domain):
@@ -74,16 +73,16 @@ class Context(object):
                     if option_domain is not domain_to_extend else (value,)
                     for option_domain in domain), origin)
 
-    def init_module_providers(self, module):
-        if module not in self._providers:
-            self._providers[module] = set()
+    def init_module_providers(self, mtype):
+        if mtype not in self._providers:
+            self._providers[mtype] = set()
 
     def init_instance_providers(self, instance):
         self.init_module_providers(type(instance))
-        for module in instance.provides:
+        for mtype in instance.provides:
             # Just in case it is not discovered yet.
-            self.init_module_providers(module)
-            self._providers[module].add(instance)
+            self.init_module_providers(mtype)
+            self._providers[mtype].add(instance)
 
     def instantiate(self, optuple, origin=None):
         g = self.pgraph
@@ -127,8 +126,8 @@ class Context(object):
     def init_pgraph_domains(self):
         g = self.pgraph
 
-        for module, domain in iteritems(self._domains):
-            atom_for_module = partial(g.atom_for, module)
+        for mtype, domain in iteritems(self._domains):
+            atom_for_module = partial(g.atom_for, mtype)
             module_atom = atom_for_module()
 
             for option, values in domain._iterpairs():
@@ -148,8 +147,8 @@ class Context(object):
 
     def init_pgraph_providers(self):
         g = self.pgraph
-        for module, providers in iteritems(self._providers):
-            module_atom = g.atom_for(module)
+        for mtype, providers in iteritems(self._providers):
+            module_atom = g.atom_for(mtype)
 
             providers_node = AtMostOne(g,
                     (g.node_for(instance._optuple) for instance in providers),
@@ -187,11 +186,11 @@ class ContextPgraph(Pgraph):
         super(ContextPgraph, self).__init__()
         self.context = context
 
-    def atom_for(self, module, option=None, value=Ellipsis):
+    def atom_for(self, mtype, option=None, value=Ellipsis):
         if option is not None:
-            return self.new_node(OptionValueAtom, module, option, value)
+            return self.new_node(OptionValueAtom, mtype, option, value)
         else:
-            return self.new_node(ModuleAtom, module)
+            return self.new_node(ModuleAtom, mtype)
 
     def node_for(self, mslice):
         # TODO should accept arbitrary expr as well.
@@ -201,40 +200,40 @@ class ContextPgraph(Pgraph):
 @ContextPgraph.node_type
 class ModuleAtom(Atom):
 
-    def __init__(self, module):
+    def __init__(self, mtype):
         super(ModuleAtom, self).__init__()
-        self.module = module
+        self.mtype = mtype
 
         # Firstly, to build a default provider since it might not be included
         # explicitly
-        is_default = any(module == interface.default_provider
-                         for interface in module.provides)
+        is_default = any(mtype == interface.default_provider
+                         for interface in mtype.provides)
         if is_default:
             self[True].level = 0
 
         self[False].level = 1  # then, try not to build a module
 
     def __repr__(self):
-        return repr(self.module)
+        return repr(self.mtype)
 
 
 @ContextPgraph.node_type
 class OptionValueAtom(Atom):
 
-    def __init__(self, module, option, value):
+    def __init__(self, mtype, option, value):
         super(OptionValueAtom, self).__init__()
-        self.module = module
+        self.mtype = mtype
         self.option = option
         self.value  = value
 
-        is_default = (value == module._optype(option).default)
+        is_default = (value == mtype._optype(option).default)
         if is_default:
             # Whenever possible prefer default option value,
             # but do it after a stage of disabling modules.
             self[True].level = 2
 
     def __repr__(self):
-        return repr(self.module(**{self.option: self.value}))
+        return repr(self.mtype(**{self.option: self.value}))
 
 
 @ContextPgraph.node_type
@@ -244,11 +243,11 @@ class OptupleNode(And):
 
     @classmethod
     def _new(cls, optuple):
-        new_atom = partial(cls.pgraph.atom_for, optuple._module)
+        new_atom = partial(cls.pgraph.atom_for, optuple._mtype)
         option_atoms = tuple(starmap(new_atom, optuple._iterpairs()))
 
         if not option_atoms:
-            return cls.pgraph.atom_for(optuple._module)
+            return cls.pgraph.atom_for(optuple._mtype)
         else:
             return super(OptupleNode, cls)._new(option_atoms, optuple)
 
@@ -269,8 +268,8 @@ def why_disabled_option_cannot_have_a_value(outcome, *causes):
     return 'disabled option cannot have a value: %s: %s' % (outcome, causes)
 def why_option_with_no_value_must_be_disabled(outcome, *causes):
     return 'option with no value must be disabled: %s: %s' % (outcome, causes)
-def why_option_implies_module(outcome, *causes):
-    return 'option implies module: %s: %s' % (outcome, causes)
+def why_option_implies_mtype(outcome, *causes):
+    return 'option implies mtype: %s: %s' % (outcome, causes)
 def why_module_implies_option(outcome, *causes):
     return 'module implies option: %s: %s' % (outcome, causes)
 
