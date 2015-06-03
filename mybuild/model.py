@@ -62,16 +62,45 @@ class Module(ModuleBase):
     def files(self):
         return []
 
+    @cached_property
+    def _builders(self):
+        ret = []
+        for tool in self.tools:
+            for name, builder_type in iteritems(tool.builder_map):
+                builder = builder_type(self)
+                ret.append(builder)
+                try:
+                    ns = getattr(self, name)
+                except AttributeError:
+                    continue
+                else:
+                    builder.setup(ns)
+        return ret
+
     def __init__(self, optuple, container=None):
         super(Module, self).__init__(optuple, container)
 
-        self._constraints = []  # [(optuple, condition)]
+        # self._constraints = []  # [(optuple, condition)]
 
-        self.tools = [tool() for tool in self.tools]
-        for tool in self.tools:
-            for attr, value in iteritems(tool.create_namespaces(self)):
-                if not hasattr(self, attr):
-                    setattr(self, attr, value)
+        # self.tools = [tool() for tool in self.tools]
+        # for tool in self.tools:
+        #     for attr, value in iteritems(tool.create_namespaces(self)):
+        #         if not hasattr(self, attr):
+        #             setattr(self, attr, value)
+
+    def build(self, stage='build'):
+        for builder in self._builders:
+            builder.build(stage)
+
+    def __setattr__(self, name, value):
+        try:
+            tool = self._tool_map[name]
+        except KeyError:
+            pass
+        else:
+            value = tool.from_dict(value.__dict__)
+
+        super(Module, self).__setattr__(name, value)
 
     def _post_init(self):
         # TODO: remove it as redundant
@@ -108,8 +137,28 @@ class Project(Module):
 class Tool(object):
     """docstring for Tool"""
 
+    builder_map = {}
+
+    @classmethod
+    def from_dict(cls, dict_):
+        instance = cls.__new__(cls)
+        instance.__dict__ = dict_
+        return instance
+
     def create_namespaces(self, instance):
         return {}
 
     def initialize_module(self, instance):
         pass
+
+
+class Builder(object):
+    """docstring for Builder"""
+
+    def __init__(self, module):
+        super(Builder, self).__init__()
+        self.module = module
+
+    def setup(self, ns):
+        pass
+

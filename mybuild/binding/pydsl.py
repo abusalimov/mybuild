@@ -84,6 +84,7 @@ class PyDslModuleMeta(core.ModuleMetaBase):
         return instance
 
 
+@PyDslModuleMeta._default_object_type
 class PyDslModuleBase(extend(core.ModuleBase,
                              metaclass=PyDslModuleMeta, internal=True)):
     """

@@ -116,8 +116,21 @@ def my_prepare_type(meta, name, bases=(), kwds={}):
 
     return meta, ns
 
+
 class MyNamespace(Namespace):
-    __slots__ = '__doc__'
+    __slots__ = '__name__', '__doc__', '__my_class__', '__my_value__'
+
+
+    def __get__(self, obj, objtype=None):
+        if objtype is None:
+            objtype = type(obj)
+        try:
+            name = self.__name__
+            wrap_attr = objtype.__my_wrap_attr__
+        except AttributeError:
+            return self
+        else:
+            return wrap_attr(obj, name, self)
 
 
 class MyDelegate(object):

@@ -19,11 +19,12 @@ __all__ = [
 
 from _compat import *
 
+import sys
 from collections import namedtuple
 from itertools import starmap
 from operator import attrgetter
-import sys
 
+from util import identity
 from util.collections import OrderedDict
 from util.itertools import attr_chain_iter
 from util.itertools import unique_values
@@ -37,8 +38,25 @@ from util.misc import BaseObjectTypeMeta
 from util.misc import ConsumeKwargsMeta
 
 
-class ModuleMetaBase(BaseObjectTypeMeta, ConsumeKwargsMeta):
+# TODO can't use ABCMeta due to abc bugs when using meta-meta classes,
+# e.g. otherwise one couldn't extend ModuleMetaBase from Mslice.
+class Mslice(object):
+    """Represents a slice of module option values."""
+    __slots__ = ()
+
+    # @abc.abstractproperty
+    def _mtype(self):
+        raise NotImplementedError
+
+    # @abc.abstractmethod
+    def __call__(self, **kwargs):
+        raise NotImplementedError
+
+
+class ModuleMetaBase(Mslice, BaseObjectTypeMeta, ConsumeKwargsMeta):
     """Metaclass of Mybuild modules."""
+
+    _mtype = property(identity)
 
     _opmake  = property(attrgetter('_options._make'))
     _optypes = property(attrgetter('_options._optypes'))
@@ -127,9 +145,23 @@ def filter_mtypes(types, with_internal=False):
                 (with_internal or not cls._internal))
 
 
+class Resolve(object):
+    """Holds necessary data for dependency resolver."""
+
+    def __init__(self, mtype):
+        super(Resolve, self).__init__()
+        self._mtype = mtype
+
+    @cached_property
+    def options(self):
+        return []
+
+
 @ModuleMetaBase._default_object_type
 class ModuleBase(extend(metaclass=ModuleMetaBase)):
     """Base class for Mybuild modules."""
+
+    _mtype = class_property(getter._mtype)
 
     # Properties set by the constructor; read-only even for subtypes.
     _optuple   = property(getter.__optuple)
@@ -140,6 +172,14 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
     _name     = default_class_property(getter._name)
     _fullname = default_class_property(getter._fullname)
     _file     = default_class_property(getter._file)
+
+    @lazy_static_attribute
+    def options():
+        return []
+
+    @lazy_static_attribute
+    def depends():
+        return []
 
     # ModuleMetaBase overloads __call__, but the default factory call is still
     # available through ModuleMetaBase._instantiate.
@@ -168,8 +208,10 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
         return repr(self._optuple)
 
 
-class OptupleBase(InstanceBoundTypeMixin):
+class OptupleBase(Mslice, InstanceBoundTypeMixin):
     __slots__ = ()  # This is essential as far as we overload __dict__.
+
+    _mtype = property(getter._module)
 
     _tuple_attrs = frozenset(filternot(invoker.startswith('_'), dir(tuple())))
 
