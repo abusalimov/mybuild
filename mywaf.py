@@ -43,20 +43,20 @@ from mybuild.test import test_solver
 namespace_router = NamespaceRouterImportHook()
 sys.meta_path.insert(0, namespace_router)
 
-default_loaders = {
-    'Mybuild': MyDslLoader,
-    'Pybuild': PyDslLoader,
-}
+default_loader_details = [
+    (MyDslLoader, ['.my'], {'Mybuild': ['Mybuild']}),
+    (PyDslLoader, ['.py'], {'Pybuild': ['Pybuild']}),
+]
 
 def register_namespace(namespace, path='.',
-                       loaders=default_loaders):
+                       loader_details=default_loader_details):
     """Registers a new namespace recognized by a namespace importer.
 
     Args:
         namespace (str): namespace root name.
         path (list/str): a list of strings (or a string of space-separated
             entries) denoting directories to search when loading files.
-        loaders: See the NamespaceFinder constructor.
+        loader_details: See the NamespaceFinder constructor.
     """
 
     if '.' in namespace:
@@ -66,7 +66,7 @@ def register_namespace(namespace, path='.',
     path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
             for path_entry in wafutils.to_list(path)]
 
-    finder = NamespaceFinder(namespace, path, loaders)
+    finder = NamespaceFinder(namespace, path, loader_details)
     namespace_router.namespace_map[namespace] = finder
 
 

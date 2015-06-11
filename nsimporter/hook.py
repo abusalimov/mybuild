@@ -24,12 +24,40 @@ class NamespaceFinder(MetaPathFinder):
     PEP 302 meta path import hook.
     """
 
-    def __init__(self, namespace, path, loaders={}):
+    def __init__(self, namespace, path, loader_details):
+        """
+        Args:
+            namespace (str): A name of the root package.
+            path (Iterable[str]): A list of directories to start searching
+                from.
+            loader_details (Iterable[(Loader,
+                                      Iterable[str],
+                                      Mapping[str, Iterable[str]])]): A list of
+                tuples of Loader, a list of filename suffixes and a dictionary
+                (or a list of pairs) mapping module names to a list of
+                filenames.
+
+                Example:
+
+                    [
+                        (MyFileLoader, ['.my'], {'MYBUILD': ['Mybuild']}),
+                        ...
+                    ]
+        """
         super(NamespaceFinder, self).__init__()
 
         self.namespace = namespace
         self.path      = list(path)
-        self.loaders   = dict(loaders) # {module_name: loader}
+
+        self.suffix_loaders          = []  # [('suffix', loader)]
+        self.module_filename_loaders = {}  # {'name': [('filename', loader)]}
+
+        for loader, suffixes, module_filenames in loader_details:
+            self.suffix_loaders.extend((suffix, loader) for suffix in suffixes)
+
+            for name, filenames in dict(module_filenames).items():
+                self.module_filename_loaders.setdefault(name, []) \
+                        .extend((filename, loader) for filename in filenames)
 
     def find_module(self, fullname, path=None):
         """
@@ -40,19 +68,19 @@ class NamespaceFinder(MetaPathFinder):
             path (list or None):
                 None - when importing namespace root package
                 self.path - importing anything within a namespace package
-                pkg.__path__ - within a regular (sub-)package;
+                pkg.__path__ - within a regular (sub-)package
 
         Returns:
             A loader if the module has been located, None otherwise.
 
-        For example, to import 'ns.pkg.PYBUILD' inside 'ns', this method gets
+        For example, to import 'ns.pkg.MYBUILD' inside 'ns', this method gets
         called three times:
 
             fullname           path           returns
             ----------------   ------------   ----------------------
             'ns'               None           PackageLoader
             'ns.pkg'           self.path      PackageLoader
-            'ns.pkg.Pybuild'   pkg.__path__   PyFileLoader
+            'ns.pkg.MYBUILD'   pkg.__path__   MyFileLoader
         """
         namespace, _, restname = fullname.partition('.')
 
@@ -62,28 +90,28 @@ class NamespaceFinder(MetaPathFinder):
         if path is None:
             path = self.path
         if not restname:  # namespace root package
-            return PackageLoader(path, self.loaders)
+            return PackageLoader(path, self.module_filename_loaders)
 
         tailname = restname.rpartition('.')[2]
         try:
-            loader_type = self.loaders[tailname]
+            # Explicitly named module, if any
+            filename_loaders = self.module_filename_loaders[tailname]
+        except KeyError:
+            # Regular module, i.e. the name tried with different suffixes
+            filename_loaders = [(tailname + suffix, loader)
+                                for suffix, loader in self.suffix_loaders]
 
-        except KeyError:  # is it a sub-package?
-            def find_loader_in(entry):
-                basepath = os.path.join(entry, tailname)
-                if os.path.isdir(basepath):
-                    return PackageLoader([basepath], self.loaders)
-
-        else:  # found a module loader, is there a corresponding file?
-            filename = getattr(loader_type, 'FILENAME', tailname)
-            def find_loader_in(entry):
+        for filename, loader_type in filename_loaders:
+            for entry in path:
                 filepath = os.path.join(entry, filename)
                 if os.path.isfile(filepath):
                     return loader_type(fullname, filepath)
 
-        for loader in map(find_loader_in, path):
-            if loader is not None:
-                return loader
+        # Namespace packages, i.e. sub-directories
+        for entry in path:
+            dirpath = os.path.join(entry, tailname)
+            if os.path.isdir(dirpath):
+                return PackageLoader([dirpath], self.module_filename_loaders)
 
 
 class NamespaceRouterImportHook(MetaPathFinder):
