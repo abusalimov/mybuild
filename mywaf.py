@@ -6,7 +6,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-02"
 
 __all__ = [
-    "namespace_importer",
+    "namespace_router",
     "register_namespace",
     "unregister_namespace",
     "mybuild_project",
@@ -23,7 +23,8 @@ import functools
 from glue import PyDslLoader
 from glue import MyDslLoader
 
-from nsimporter.hook import NamespaceImportHook
+from nsimporter import NamespaceFinder
+from nsimporter import NamespaceRouterImportHook
 
 from mybuild.context import resolve
 from mybuild.solver import SolveError
@@ -39,20 +40,23 @@ from test import module_tests_solver
 from mybuild.test import test_solver
 
 
-namespace_importer = NamespaceImportHook(loaders={
+namespace_router = NamespaceRouterImportHook()
+sys.meta_path.insert(0, namespace_router)
+
+default_loaders = {
     'Mybuild': MyDslLoader,
     'Pybuild': PyDslLoader,
-})
-sys.meta_path.insert(0, namespace_importer)
+}
 
-
-def register_namespace(namespace, path='.'):
+def register_namespace(namespace, path='.',
+                       loaders=default_loaders):
     """Registers a new namespace recognized by a namespace importer.
 
     Args:
         namespace (str): namespace root name.
         path (list/str): a list of strings (or a string of space-separated
             entries) denoting directories to search when loading files.
+        loaders: See the NamespaceFinder constructor.
     """
 
     if '.' in namespace:
@@ -62,12 +66,13 @@ def register_namespace(namespace, path='.'):
     path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
             for path_entry in wafutils.to_list(path)]
 
-    namespace_importer.namespace_path[namespace] = path
+    finder = NamespaceFinder(namespace, path, loaders)
+    namespace_router.namespace_map[namespace] = finder
 
 
 def unregister_namespace(namespace):
     """Unregisters and returns a previously registered namespace (if any)."""
-    return namespace_importer.namespace_path.pop(namespace, None)
+    return namespace_router.namespace_map.pop(namespace, None)
 
 
 def mybuild_project(module):

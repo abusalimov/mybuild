@@ -6,29 +6,30 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2013-06-26"
 
 __all__ = [
-    "NamespaceImportHook",
+    "NamespaceFinder",
+    "NamespaceRouterImportHook",
 ]
 
 
 from _compat import *
 
-import sys
 import os.path
 
 from nsimporter.package import PackageLoader
 from util.importlib.abc import MetaPathFinder
 
 
-class NamespaceImportHook(MetaPathFinder):
+class NamespaceFinder(MetaPathFinder):
     """
     PEP 302 meta path import hook.
     """
 
-    def __init__(self, loaders={}, namespace_path={}):
-        super(NamespaceImportHook, self).__init__()
+    def __init__(self, namespace, path, loaders={}):
+        super(NamespaceFinder, self).__init__()
 
-        self.loaders        = dict(loaders)         # {module_name: loader}
-        self.namespace_path = dict(namespace_path)  # {namespace: [path]}
+        self.namespace = namespace
+        self.path      = list(path)
+        self.loaders   = dict(loaders) # {module_name: loader}
 
     def find_module(self, fullname, path=None):
         """
@@ -55,12 +56,13 @@ class NamespaceImportHook(MetaPathFinder):
         """
         namespace, _, restname = fullname.partition('.')
 
-        try:
-            ns_path = self.namespace_path[namespace]
-        except KeyError:
+        if namespace != self.namespace:
             return None
+
+        if path is None:
+            path = self.path
         if not restname:  # namespace root package
-            return PackageLoader(ns_path, self.loaders)
+            return PackageLoader(path, self.loaders)
 
         tailname = restname.rpartition('.')[2]
         try:
@@ -79,7 +81,25 @@ class NamespaceImportHook(MetaPathFinder):
                 if os.path.isfile(filepath):
                     return loader_type(fullname, filepath)
 
-        for loader in map(find_loader_in, path or sys.path):
+        for loader in map(find_loader_in, path):
             if loader is not None:
                 return loader
 
+
+class NamespaceRouterImportHook(MetaPathFinder):
+    """PEP 302 meta path import hook that routes find requests to a
+    NamespaceFinder register for a given namespace.
+    """
+
+    def __init__(self, namespace_map={}):
+        super(NamespaceRouterImportHook, self).__init__()
+        self.namespace_map = dict(namespace_map)
+
+    def find_module(self, fullname, path=None):
+        namespace = fullname.partition('.')[0]
+        try:
+            finder = self.namespace_map[namespace]
+        except KeyError:
+            return None
+        else:
+            return finder.find_module(fullname, path)
