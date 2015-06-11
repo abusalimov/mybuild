@@ -21,10 +21,6 @@ class PyFileLoader(SourceFileLoader):
         namespace = self.name.partition('.')[0]
         return {namespace: __import__(namespace)}
 
-    def __init__(self, importer, fullname, path):
-        super(PyFileLoader, self).__init__(fullname, path)
-        self.importer = importer
-
     def is_package(self, fullname):
         return False
 

@@ -19,27 +19,6 @@ from nsimporter.package import PackageLoader
 from util.importlib.abc import MetaPathFinder
 
 
-class Loader(object):
-    """NamespaceImportHook-compatible loader extension protocol.
-
-    This class is mainly serves documentation purposes, there is no need to
-    extend it.
-
-    An optional FILENAME attribute is recognized which is used to locate
-    a file within directories in a path.
-    Defaults to a name inside a loaders mapping of the importer.
-    """
-
-    def __init__(self, importer, fullname, path):
-        """
-        Args:
-            importer: an associated importer
-            fullname (str): fully.qualified.name of a module to load
-            path (str): a file path
-        """
-        super(Loader, self).__init__()
-
-
 class NamespaceImportHook(MetaPathFinder):
     """
     PEP 302 meta path import hook.
@@ -98,7 +77,7 @@ class NamespaceImportHook(MetaPathFinder):
             def find_loader_in(entry):
                 filepath = os.path.join(entry, filename)
                 if os.path.isfile(filepath):
-                    return loader_type(self, fullname, filepath)
+                    return loader_type(fullname, filepath)
 
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
