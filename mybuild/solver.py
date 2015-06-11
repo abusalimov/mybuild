@@ -32,6 +32,7 @@ import operator
 from mybuild.pgraph import *
 
 from util.itertools import pop_iter
+from util.itertools import unique
 from util.operator import getter
 from util.operator import invoker
 from util.prop import cached_property
@@ -131,9 +132,12 @@ class Trunk(Solution):
 
         self.commits = list()  # incremental diffs applied to the trunk
 
-    def commit(self, diff):
+    def _check_is_trunk_of(self, diff):
         if self is not diff.trunk:
-            raise ValueError('Diff must be created from this trunk')
+            raise ValueError("{} belongs to another trunk".format(diff))
+
+    def commit(self, diff):
+        self._check_is_trunk_of(diff)
 
         assert self.isdisjoint(diff), ("diff must not intersect the trunk "
                                        "(must be a strict diff)")
@@ -164,10 +168,10 @@ class Trunk(Solution):
         Replaces a branch by another one by updating gen_literals of the other
         and a branchmap of self.
         """
+        self._check_is_trunk_of(branch)
+        self._check_is_trunk_of(other)
         if branch is other:
-            raise ValueError("Can't substitute branch with itself")
-        if not (self is branch.trunk is other.trunk):
-            raise ValueError("Both branches must be created from this trunk")
+            return
 
         other.gen_literals |= branch.gen_literals
 
@@ -175,6 +179,10 @@ class Trunk(Solution):
         for gen_literal in branch.gen_literals:
             assert self.branchmap[gen_literal] is branch
             self.branchmap[gen_literal] = other
+
+    def canonical_branch(self, branch):
+        self._check_is_trunk_of(branch)
+        return self.branchmap.get(branch.any_gen_literal, branch)
 
     def iter_branch_todo_away(self, branch):
         """
@@ -186,8 +194,7 @@ class Trunk(Solution):
         todo set).
         Note: The iterator is modification-safe.
         """
-        if self is not branch.trunk:
-            raise ValueError("Branch must be created from this trunk")
+        self._check_is_trunk_of(branch)
 
         for literal in branch.iter_todo_away():
             try:
@@ -201,18 +208,23 @@ class Trunk(Solution):
 
             yield literal, implied
 
-    def branchset(self):
-        return set(itervalues(self.branchmap))
+    def branchset(self, with_dead=False):
+        ret = set(self.branchmap.values())
+        if with_dead:
+            ret.update(self.dead_branches.values())
+        return ret
+
+    def branches_to_resolve(self):
+        for branch in self.branchset():
+            if not branch.valid:
+                for literal in branch.gen_literals:
+                    yield self.branchmap[~literal]
 
 
 class Diff(Solution):
     """docstring for Diff"""
 
     _dump_attrs = (Solution._dump_attrs + 'todo negexcls'.split())
-
-    @property
-    def trunked(self):
-        return self.trunk is not None
 
     @property
     def ready(self):
@@ -291,8 +303,8 @@ class Diff(Solution):
         if op is not None:
             op(negexcl, *args)  # TODO don't like this
 
-        assert trunk_negleft >= negexcl, (
-                "branch: %r; neglast: %r; negexcl %r must be subset of trunk negleft %r" %
+        assert trunk_negleft >= negexcl, ("branch: %r; neglast: %r; "
+                "negexcl %r must be a subset of trunk negleft %r" %
                 (self, neglast.literals, negexcl, trunk_negleft))
 
         left = len(trunk_negleft) - len(negexcl)
@@ -323,6 +335,11 @@ class Branch(Diff):
     """docstring for Branch"""
 
     _dump_attrs = (Diff._dump_attrs + 'gen_literals'.split())
+
+    @property
+    def any_gen_literal(self):
+        assert self.gen_literals
+        return next(iter(self.gen_literals))
 
     def __init__(self, trunk, gen_literal):
         super(Branch, self).__init__(trunk)
@@ -532,17 +549,9 @@ def expand_branch(branch):
 
 
 def expand_branchset(trunk):
-    branchset = trunk.branchset() | set(itervalues(trunk.dead_branches))
-
-    for branch in filter(getter.trunked, branchset):
+    branchset = trunk.branchset(with_dead=True)
+    for branch in unique(map(trunk.canonical_branch, branchset)):
         expand_branch(branch)
-
-
-def branchset_to_resolve(trunk):
-    dead_literals = set()
-    for branch in filternot(getter.valid, trunk.branchset()):
-        dead_literals |= branch.gen_literals
-    return dead_literals, set(trunk.branchmap[~literal] for literal in dead_literals)
 
 
 @logger.wrap
@@ -552,10 +561,10 @@ def resolve_branches(trunk, branches=None):
     branches.
     """
 
-    dead_literals = set()
     if branches is None:
-        dead_literals, branches = branchset_to_resolve(trunk)
-
+        dead_literals, branches = trunk.branches_to_resolve()
+    else:
+        dead_literals = set()
 
     while branches:
         logger.info('resolving %d branch(es)', len(branches))
@@ -587,6 +596,7 @@ def resolve_branches(trunk, branches=None):
         # Reintegrate into trunk. This also removes resolved branches and
         # their opposites (refused branches) from branchmap.
         trunk.commit(resolved)
+        logger.info('merged %d node(s) into trunk', len(resolved.nodes))
 
         # Maintain remaining branches to be strict diffs with just updated
         # trunk. This may involve new conflicts, i.e. new branches can be
@@ -596,7 +606,7 @@ def resolve_branches(trunk, branches=None):
             branch.reverse_merge(resolved)
         expand_branchset(trunk)
 
-        dead_literals, branches = branchset_to_resolve(trunk)
+        dead_literals, branches = trunk.branches_to_resolve()
 
     logger.dump(trunk)
 
@@ -629,9 +639,14 @@ def solve(pgraph, initial_values={}):
     trunk = solve_trunk(pgraph, initial_values)
     ret = dict.fromkeys(pgraph.nodes)
     ret.update(trunk.literals)
-    logger.debug('Solution:')
-    for literal in ret:
-        logger.debug('\t%s: %s', literal, ret[literal])
+
+    if log_debug_enabled():
+        logger.debug('Solution:')
+        for literal in ret:
+            logger.debug('\t%s: %s', literal, ret[literal])
+
+    logger.info('solved %d / %d node(s)', len(trunk.nodes), len(pgraph.nodes))
+
     return ret
 
 def why_implied_by_dead_branch(literal, *cause_literals):
