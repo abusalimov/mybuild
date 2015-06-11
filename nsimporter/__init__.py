@@ -59,13 +59,13 @@ class NamespaceContextManager(NamespaceFinder):
         return ns_module
 
 
-def import_all(relative_dirnames, namespace, path, loaders):
+def import_all(relative_dirnames, namespace, path, loader_details):
     """
     Goes through relative_dirnames converting them into module names within
     the specified namespace and importing by using NamespaceImporter.
     """
 
-    with NamespaceContextManager(namespace, path, loaders) as importer:
+    with NamespaceContextManager(namespace, path, loader_details) as importer:
         return importer.import_all(dirname.replace(os.path.sep, '.').strip('.')
                                    for dirname in relative_dirnames
                                    if '.' not in dirname)
