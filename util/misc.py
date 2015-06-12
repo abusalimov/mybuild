@@ -8,7 +8,6 @@ from _compat import *
 
 from collections import namedtuple as _namedtuple
 import json as _json
-import string as _string
 
 from util.collections import is_mapping
 
@@ -20,6 +19,16 @@ class Pair(_namedtuple('_Pair', 'false true')):
         return Pair._make(map(func, self))
 
 bools = Pair(False, True)
+
+
+def check_type(value, expected_types, expected_string=None):
+    if not isinstance(value, expected_types):
+        raise_type_error(value, expected_string or str(expected_types))
+    return value
+
+def raise_type_error(value, expected):
+    raise TypeError("Expected {}, got '{}' object '{}' instead"
+                    .format(expected, type(value), value))
 
 
 def to_dict(iterable_or_mapping, check_exclusive=False):
