@@ -13,6 +13,8 @@ __all__ = [
 
 from _compat import *
 
+import functools
+import inspect
 from itertools import starmap
 
 from util.misc import check_type
@@ -94,6 +96,52 @@ def conv(value, to=None):
             return to_type(conv(el, el_to) for el in value)
 
     return check_type(value, to_type)
+
+
+def conv_args(*func_arg, **spec_kwargs):
+    if len(func_arg) > 1 or func_arg and spec_kwargs:
+        raise TypeError('conv_args() takes either a single positional '
+                        'argument or solely keyword arguments')
+
+    def decorator(func):
+        orig_func = inspect.unwrap(func)
+        pos_names, va_nm, kw_nm, defaults = inspect.getargspec(orig_func)
+        if va_nm in spec_kwargs or kw_nm in spec_kwargs:
+            raise NotImplementedError('Star args not supported')
+        num_pos = len(pos_names)
+        idx_default = num_pos - len(defaults or ())
+        name_defaults = list(zip(pos_names[idx_default:], defaults or ()))
+        get_spec = spec_kwargs.get
+
+        @functools.wraps(func)
+        def decorated(*args, **kwargs):
+            print(args, kwargs)
+            num_args = len(args)
+
+            args = tuple(conv(value, get_spec(name))
+                         for name, value in zip(pos_names, args))
+
+            if num_args < num_pos:
+                args += args[num_pos:]
+                defaults_left = name_defaults[min(0, num_args - idx_default):]
+                if defaults_left:
+                    kwargs = dict(defaults_left, **kwargs)
+
+            kwargs = dict((name, conv(value, get_spec(name)))
+                          for name, value in iteritems(kwargs))
+
+            print(args, kwargs)
+            return func(*args, **kwargs)
+
+        return decorated
+
+    if func_arg:
+        func = func_arg[0]
+        spec_kwargs = dict(func.__annotations__)
+        spec_kwargs.pop('return', None)
+        return decorator(func)
+
+    return decorator
 
 
 if __name__ == '__main__':
