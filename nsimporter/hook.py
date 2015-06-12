@@ -17,6 +17,7 @@ import os.path
 
 from nsimporter.package import PackageLoader
 from util.importlib.abc import MetaPathFinder
+from util.misc import conv, conv_args
 
 
 class NamespaceFinder(MetaPathFinder):
@@ -24,8 +25,31 @@ class NamespaceFinder(MetaPathFinder):
     PEP 302 meta path import hook.
     """
 
-    def __init__(self, namespace, path, loader_details):
+    @conv_args(path=['entry'],
+               suffix_loaders=[('suffix', callable)],
+               module_filename_loaders={'name': [('filename', callable)]})
+    def __init__(self, namespace, path,
+                 suffix_loaders, module_filename_loaders):
         """
+        Args:
+            namespace (str): A name of the root package.
+            path (Iterable[str]): A list of directories to start searching
+                from.
+        """
+        super(NamespaceFinder, self).__init__()
+
+        self.namespace = namespace
+        self.path      = path
+
+        self.suffix_loaders          = suffix_loaders
+        self.module_filename_loaders = module_filename_loaders
+
+    @classmethod
+    @conv_args(loader_details=[(callable, ['suffix'], {'name': ['filename']})])
+    def from_details(cls, namespace, path, loader_details):
+        """
+        An alternative constructor.
+
         Args:
             namespace (str): A name of the root package.
             path (Iterable[str]): A list of directories to start searching
@@ -44,20 +68,18 @@ class NamespaceFinder(MetaPathFinder):
                         ...
                     ]
         """
-        super(NamespaceFinder, self).__init__()
 
-        self.namespace = namespace
-        self.path      = list(path)
-
-        self._suffix_list         = []  # [(suffix, loader)]
-        self._module_filename_map = {}  # {name: [(filename, loader)]}
+        suffix_loaders          = []  # [('suffix', loader)]
+        module_filename_loaders = {}  # {'name': [('filename', loader)]}
 
         for loader, suffixes, module_filenames in loader_details:
-            self._suffix_list.extend((suffix, loader) for suffix in suffixes)
+            suffix_loaders.extend((suffix, loader) for suffix in suffixes)
 
-            for name, filenames in dict(module_filenames).items():
-                self._module_filename_map.setdefault(name, []) \
+            for name, filenames in module_filenames.items():
+                module_filename_loaders.setdefault(name, []) \
                         .extend((filename, loader) for filename in filenames)
+
+        return cls(namespace, path, suffix_loaders, module_filename_loaders)
 
     def find_module(self, fullname, path=None):
         """
@@ -90,16 +112,16 @@ class NamespaceFinder(MetaPathFinder):
         if path is None:
             path = self.path
         if not restname:  # namespace root package
-            return PackageLoader(path, self._module_filename_map)
+            return PackageLoader(path, self.module_filename_loaders)
 
         tailname = restname.rpartition('.')[2]
         try:
             # Explicitly named module, if any
-            filename_loaders = self._module_filename_map[tailname]
+            filename_loaders = self.module_filename_loaders[tailname]
         except KeyError:
             # Regular module, i.e. the name tried with different suffixes
             filename_loaders = [(tailname + suffix, loader)
-                                for suffix, loader in self._suffix_list]
+                                for suffix, loader in self.suffix_loaders]
 
         for filename, loader_type in filename_loaders:
             for entry in path:
@@ -111,7 +133,7 @@ class NamespaceFinder(MetaPathFinder):
         for entry in path:
             dirpath = os.path.join(entry, tailname)
             if os.path.isdir(dirpath):
-                return PackageLoader([dirpath], self._module_filename_map)
+                return PackageLoader([dirpath], self.module_filename_loaders)
 
 
 class NamespaceRouterImportHook(MetaPathFinder):
