@@ -40,13 +40,17 @@ class PackageLoader(GenericLoader):
             else:
                 sub_module = getattr(module, sub_name)
 
-            try:
-                attrs = sub_module.__all__
-            except AttributeError:
-                attrs = [attr for attr in sub_module.__dict__
-                         if not attr.startswith('_')]
-            for attr in attrs:
-                setattr(module, attr, getattr(sub_module, attr))
+            for attr, value in iteritems(get_public_exports(sub_module)):
+                setattr(module, attr, value)
+
+
+def get_public_exports(module):
+    try:
+        attrs = module.__all__
+    except AttributeError:
+        attrs = (attr for attr in module.__dict__
+                 if not attr.startswith('_'))
+    return dict((attr, getattr(module, attr)) for attr in attrs)
 
 
 class PackageModule(types.ModuleType):
