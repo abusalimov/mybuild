@@ -6,6 +6,7 @@ Namespace-related loaders that don't run any code directly.
 from _compat import *
 
 import types
+from importlib import import_module
 
 from util.importlib.machinery import GenericLoader
 
@@ -22,7 +23,7 @@ class PackageLoader(GenericLoader):
         self.sub_modules = sub_modules
 
     def _new_module(self, fullname):
-        return PackageModule(fullname)
+        return AutoloadPackageModule(fullname)
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -53,17 +54,15 @@ def get_public_exports(module):
     return dict((attr, getattr(module, attr)) for attr in attrs)
 
 
-class PackageModule(types.ModuleType):
+class AutoloadPackageModule(types.ModuleType):
     """In case of missing attribute lookup error attempts to import
-    a subpackage with such name."""
+    a submodule with such name."""
 
     def __getattr__(self, name):
+        fullname = self.__name__ + '.' + name
         try:
-            __import__(self.__name__ + '.' + name)
+            return import_module(fullname)
         except ImportError:
-            raise AttributeError("'{cls.__name__}' object has no attribute "
-                                 "'{name}'".format(cls=type(self), **locals()))
-        else:
-            return getattr(self, name)
-
+            raise AttributeError("'{self.__name__}' has no attribute '{name}'"
+                                 .format(**locals()))
 
