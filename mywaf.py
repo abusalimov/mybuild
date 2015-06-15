@@ -25,6 +25,8 @@ from glue import MyDslLoader
 
 from nsimporter import NamespaceFinder
 from nsimporter import NamespaceRouterImportHook
+from nsimporter.package import AutoloadPackageModule
+from nsimporter.package import TransparentPackageLoader
 
 from mybuild.context import resolve
 from mybuild.solver import SolveError
@@ -66,7 +68,11 @@ def register_namespace(namespace, path='.',
     path = [os.path.normpath(os.path.join(wafcontext.run_dir, path_entry))
             for path_entry in wafutils.to_list(path)]
 
-    finder = NamespaceFinder(namespace, path, loader_details)
+    def package_loader(fullname, path):
+        return TransparentPackageLoader(fullname, path,
+                                        module_type=AutoloadPackageModule,
+                                        preload_modules=preload_modules)
+    finder = NamespaceFinder(namespace, path, loader_details, package_loader)
     namespace_router.namespace_map[namespace] = finder
 
 

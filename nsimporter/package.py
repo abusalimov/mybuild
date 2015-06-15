@@ -12,18 +12,22 @@ from util.importlib.machinery import GenericLoader
 
 
 class PackageLoader(GenericLoader):
-    """Performs basic initialization required to load a sourceless package.
+    """Performs basic initialization required to load a sourceless package."""
 
-    Also loads modules supported by available loaders and fills the package
-    module with public contents of the loaded modules."""
+    DEFAULT_MODULE_TYPE = types.ModuleType
 
-    def __init__(self, path, sub_modules=[]):
+    def __init__(self, fullname, path, module_type=None):
         super(PackageLoader, self).__init__()
+
+        self.name = fullname
         self.path = path
-        self.sub_modules = sub_modules
+
+        if module_type is None:
+            module_type = self.DEFAULT_MODULE_TYPE
+        self.module_type = module_type
 
     def _new_module(self, fullname):
-        return AutoloadPackageModule(fullname)
+        return self.module_type(fullname)
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -33,15 +37,38 @@ class PackageLoader(GenericLoader):
         module.__path__    = self.path
         module.__loader__  = self
 
-        for sub_name in self.sub_modules:
+
+class PreloadPackageLoader(PackageLoader):
+    """Attempts to load listed modules one by one."""
+
+    def __init__(self, fullname, path, module_type=None, preload_modules=[]):
+        super(PreloadPackageLoader, self).__init__(fullname, path,
+                                                   module_type=module_type)
+        self.preload_modules = list(preload_modules)
+
+    def _init_module(self, module):
+        super(PreloadPackageLoader, self)._init_module(module)
+
+        for submodule_name in self.preload_modules:
             try:
-                __import__(fullname + '.' + sub_name)
+                import_module(module.__name__ + '.' + submodule_name)
             except ImportError:
                 continue
-            else:
-                sub_module = getattr(module, sub_name)
 
-            for attr, value in iteritems(get_public_exports(sub_module)):
+
+class TransparentPackageLoader(PreloadPackageLoader):
+    """Automatically loads listed modules and also fills the package
+    module with public contents of the loaded modules."""
+
+    def _init_module(self, module):
+        super(TransparentPackageLoader, self)._init_module(module)
+
+        for submodule_name in self.preload_modules:
+            try:
+                submodule = getattr(module, submodule_name)
+            except AttributeError:
+                continue
+            for attr, value in iteritems(get_public_exports(submodule)):
                 setattr(module, attr, value)
 
 

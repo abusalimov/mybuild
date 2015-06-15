@@ -24,7 +24,8 @@ class NamespaceFinder(MetaPathFinder):
     PEP 302 meta path import hook.
     """
 
-    def __init__(self, namespace, path, loader_details):
+    def __init__(self, namespace, path, loader_details,
+                 package_loader=PackageLoader):
         """
         Args:
             namespace (str): A name of the root package.
@@ -43,11 +44,18 @@ class NamespaceFinder(MetaPathFinder):
                         (MyFileLoader, ['.my'], {'MYBUILD': ['Mybuild']}),
                         ...
                     ]
+
+            package_loader (Callable[str, List[str]]): A loader type to use
+                to create package loaders. Must accept two positional args:
+                    fullname (str): Fully qualified name of a new package
+                        module.
+                    path (List[str]): Package __path__.
         """
         super(NamespaceFinder, self).__init__()
 
-        self.namespace = namespace
-        self.path      = list(path)
+        self.namespace      = namespace
+        self.path           = list(path)
+        self.package_loader = package_loader
 
         self.suffix_loaders          = []  # [('suffix', loader)]
         self.module_filename_loaders = {}  # {'name': [('filename', loader)]}
@@ -90,7 +98,7 @@ class NamespaceFinder(MetaPathFinder):
         if path is None:
             path = self.path
         if not restname:  # namespace root package
-            return PackageLoader(path, self.module_filename_loaders)
+            return self.package_loader(fullname, list(path))
 
         tailname = restname.rpartition('.')[2]
         try:
@@ -111,7 +119,7 @@ class NamespaceFinder(MetaPathFinder):
         for entry in path:
             dirpath = os.path.join(entry, tailname)
             if os.path.isdir(dirpath):
-                return PackageLoader([dirpath], self.module_filename_loaders)
+                return self.package_loader(fullname, [dirpath])
 
 
 class NamespaceRouterImportHook(MetaPathFinder):
