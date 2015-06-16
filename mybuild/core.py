@@ -109,20 +109,22 @@ class ModuleMetaBase(type):
         if not cls._internal or option_types is not None:
             option_types = list(option_types or [])
 
+            for option, optype in option_types:
+                # Every module has an _optuple attribute,
+                # see ModuleBase.__init__()
+                getter = attrgetter('_optuple.{0}'.format(option))
+                setattr(cls, option, property(getter))
+
             base_option_types = [pair for base in filter_mtypes(cls.__mro__)
                                  for pair in base._optypes._iterpairs()]
             all_optypes = list(unique_values(option_types + base_option_types))
 
             cls._init_options(all_optypes)
 
-    def _init_options(cls, optypes):
-        optuple_type = Optuple if optypes else EmptyOptuple
-        cls._options = options = optuple_type._new_type(cls, optypes)._options
-
-        for option in options:
-            # Every module has an _optuple attribute, see ModuleBase.__init__
-            getter = attrgetter('_optuple.{0}'.format(option))
-            setattr(cls, option, property(getter))
+    def _init_options(cls, all_optypes):
+        optuple_base = Optuple if all_optypes else EmptyOptuple
+        optuple_type = optuple_base._new_type(cls, all_optypes)
+        cls._options = optuple_type._options
 
     def _instantiate(cls, *args, **kwargs):
         return super(ModuleMetaBase, cls).__call__(*args, **kwargs)
