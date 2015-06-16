@@ -97,23 +97,25 @@ class ModuleMetaBase(type):
 
     def __init__(cls, name, bases, attrs, option_types=None, **kwargs):
         """Real module classes must be created with 'option_types' keyword
-        argument. By default produces internal classes."""
+        argument or extend some other non-internal class.
+
+        By default produces internal classes.
+
+        Args:
+            option_types: A list of ('name', Optype) pairs or None.
+        """
         super(ModuleMetaBase, cls).__init__(name, bases, attrs)
 
-        if option_types is not None:
-            if not cls._internal:
-                raise TypeError("A non-internal class '{cls}' already has "
-                                "its options initialized".format(**locals()))
+        if not cls._internal or option_types is not None:
+            option_types = list(option_types or [])
 
             base_option_types = [pair for base in filter_mtypes(cls.__mro__)
                                  for pair in base._optypes._iterpairs()]
-            optypes = unique_values(list(option_types) + base_option_types)
+            all_optypes = list(unique_values(option_types + base_option_types))
 
-            cls._init_options(optypes)
+            cls._init_options(all_optypes)
 
     def _init_options(cls, optypes):
-        optypes = tuple(optypes)
-
         optuple_type = Optuple if optypes else EmptyOptuple
         cls._options = options = optuple_type._new_type(cls, optypes)._options
 
