@@ -110,10 +110,8 @@ class ModuleMetaBase(type):
             option_types = list(option_types or [])
 
             for option, optype in option_types:
-                # Every module has an _optuple attribute,
-                # see ModuleBase.__init__()
-                getter = attrgetter('_optuple.{0}'.format(option))
-                setattr(cls, option, property(getter))
+                optype.set(name=option)
+                setattr(cls, option, optype)  # acts as a read-only property
 
             base_option_types = [pair for base in filter_mtypes(cls.__mro__)
                                  for pair in base._optypes._iterpairs()]
@@ -431,10 +429,14 @@ class EmptyOptuple(OptupleBase):
         return new_type
 
 
-class Optype(object):
+class Optype(property):
 
     def __init__(self, *values, **setup_flags):
-        super(Optype, self).__init__()
+        def option_getter(obj):
+            # Every module instance has an '_optuple' attribute,
+            # see ModuleBase.__init__().
+            return getattr(obj._optuple, self._name)
+        super(Optype, self).__init__(fget=option_getter)
 
         self.default = values[0] if values else Ellipsis
         self.extendable = True
