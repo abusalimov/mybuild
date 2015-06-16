@@ -110,7 +110,7 @@ class ModuleMetaBase(type):
             option_types = list(option_types or [])
 
             for option, optype in option_types:
-                optype.set(name=option)
+                optype.set(_module=cls, name=option)
                 setattr(cls, option, optype)  # acts as a read-only property
 
             base_option_types = [pair for base in filter_mtypes(cls.__mro__)
@@ -383,7 +383,7 @@ class Optuple(OptupleBase):
 
         make = new_type._make
         new_type._ellipsis = make(Ellipsis for _ in optypes)
-        new_type._optypes  = make(map(invoker.set(_module=module), optypes))
+        new_type._optypes  = make(optypes)
         new_type._options  = make(new_type._fields)
 
         return new_type
