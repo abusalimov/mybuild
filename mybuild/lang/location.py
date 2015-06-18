@@ -77,6 +77,9 @@ class Location(object):
         new.lineno, new.column = ast_node.lineno, ast_node.col_offset
         return new
 
+    def __iter__(self):
+        return iter(self.to_syntax_error_tuple())
+
     def to_syntax_error_tuple(self):
         """4-element tuple suitable to pass to a constructor of SyntaxError."""
         return (self.filename, self.lineno, self.column, self.line)

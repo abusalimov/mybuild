@@ -814,8 +814,6 @@ def my_parse(source, filename='<unknown>', mode='exec', **kwargs):
 
 class MySyntaxError(Exception):
     """Stub class for using instead of standard SyntaxError because the latter
-    has the special meaning for PLY."""
+    has the special meaning for PLY.
 
-    def __init__(self, msg, loc=None):
-        loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
-        super(MySyntaxError, self).__init__(msg, *loc_args)
+    Constructor args are treated in the same way as for SyntaxError."""
