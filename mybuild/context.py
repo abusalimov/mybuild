@@ -61,18 +61,21 @@ class Context(object):
             self.post(optuple, origin)
 
     def post_discover(self, optuple, origin=None):
-        domain = self.domain_for(optuple._module)
-
         logger.debug("discover %s (posted by %s)", optuple, origin)
-        for value, domain_to_extend in optuple._zipwith(domain):
-            if value in domain_to_extend:
-                continue
 
-            domain_to_extend.add(value)
+        for mtype in optuple._module._all_mtypes():
+            domain = self.domain_for(mtype)
+            assert set(optuple._fields) >= set(domain._fields)
 
-            self.post_product(optuple._make(option_domain
-                    if option_domain is not domain_to_extend else (value,)
-                    for option_domain in domain), origin)
+            for value, domain_to_extend in optuple._zipwith(domain):
+                if value in domain_to_extend:
+                    continue
+
+                domain_to_extend.add(value)
+
+                self.post_product(domain._make(option_domain
+                        if option_domain is not domain_to_extend else (value,)
+                        for option_domain in domain), origin)
 
     def init_module_providers(self, module):
         if module not in self._providers:
