@@ -351,9 +351,13 @@ class Optuple(OptupleBase):
                 (pair for pair in it if pair[1] is not Ellipsis))
 
     def _zipwith(self, other, with_ellipsis=False):
-        it = zip(self, other)
-        return (it if with_ellipsis else
-                (pair for pair in it if pair[0] is not Ellipsis))
+        for option, value in self._iterpairs(with_ellipsis=with_ellipsis):
+            try:
+                other_value = getattr(other, option)
+            except AttributeError:
+                continue
+            else:
+                yield value, other_value
 
     def _get(self, attr):
         return getattr(self, attr)
