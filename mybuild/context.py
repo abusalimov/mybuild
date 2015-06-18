@@ -45,7 +45,7 @@ class Context(object):
             domain = self._domains[module]
         except KeyError:
             domain = self._domains[module] = \
-                module._opmake(set(optype._values)
+                module._opmake(set(optype.all_values())
                                for optype in module._optypes)
             self.post_product(domain)
 

@@ -482,6 +482,17 @@ class Optype(property):
 
         return True
 
+    def all_values(self):
+        ret = set()
+        for mtype in self._module._all_mtypes():
+            try:
+                optype = mtype.__dict__[self._name]
+            except KeyError:
+                continue
+            else:
+                ret.update(optype._values)
+        return ret
+
     @classmethod
     def enum(cls, *values):
         return cls(*values, extendable=False)
