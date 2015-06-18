@@ -95,3 +95,10 @@ class Location(object):
                 setattr(ast_node, attr, getattr(self, attr))
         return ast_node
 
+    def __repr__(self):
+        try:
+            return ('<{} ({self.filename}:{self.lineno}:{self.column})>'
+                    .format(type(self).__name__, **locals()))
+        except AttributeError:
+            return super(Location, self).__repr__()
+
