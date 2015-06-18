@@ -8,6 +8,7 @@ __author__ = "Eldar Abusalimov"
 __date__ = "2012-09-15"
 
 __all__ = [
+    "filter_mtypes",
     "ModuleMetaBase",
     "ModuleBase",
     "Module",
@@ -113,7 +114,7 @@ class ModuleMetaBase(type):
                 optype.set(_module=cls, name=option)
                 setattr(cls, option, optype)  # acts as a read-only property
 
-            base_option_types = [pair for base in filter_mtypes(cls.__mro__)
+            base_option_types = [pair for base in cls._all_mtypes()
                                  for pair in base._optypes._iterpairs()]
             all_optypes = list(unique_values(option_types + base_option_types))
 
@@ -123,6 +124,9 @@ class ModuleMetaBase(type):
         optuple_base = Optuple if all_optypes else EmptyOptuple
         optuple_type = optuple_base._new_type(cls, all_optypes)
         cls._options = optuple_type._options
+
+    def _all_mtypes(cls):
+        return tuple(filter_mtypes(cls.__mro__))
 
     def _instantiate(cls, *args, **kwargs):
         return super(ModuleMetaBase, cls).__call__(*args, **kwargs)
