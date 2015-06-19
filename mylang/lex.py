@@ -87,7 +87,7 @@ def t_error(t):
                       loc(t).to_syntax_error_tuple())
 
 
-lexer = ply.lex.lex(optimize=1, lextab=None)
+lexer = ply.lex.lex()
 lexer.ignore_newline_stack = [0]
 
 if __name__ == "__main__":

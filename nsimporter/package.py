@@ -6,23 +6,28 @@ Namespace-related loaders that don't run any code directly.
 from _compat import *
 
 import types
+from importlib import import_module
 
 from util.importlib.machinery import GenericLoader
 
 
 class PackageLoader(GenericLoader):
-    """Performs basic initialization required to load a sourceless package.
+    """Performs basic initialization required to load a sourceless package."""
 
-    Also loads modules supported by available loaders and fills the package
-    module with public contents of the loaded modules."""
+    DEFAULT_MODULE_TYPE = types.ModuleType
 
-    def __init__(self, path, sub_modules=[]):
+    def __init__(self, fullname, path, module_type=None):
         super(PackageLoader, self).__init__()
+
+        self.name = fullname
         self.path = path
-        self.sub_modules = sub_modules
+
+        if module_type is None:
+            module_type = self.DEFAULT_MODULE_TYPE
+        self.module_type = module_type
 
     def _new_module(self, fullname):
-        return PackageModule(fullname)
+        return self.module_type(fullname)
 
     def _init_module(self, module):
         fullname = module.__name__
@@ -32,34 +37,59 @@ class PackageLoader(GenericLoader):
         module.__path__    = self.path
         module.__loader__  = self
 
-        for sub_name in self.sub_modules:
+
+class PreloadPackageLoader(PackageLoader):
+    """Attempts to load listed modules one by one."""
+
+    def __init__(self, fullname, path, module_type=None, preload_modules=[]):
+        super(PreloadPackageLoader, self).__init__(fullname, path,
+                                                   module_type=module_type)
+        self.preload_modules = list(preload_modules)
+
+    def _init_module(self, module):
+        super(PreloadPackageLoader, self)._init_module(module)
+
+        for submodule_name in self.preload_modules:
             try:
-                __import__(fullname + '.' + sub_name)
+                import_module(module.__name__ + '.' + submodule_name)
             except ImportError:
                 continue
-            else:
-                sub_module = getattr(module, sub_name)
 
+
+class TransparentPackageLoader(PreloadPackageLoader):
+    """Automatically loads listed modules and also fills the package
+    module with public contents of the loaded modules."""
+
+    def _init_module(self, module):
+        super(TransparentPackageLoader, self)._init_module(module)
+
+        for submodule_name in self.preload_modules:
             try:
-                attrs = sub_module.__all__
+                submodule = getattr(module, submodule_name)
             except AttributeError:
-                attrs = [attr for attr in sub_module.__dict__
-                         if not attr.startswith('_')]
-            for attr in attrs:
-                setattr(module, attr, getattr(sub_module, attr))
+                continue
+            for attr, value in iteritems(get_public_exports(submodule)):
+                setattr(module, attr, value)
 
 
-class PackageModule(types.ModuleType):
+def get_public_exports(module):
+    try:
+        attrs = module.__all__
+    except AttributeError:
+        attrs = (attr for attr in module.__dict__
+                 if not attr.startswith('_'))
+    return dict((attr, getattr(module, attr)) for attr in attrs)
+
+
+class AutoloadPackageModule(types.ModuleType):
     """In case of missing attribute lookup error attempts to import
-    a subpackage with such name."""
+    a submodule with such name."""
 
     def __getattr__(self, name):
+        fullname = self.__name__ + '.' + name
         try:
-            __import__(self.__name__ + '.' + name)
+            return import_module(fullname)
         except ImportError:
-            raise AttributeError("'{cls.__name__}' object has no attribute "
-                                 "'{name}'".format(cls=type(self), **locals()))
-        else:
-            return getattr(self, name)
-
+            raise AttributeError("'{self.__name__}' has no attribute '{name}'"
+                                 .format(**locals()))
 
