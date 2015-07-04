@@ -435,7 +435,7 @@ def create_trunk(pgraph, initial_literals=[]):
     if not trunk.valid:
         logger.info('trunk is not valid')
         for node in filter(trunk.literals.issuperset, trunk.nodes):
-            logger.info('\tviolated node: %r', node)
+            logger.debug('\tviolated node: %r', node)
 
         raise SolveError(trunk)
 

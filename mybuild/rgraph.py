@@ -51,6 +51,15 @@ class Container(object):
         self.members = set()
         self.therefore = {} # key = Rnode, value = Reason
 
+    def __lt__(self, other):
+        if not isinstance(other, Container):
+            return NotImplemented
+        return self.length < other.length
+    def __gt__(self, other):
+        if not isinstance(other, Container):
+            return NotImplemented
+        return self.length > other.length
+
     def __repr__(self):
         return ("<{cls.__name__}: {literals}>"
                 .format(cls=type(self), literals=list(self.literals)))

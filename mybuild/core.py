@@ -27,6 +27,7 @@ from _compat import *
 from collections import namedtuple
 from itertools import starmap
 from operator import attrgetter
+import os.path
 import sys
 
 from util.collections import OrderedDict
@@ -190,8 +191,64 @@ class ModuleBase(extend(metaclass=ModuleMetaBase)):
 ModuleMetaBase._base_type = ModuleBase
 
 
-class Module(ModuleBase):
+from mylang.runtime import MyNamespace
+
+def flatten(obj, iterable_types=(list, tuple)):
+    if isinstance(obj, iterable_types):
+        ret = list(obj)
+    else:
+        ret = [obj]
+    i = 0
+    while i < len(ret):
+        elem = ret[i]
+        while isinstance(elem, iterable_types):
+            ret[i:i + 1] = elem
+            if not elem:
+                break
+            elem = ret[i]
+        else:
+            i += 1
+    return ret
+
+def _my_split_value_nsdict(obj, nsdict={}):
+    try:
+        value = obj.__my_value__
+    except AttributeError:
+        return obj, nsdict
+    else:
+        return value, dict(nsdict, **obj.__dict__)
+
+def _my_iter_flatten(obj, nsdict={}, iterable_types=(list,)):
+    obj, nsdict = _my_split_value_nsdict(obj, nsdict)
+
+    if isinstance(obj, iterable_types):
+        for elem in obj:
+            for item in _my_iter_flatten(elem, nsdict, iterable_types):
+                yield item
+    else:
+        yield obj, nsdict
+
+# def my_flatten(obj, namespace=Namespace()):
+#     return [Namespace(nsdict, __my_value__=value)
+#             for value, nsdict in _my_iter_flatten(obj, namespace.__dict__)]
+
+def my_flatten_values(obj):
+    return [value for value, nsdict in _my_iter_flatten(obj)]
+
+class MyProxy(object):
+    def __init__(self, proxifier, obj, objtype):
+        super(MyProxy, self).__init__()
+        self.__obj = obj
+    def __getattr__(self, name):
+        return my_flatten_values(getattr(self.__obj, name))
+
+class MyProxifier(object):
+    __get__ = MyProxy
+
+class _Module(ModuleBase):
     """Provides a data necessary for Context."""
+
+    my = MyProxifier()
 
     @cached_property
     def tools(self):
@@ -208,26 +265,26 @@ class Module(ModuleBase):
 
     @cached_property
     def build_depends(self):
-        return []
+        return my_flatten_values(self.depends)
 
     @cached_property
     def runtime_depends(self):
         return []
 
-    @cached_class_property
-    def provides(cls):
-        return [cls]
-
-    @cached_class_property
-    def default_provider(cls):
-        return None
-
     @cached_property
     def files(self):
         return []
 
+    @cached_property
+    def absfiles(self):
+        module_file = self._file
+        if module_file is None:
+            return list(self.files)
+        return [os.path.join(os.path.dirname(module_file), filename)
+                for filename in my_flatten_values(self.files)]
+
     def __init__(self, optuple, container=None):
-        super(Module, self).__init__(optuple)
+        super(_Module, self).__init__(optuple)
         self._container = container
 
         self._constraints = []  # [(optuple, condition)]
@@ -239,9 +296,9 @@ class Module(ModuleBase):
                     setattr(self, attr, value)
 
     def _post_init(self):
-        # TODO: remove it as redundant
-        for dep in self.depends:
-            self._add_constraint(dep)
+        # # TODO: remove it as redundant
+        # for dep in self.depends:
+        #     self._add_constraint(dep)
 
         for dep in self.build_depends:
             self._add_constraint(dep)
@@ -253,7 +310,12 @@ class Module(ModuleBase):
             self._discover(self.default_provider)
 
     def _add_constraint(self, mslice, condition=True):
-        self._constraints.append((mslice(), condition))
+        try:
+            self._constraints.append((mslice(), condition))
+        except:
+            print(type(mslice))
+            print(mslice)
+            raise
 
     def _discover(self, mslice):
         self._add_constraint(mslice, condition=False)
@@ -261,15 +323,26 @@ class Module(ModuleBase):
     _constrain = _add_constraint
 
 
-class InterfaceModule(Module):
-    provides = []
+class InterfaceModule(_Module):
+
+    @default_class_property
+    def provides(cls):
+        return ()
     default_provider = None
 
-    def __init__(self, optuple, container=None):
-        super(InterfaceModule,self).__init__(optuple, container)
+
+class Module(InterfaceModule):
+
+    @default_class_property
+    def provides(cls):
+        return cls._all_mtypes()
+
+    @default_class_property
+    def default_provider(cls):
+        return cls
 
 
-class CompositeModule(Module):
+class CompositeModule(_Module):
 
     # components = cumulative_sequence_property(attr.__components)
 

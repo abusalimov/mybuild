@@ -12,7 +12,7 @@
 			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
 			"selector": "source.python",
 
-			"cmd": ["python", "-u", "run-fixup.py", "$file"],
+			"cmd": ["python3.4", "-u", "run-fixup.py", "$file"],
 			"working_dir": "${project_path}"
 		},
 		{

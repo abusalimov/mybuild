@@ -24,7 +24,7 @@ _logging.addLevelName(_logging.DUMP, 'DUMP')
 
 logging_defaults = dict(
     level=_logging.DEBUG,
-    format='%(levelname)-8s%(name)s:\t%(message)s',
+    format='%(levelname)-8s%(name)s: %(message)s',
 )
 
 def init_logging(filename_or_stream, **kwargs):

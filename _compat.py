@@ -51,6 +51,15 @@ else:
 iterkeys = iter
 
 
+# standard types
+if py3k:
+    string_types = str,
+    integer_types = int,
+else:
+    string_types = basestring,
+    integer_types = int, long
+
+
 def extend(*bases, **kwargs):
     """Allows one to use some of Py3k metaclass features from PEP 3115.
 

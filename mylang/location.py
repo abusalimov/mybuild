@@ -38,7 +38,8 @@ class Fileinfo(object):
         if not line_start <= offset < line_end:
             raise ValueError("position {offset} does not fall "
                              "within the line {lineno} "
-                             "({line_start}:{line_end})".format(**locals()))
+                             "(spanning {line_start}:{line_end}) "
+                             "in file '{self.name}'".format(**locals()))
         return offset - line_start + 1
 
 
