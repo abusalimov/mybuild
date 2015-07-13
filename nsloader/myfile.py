@@ -26,4 +26,3 @@ class MyFileLoader(pyfile.PyFileLoader):
         source_string = self.get_source(fullname)
 
         return my_compile(source_string, source_path, 'exec')
-

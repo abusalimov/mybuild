@@ -83,4 +83,3 @@ def map_bypass(func, exception, *iterables):
             pass
         else:
             yield e
-

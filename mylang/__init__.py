@@ -19,5 +19,3 @@ def my_compile(source, filename='<unknown>', mode='exec'):
 
     ast_root = my_parse(source, filename, mode)
     return compile(ast_root, filename, mode)
-
-

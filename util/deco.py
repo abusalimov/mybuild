@@ -117,4 +117,3 @@ class ReentManager(object):
                     job_func()
             finally:
                 self._outermost = True
-

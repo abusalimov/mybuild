@@ -200,4 +200,3 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
-

@@ -126,5 +126,3 @@ class SourceLoader(ResourceLoader, ExecutionLoader):
         code_object = compile(source_bytes, source_path, 'exec',
                                 dont_inherit=True)
         return code_object
-
-

@@ -693,4 +693,3 @@ class AllEqual(OperandSetNode):
             self.equivalent(operand,
                             why_becauseof=why,
                             why_therefore=why)
-

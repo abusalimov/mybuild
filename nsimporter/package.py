@@ -61,5 +61,3 @@ class PackageModule(types.ModuleType):
                                  "'{name}'".format(cls=type(self), **locals()))
         else:
             return getattr(self, name)
-
-

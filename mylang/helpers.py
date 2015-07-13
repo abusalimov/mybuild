@@ -43,5 +43,3 @@ def rule(func):
     def decorated(p):
         p[0] = func(p, *_symbols_at(p, indices))
     return decorated
-
-

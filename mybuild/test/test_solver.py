@@ -319,4 +319,3 @@ if __name__ == '__main__':
                       level=logging.DUMP)
 
     unittest.main()
-

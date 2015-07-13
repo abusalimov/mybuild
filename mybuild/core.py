@@ -541,5 +541,3 @@ class InstanceError(MybuildError):
     Throwing this kind of errors from inside a module function indicates that
     instance is not viable anymore and thus shouldn't be considered.
     """
-
-

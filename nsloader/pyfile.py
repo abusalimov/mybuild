@@ -34,4 +34,3 @@ class PyFileLoader(SourceFileLoader):
     def _init_module(self, module):
         module.__dict__.update(self.defaults_for_module(module))
         super(PyFileLoader, self)._init_module(module)
-

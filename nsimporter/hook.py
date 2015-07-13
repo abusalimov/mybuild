@@ -103,4 +103,3 @@ class NamespaceImportHook(MetaPathFinder):
         for loader in map(find_loader_in, path or sys.path):
             if loader is not None:
                 return loader
-

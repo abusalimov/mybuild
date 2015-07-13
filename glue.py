@@ -237,4 +237,3 @@ class MyDslLoader(LoaderMixin, myfile.MyFileLoader):
 class PyDslLoader(LoaderMixin, pyfile.PyFileLoader):
     FILENAME = 'Pybuild'
     dsl = pydsl
-

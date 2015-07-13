@@ -72,4 +72,3 @@ def import_all(relative_dirnames, loaders, namespace, path=[]):
         return importer.import_all(dirname.replace(os.path.sep, '.')
                                    for dirname in relative_dirnames
                                    if '.' not in dirname)
-

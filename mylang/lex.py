@@ -92,4 +92,3 @@ lexer.ignore_newline_stack = [0]
 
 if __name__ == "__main__":
     ply.lex.runmain(lexer)
-

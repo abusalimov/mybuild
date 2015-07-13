@@ -277,4 +277,3 @@ except NameError:
         def viewitems(self):
             "od.viewitems() -> a set-like object providing a view on od's items"
             return _ItemsView(self)
-

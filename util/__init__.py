@@ -40,12 +40,12 @@ def init_logging(filename_or_stream, **kwargs):
 
 
 def get_extended_logger(name):
-	return extend_logger(_logging.getLogger(name))
+    return extend_logger(_logging.getLogger(name))
 
 def extend_logger(logger):
-	logger.dump = _functools.partial(logger_dump, logger)
-	logger.wrap = _functools.partial(logger_wrap, logger)
-	return logger
+    logger.dump = _functools.partial(logger_dump, logger)
+    logger.wrap = _functools.partial(logger_wrap, logger)
+    return logger
 
 
 def logger_wrap(logger, func, width=60):
@@ -66,7 +66,7 @@ def logger_wrap(logger, func, width=60):
 
 def logger_dump(logger, target, attrs=None):
     if not logger.isEnabledFor(_logging.DEBUG):
-    	return
+        return
 
     if isinstance(attrs, str):
         attrs = attrs.split()
@@ -105,4 +105,3 @@ def _log_dump_normalize(obj):
     elif is_container(obj):
         obj = sorted(obj, key=repr)
     return obj
-

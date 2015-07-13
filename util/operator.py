@@ -52,5 +52,3 @@ def instanceof(*classinfo):
     return lambda obj: isinstance(obj, classinfo)
 def subclassof(*classinfo):
     return lambda obj: issubclass(obj, classinfo)
-
-

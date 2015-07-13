@@ -114,4 +114,3 @@ class FileLoader(abc_.ResourceLoader, abc_.ExecutionLoader):
 
 class SourceFileLoader(FileLoader, SourceLoader):
     """Concrete implementation of SourceLoader using the file system."""
-

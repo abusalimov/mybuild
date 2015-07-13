@@ -91,4 +91,3 @@ class Location(object):
             if attr in ast_node._attributes:
                 setattr(ast_node, attr, getattr(self, attr))
         return ast_node
-

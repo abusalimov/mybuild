@@ -93,4 +93,3 @@ class InstanceBoundTypeMixin(object):
         return self._type_eq(other)
     def __hash__(self):
         return self._type_hash()
-

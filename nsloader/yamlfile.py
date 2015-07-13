@@ -73,4 +73,3 @@ class YamlFileLoader(SourceFileLoader):
                 if not hasattr(doc, '__name__'):
                     continue
                 setattr(module, doc.__name__, doc)
-

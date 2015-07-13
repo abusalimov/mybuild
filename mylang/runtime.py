@@ -151,4 +151,3 @@ def my_ns_delegate(meta, ns):
 # Note that some name are taken from globals of this module (this includes
 # _compat.* as well), and the rest come from Python builtins.
 builtins = dict((name, eval(name)) for name in builtin_names)
-
