@@ -8,12 +8,12 @@ __date__ = "2013-07-29"
 __all__ = ['module', 'project', 'option']
 
 
-from _compat import *
+from mybuild._compat import *
 
 import inspect
 
 from mybuild import core
-from util.deco import constructor_decorator
+from mybuild.util.deco import constructor_decorator
 
 
 class PyDslModuleMeta(core.ModuleMetaBase):

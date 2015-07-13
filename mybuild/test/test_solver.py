@@ -1,10 +1,10 @@
-from _compat import *
+from mybuild._compat import *
 
 import unittest
 import functools
 
-from mybuild import pgraph
-from mybuild.solver import *
+from mybuild.req import pgraph
+from mybuild.req.solver import *
 
 
 class TestPgraph(pgraph.Pgraph):
@@ -313,7 +313,8 @@ def suite():
 
 
 if __name__ == '__main__':
-    import util, sys, logging
+    from mybuild import util
+    import sys, logging
     # util.init_logging(filename='%s.log' % __name__)
     util.init_logging(sys.stderr,
                       level=logging.DUMP)
