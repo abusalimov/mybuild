@@ -1,8 +1,7 @@
 """
 Property descriptors.
 """
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 from functools import partial as _partial

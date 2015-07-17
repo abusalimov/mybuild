@@ -1,6 +1,15 @@
 """
 Defines meta hook for importing namespaces.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import os.path
+import sys
+
+from mybuild.nsimporter.package import PackageLoader
+from mybuild.util.importlib.abc import MetaPathFinder
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-06-26"
@@ -8,15 +17,6 @@ __date__ = "2013-06-26"
 __all__ = [
     "NamespaceImportHook",
 ]
-
-
-from mybuild._compat import *
-
-import sys
-import os.path
-
-from mybuild.nsimporter.package import PackageLoader
-from mybuild.util.importlib.abc import MetaPathFinder
 
 
 class Loader(object):

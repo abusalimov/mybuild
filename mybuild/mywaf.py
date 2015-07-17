@@ -1,6 +1,28 @@
 """
 Mybuild tool for Waf.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import functools
+import os.path
+import sys
+import unittest
+from test import module_tests_solver
+
+from waflib import (Context as wafcontext,
+                    Errors as waferrors,
+                    Logs as waflogs,
+                    TaskGen,
+                    Utils as wafutils)
+
+from mybuild.core.context import resolve
+from mybuild.glue import MyDslLoader, PyDslLoader
+from mybuild.nsimporter.hook import NamespaceImportHook
+from mybuild.req.rgraph import *
+from mybuild.req.solver import SolveError
+from mybuild.test import test_solver
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-02"
@@ -11,32 +33,6 @@ __all__ = [
     "unregister_namespace",
     "mybuild_project",
 ]  # the rest is bound as Waf Context methods.
-
-
-from mybuild._compat import *
-
-import sys
-import os.path
-
-import functools
-
-from mybuild.glue import PyDslLoader
-from mybuild.glue import MyDslLoader
-
-from mybuild.nsimporter.hook import NamespaceImportHook
-
-from mybuild.core.context import resolve
-from mybuild.req.solver import SolveError
-from mybuild.req.rgraph import *
-
-from waflib import Context as wafcontext
-from waflib import Errors  as waferrors
-from waflib import Logs    as waflogs
-from waflib import Utils   as wafutils
-
-import unittest
-from test import module_tests_solver
-from mybuild.test import test_solver
 
 
 namespace_importer = NamespaceImportHook(loaders={
@@ -216,8 +212,6 @@ def selftest(ctx):
 
     unittest.TextTestRunner(verbosity=waflogs.verbose).run(suite)
 
-
-from waflib import TaskGen
 
 @TaskGen.feature('module_header')
 def header_gen(self):

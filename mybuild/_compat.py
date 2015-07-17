@@ -1,11 +1,14 @@
 """
 2to3 compat stuff.
 """
-
+from __future__ import absolute_import, division, print_function
 
 import abc as _abc
+import functools as _functools
+import inspect as _inspect
 import operator as _operator
 import sys as _sys
+
 
 py3k = (_sys.version_info[0] == 3)
 
@@ -142,7 +145,6 @@ def new_type(name, bases, attrs, **kwargs):
     return type(temp_class)(name, (temp_class,), attrs)
 
 
-import functools as _functools
 def _foo(): pass
 def _bar(): pass
 _functools.update_wrapper(_foo, _bar)
@@ -159,7 +161,6 @@ del _foo
 del _bar
 del _functools
 
-import inspect as _inspect
 if not hasattr(_inspect, 'unwrap'):
     def unwrap(func, stop=None):
         """Get the object wrapped by *func*.

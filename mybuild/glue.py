@@ -1,23 +1,20 @@
 """
 Glue code between nsloaders and Mybuild bindings for py/my DSL files.
 """
-
-__author__ = "Eldar Abusalimov"
-__date__ = "2013-08-07"
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
-
-from mybuild.nsloader import myfile
-from mybuild.nsloader import pyfile
 
 import mybuild
 from mybuild.binding import pydsl
-
-from mybuild.util.operator import attr
-from mybuild.util.namespace import Namespace
-from mybuild.util.prop import cached_property
+from mybuild.nsloader import myfile, pyfile
 from mybuild.util.misc import stringify
+from mybuild.util.namespace import Namespace
+from mybuild.util.operator import attr
+from mybuild.util.prop import cached_property
+
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-08-07"
 
 
 class LoaderMixin(object):

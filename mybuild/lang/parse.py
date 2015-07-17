@@ -1,26 +1,23 @@
 """
 PLY-based parser for Myfile grammar.
 """
-
-__author__ = "Eldar Abusalimov"
-__date__ = "2013-07-05"
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import functools
 import itertools
-from collections import namedtuple
 import ply.yacc
+from collections import namedtuple
 
-from mybuild.lang import lex
-from mybuild.lang import x_ast as ast
-from mybuild.lang.location import Fileinfo
-from mybuild.lang.location import Location
+from mybuild.lang import lex, x_ast as ast
 from mybuild.lang.helpers import rule
-
-from mybuild.util.operator import getter
+from mybuild.lang.location import Fileinfo, Location
 from mybuild.util.collections import OrderedDict
+from mybuild.util.operator import getter
+
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-05"
 
 
 # Runtime intrinsics and internal auxiliary names.

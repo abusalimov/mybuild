@@ -1,6 +1,14 @@
 """
 Namespace importer integrated into Python modules infrastructure.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import os.path
+import sys
+
+from mybuild.nsimporter.hook import NamespaceImportHook
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
@@ -10,14 +18,6 @@ __all__ = [
     "SingleNamespaceImporter",
     "import_all",
 ]
-
-
-from mybuild._compat import *
-
-import sys
-import os.path
-
-from mybuild.nsimporter.hook import NamespaceImportHook
 
 
 class SingleNamespaceImporter(NamespaceImportHook):

@@ -1,13 +1,11 @@
 """
 Extends the standard operator module with few handy functions.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
-from operator import *
 from functools import partial as _partial
+from operator import *
 
 
 class GetterType(object):

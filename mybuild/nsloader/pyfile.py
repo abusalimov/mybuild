@@ -1,8 +1,7 @@
 """
 Python-like loader which is able to customize default global namespace.
 """
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 from mybuild.util.importlib.machinery import SourceFileLoader

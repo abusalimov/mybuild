@@ -1,16 +1,15 @@
 """
 Loader for plain old Mybuild files.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+from mybuild.lang import my_compile, runtime
+from mybuild.nsloader import pyfile
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-05"
-
-
-from mybuild._compat import *
-
-from mybuild.lang import my_compile
-from mybuild.lang import runtime
-from mybuild.nsloader import pyfile
 
 
 class MyFileLoader(pyfile.PyFileLoader):

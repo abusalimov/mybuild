@@ -2,7 +2,7 @@
 
 Provides compatibility across different versions and simplified signatures.
 """
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 from ast import *

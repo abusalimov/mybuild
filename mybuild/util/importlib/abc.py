@@ -1,9 +1,7 @@
 """
 Abstract base classes related to import. Primarily for documentation purposes.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import abc

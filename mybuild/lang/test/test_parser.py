@@ -1,18 +1,18 @@
 """
 Unit tests for mylang.parse
 """
-
-__author__ = "Vita Loginova"
-__date__ = "2015-02-02"
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import ast
 import itertools
-
 import unittest
 
 from mybuild.lang.parse import my_parse
+
+
+__author__ = "Vita Loginova"
+__date__ = "2015-02-02"
 
 
 class ASTComparator(object):

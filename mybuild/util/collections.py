@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from collections import *
 
 from mybuild.util.operator import instanceof

@@ -1,13 +1,11 @@
 """
 Useful decorators/deco-makers.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
-from collections import deque
 import functools
+from collections import deque
 from functools import partial
 
 from mybuild.util.itertools import pop_iter

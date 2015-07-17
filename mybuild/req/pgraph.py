@@ -1,6 +1,16 @@
 """
 The Graph of Predicates.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+from collections import namedtuple
+from operator import attrgetter
+
+from mybuild.util.collections import is_mapping
+from mybuild.util.misc import Pair, bools
+from mybuild.util.operator import instanceof
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-29"
@@ -30,17 +40,6 @@ __all__ = [
     "AtMostOne",
     "AllEqual",
 ]
-
-
-from mybuild._compat import *
-
-from collections import namedtuple
-from operator import attrgetter
-
-from mybuild.util.misc import bools
-from mybuild.util.misc import Pair
-from mybuild.util.operator import instanceof
-from mybuild.util.collections import is_mapping
 
 
 class PgraphMeta(type):
