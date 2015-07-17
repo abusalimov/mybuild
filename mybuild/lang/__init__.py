@@ -1,5 +1,8 @@
-"""
-Parser, compiler and runtime support for My-files.
+"""Parser, compiler and runtime support for Mybuild DSL.
+
+The parser is based on the PLY parser engine; it translates the input source
+into a Python AST (abstract syntax tree) which, in turn, is then compiled and
+executed as a regular Python code.
 """
 from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
