@@ -1,5 +1,25 @@
-"""
-2to3 compat stuff.
+"""Python 2 compatibility layer.
+
+Mybuild requires Python >= 3.3 or Python 2.7 to run.
+
+This way, all modules should be written primarily for Python 3 with Python 2.7
+compatibility kept in mind (but not at a cost of code readability or
+maintainability!).
+
+For example, dict.items() and map() are assumed to return a dictionary view and
+a generator respectively, not a list, as in Python 2; if it is needed to store
+the result somewhere, convert it to a list explicitly. On the other hand,
+'class C: ...' creates an old-style class in Python 2 and must be avoided in
+favor of the explicit `class C(object): ...` form, even though both are equal
+in Python 3.
+
+In short, write the code for Python 3 with some exception like as mentioned
+above. And to get it work on Python 2 behaving alike Python 3, include these
+lines at the top of each module:
+
+    >>> from __future__ import absolute_import, division, print_function
+    >>> from mybuild._compat import *
+
 """
 from __future__ import absolute_import, division, print_function
 
