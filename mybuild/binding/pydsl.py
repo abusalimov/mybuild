@@ -1,19 +1,19 @@
 """
 Necessary bindings for Pybuild files.
 """
-
-__author__ = "Eldar Abusalimov"
-__date__ = "2013-07-29"
-
-__all__ = ['module', 'project', 'option']
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import inspect
 
 from mybuild import core
 from mybuild.util.deco import constructor_decorator
+
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-29"
+
+__all__ = ['module', 'project', 'option']
 
 
 class PyDslModuleMeta(core.ModuleMetaBase):

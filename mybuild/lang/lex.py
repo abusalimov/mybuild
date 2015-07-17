@@ -1,16 +1,16 @@
 """
 Lexer definitions for My-files grammar.
 """
-
-__author__ = "Eldar Abusalimov"
-__date__ = "2013-07-05"
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import ply.lex
 
 from mybuild.lang.location import Location
+
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-05"
 
 
 def loc(t):

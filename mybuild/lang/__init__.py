@@ -1,14 +1,12 @@
 """
 Parser, compiler and runtime support for My-files.
 """
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
 
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-07-30"
-
-
-from mybuild._compat import *
 
 
 def my_compile(source, filename='<unknown>', mode='exec'):

@@ -1,16 +1,14 @@
 """
 Machinery: implementations of some finders and loaders.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import abc
 import functools
 import imp
-import sys
 import os.path
+import sys
 
 from mybuild.util.importlib import abc as abc_
 

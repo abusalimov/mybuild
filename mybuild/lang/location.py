@@ -1,15 +1,15 @@
 """
 Location tracking needed for rich error reporting.
 """
-
-__author__ = "Eldar Abusalimov"
-__date__ = "2013-07-29"
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 from mybuild.util.operator import getter
 from mybuild.util.prop import cached_property
+
+
+__author__ = "Eldar Abusalimov"
+__date__ = "2013-07-29"
 
 
 class Fileinfo(object):

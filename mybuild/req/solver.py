@@ -1,6 +1,19 @@
 """
 Pgraph solver.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import logging
+import operator
+from collections import defaultdict
+
+from mybuild import util
+from mybuild.req.pgraph import Reason, to_lset
+from mybuild.util.itertools import pop_iter
+from mybuild.util.operator import getter, invoker
+from mybuild.util.prop import cached_property
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-30"
@@ -24,20 +37,6 @@ __all__ = [
 ]
 
 
-from mybuild._compat import *
-
-from collections import defaultdict
-import operator
-
-from mybuild.req.pgraph import *
-
-from mybuild.util.itertools import pop_iter
-from mybuild.util.operator import getter
-from mybuild.util.operator import invoker
-from mybuild.util.prop import cached_property
-
-from mybuild import util
-import logging
 logger = util.get_extended_logger(__name__)
 
 

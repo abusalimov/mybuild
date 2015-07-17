@@ -1,12 +1,11 @@
 """
 Misc stuff.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 from collections import namedtuple as _namedtuple
+
 import json as _json
 import string as _string
 

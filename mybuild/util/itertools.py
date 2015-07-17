@@ -1,13 +1,11 @@
 """
 Extends the standard itertools module.
 """
-from __future__ import absolute_import
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
-from itertools import *
 from functools import partial
+from itertools import *
 
 
 def raises(exception, func, *args, **kwargs):

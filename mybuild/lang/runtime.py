@@ -1,21 +1,18 @@
 """
 Runtime support for My-lang.
 """
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+from mybuild._compat import _calculate_meta
+
+from functools import partial
+
+from mybuild.util.namespace import Namespace
+from mybuild.util.prop import cached_class_property, cached_property
 
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2013-08-22"
-
-
-from mybuild._compat import *
-from mybuild._compat import _calculate_meta
-
-from mybuild.util.prop import cached_property
-from mybuild.util.prop import cached_class_property
-from mybuild.util.namespace import Namespace
-
-from functools import partial
 
 
 builtin_names = [

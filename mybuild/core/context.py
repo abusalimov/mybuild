@@ -1,6 +1,19 @@
 """
 Types used on a per-build basis.
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import logging
+from collections import deque
+from functools import partial
+from itertools import product, starmap
+
+from mybuild.core import InstanceError
+from mybuild.req.pgraph import And, AtMostOne, Atom, Pgraph
+from mybuild.req.solver import solve
+from mybuild.util.itertools import pop_iter
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-11-09"
@@ -11,20 +24,6 @@ __all__ = [
 ]
 
 
-from mybuild._compat import *
-
-from collections import deque
-from functools import partial
-from itertools import product
-from itertools import starmap
-
-from mybuild.core import *
-from mybuild.req.pgraph import *
-from mybuild.req.solver import solve
-
-from mybuild.util.itertools import pop_iter
-
-import logging
 logger = logging.getLogger(__name__)
 
 

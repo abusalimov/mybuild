@@ -1,18 +1,17 @@
 """
 Utils package.
 """
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
-import logging as _logging
-import functools as _functools
+import pprint
 from inspect import ismethod
 
-from mybuild.util.collections import is_container
-from mybuild.util.collections import is_mapping
+import functools as _functools
+import logging as _logging
+
+from mybuild.util.collections import is_container, is_mapping
 from mybuild.util.operator import invoker
-import pprint
 
 
 def identity(x):

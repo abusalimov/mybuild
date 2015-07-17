@@ -1,10 +1,10 @@
 """
 Dynamic inheritance for class members.
 """
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
-from mybuild.util.itertools import pop_iter
-from mybuild.util.itertools import unique
+
+from mybuild.util.itertools import pop_iter, unique
 
 
 class InheritMeta(type):
@@ -15,8 +15,7 @@ class InheritMeta(type):
 
     Let's create three classes using InheritMeta (owner classes): A, B, C
 
-    >>> from util.inherit import InheritMeta
-    >>> from _compat import *
+    >>> from mybuild._compat import *
     >>> class A(extend(metaclass=InheritMeta)):
     ...     pass
     ...

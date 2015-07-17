@@ -3,6 +3,22 @@ Mybuild core types.
 
 TODO docs. -- Eldar
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import sys
+from collections import namedtuple
+from itertools import starmap
+from operator import attrgetter
+
+from mybuild.util.collections import OrderedDict
+from mybuild.util.itertools import unique_values
+from mybuild.util.misc import InstanceBoundTypeMixin
+from mybuild.util.operator import attr, getter, instanceof, invoker
+from mybuild.util.prop import (cached_class_property,
+                               cached_property,
+                               default_class_property)
+
 
 __author__ = "Eldar Abusalimov"
 __date__ = "2012-09-15"
@@ -19,25 +35,6 @@ __all__ = [
     "MybuildError",
     "InstanceError",
 ]
-
-
-from mybuild._compat import *
-
-from collections import namedtuple
-from itertools import starmap
-from operator import attrgetter
-import sys
-
-from mybuild.util.collections import OrderedDict
-from mybuild.util.itertools import unique_values
-from mybuild.util.operator import attr
-from mybuild.util.operator import getter
-from mybuild.util.operator import invoker
-from mybuild.util.operator import instanceof
-from mybuild.util.prop import default_class_property
-from mybuild.util.prop import cached_property
-from mybuild.util.prop import cached_class_property
-from mybuild.util.misc import InstanceBoundTypeMixin
 
 
 class ModuleMetaBase(type):

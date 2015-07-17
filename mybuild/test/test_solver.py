@@ -1,10 +1,15 @@
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
-import unittest
 import functools
+import unittest
 
 from mybuild.req import pgraph
-from mybuild.req.solver import *
+from mybuild.req.solver import (ComparableSolution,
+                                create_trunk,
+                                solve_trunk,
+                                solve,
+                                SolveError)
 
 
 class TestPgraph(pgraph.Pgraph):

@@ -1,8 +1,7 @@
 """
 Namespace-related loaders that don't run any code directly.
 """
-
-
+from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import types

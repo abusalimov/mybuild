@@ -1,19 +1,20 @@
 """
 Graph for reasons of pgraph solution
 """
+from __future__ import absolute_import, division, print_function
+from mybuild._compat import *
+
+import heapq
+import logging
+from collections import deque
+
+from mybuild.req.pgraph import Reason
+
 
 __author__ = "Vita Loginova"
 __date__ = "2013-06-28"
 
 
-from  _compat import *
-
-import heapq
-from collections import deque
-
-from mybuild.req.pgraph import Reason
-
-import logging
 logger = logging.getLogger(__name__)
 
 
