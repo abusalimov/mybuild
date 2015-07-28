@@ -4,34 +4,5 @@
 		{
 			"path": "."
 		}
-	],
-	"build_systems":
-	[
-		{
-			"name": "Python (project-specific)",
-			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
-			"selector": "source.python",
-
-			"cmd": ["python", "-u", "run-fixup.py", "$file"],
-			"working_dir": "${project_path}"
-		},
-		{
-			"name": "Python with Coverage (project-specific)",
-			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
-			"selector": "source.python",
-
-			"cmd": ["env", "PYTHONPATH=${packages}/Python Coverage",
-					"python", "-u", "-m", "coverage", "run",
-					"run-fixup.py", "$file"],
-			"working_dir": "${project_path}"
-		},
-		{
-			"name": "Waf (project-specific)",
-			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
-			"selector": "source.python",
-
-			"cmd": ["./waf", "-v"],
-			"working_dir": "${project_path}"
-		}
 	]
 }
