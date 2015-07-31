@@ -262,18 +262,3 @@ except __my_exec_module__:
         self.assertIs(True, ASTComparator().compare(my_node1, my_node2))
         self.assertIs(True, ASTComparator().compare(my_node1, py_node))
         pass
-
-
-def suite():
-    import sys
-    return unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
-
-
-if __name__ == '__main__':
-    import sys, logging
-    from mybuild import util
-    # util.init_logging(filename='%s.log' % __name__)
-    util.init_logging(sys.stderr,
-                      level=logging.DUMP)
-
-    unittest.main()

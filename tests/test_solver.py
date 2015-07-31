@@ -310,18 +310,3 @@ class BranchTestCase(SolverTestCaseBase):
 
         self.assertEqual(ComparableSolution(initial_trunk.base),
                          ComparableSolution(solved_trunk.base))
-
-
-def suite():
-    import sys
-    return unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
-
-
-if __name__ == '__main__':
-    from mybuild import util
-    import sys, logging
-    # util.init_logging(filename='%s.log' % __name__)
-    util.init_logging(sys.stderr,
-                      level=logging.DUMP)
-
-    unittest.main()

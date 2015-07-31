@@ -7,8 +7,6 @@ from mybuild._compat import *
 import functools
 import os.path
 import sys
-import unittest
-from test import module_tests_solver
 
 from waflib import (Context as wafcontext,
                     Errors as waferrors,
@@ -21,7 +19,6 @@ from mybuild.glue import MyDslLoader, PyDslLoader
 from mybuild.nsimporter.hook import NamespaceImportHook
 from mybuild.req.rgraph import get_error_rgraph, traverse_error_rgraph
 from mybuild.req.solver import SolveError
-from mybuild.test import test_solver
 
 
 __author__ = "Eldar Abusalimov"
@@ -202,15 +199,6 @@ def options(ctx):
 
 def configure(ctx):
     print('mywaf: configure %r' % ctx)
-
-def selftest(ctx):
-    suite = unittest.TestSuite()
-    suite.addTests([
-        test_solver.suite(),
-        module_tests_solver.suite(ctx),
-    ])
-
-    unittest.TextTestRunner(verbosity=waflogs.verbose).run(suite)
 
 
 @TaskGen.feature('module_header')

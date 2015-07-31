@@ -122,18 +122,3 @@ class SolverTestCase(unittest.TestCase):
         self.assertIn(m1, modules)
         self.assertNotIn(m2, modules)
         self.assertIn(m3, modules)
-
-
-def suite(wafctx_):
-    class WafCtxBoundTestCase(SolverTestCase):
-        wafctx = wafctx_
-    return unittest.TestLoader().loadTestsFromTestCase(WafCtxBoundTestCase)
-
-
-if __name__ == '__main__':
-    import util, sys, logging
-    # util.init_logging(filename='%s.log' % __name__)
-    util.init_logging(sys.stderr,
-                      level=logging.DUMP)
-
-    unittest.main()
