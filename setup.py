@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 import setuptools
+import sys
+
+
+def have_arg(*args):
+    return any(arg in sys.argv for arg in args)
 
 
 def dict_of(cls):
@@ -44,6 +49,22 @@ class setup_params:
     install_requires = [
         'ply>=3.4',
     ]
+
+    setup_requires = []
+    if have_arg('pytest', 'test', 'ptr'):
+        setup_requires += ['pytest_runner']
+
+    @dict_of
+    class extras_require:
+        test = [
+            'pytest',
+        ]
+
+        dev = test + [
+            'pytest-catchlog',
+        ]
+
+    tests_require = extras_require['test']
 
 
 if __name__ == '__main__':
