@@ -12,10 +12,10 @@ from mybuild.req.solver import (ComparableSolution,
                                 SolveError)
 
 
-class TestPgraph(pgraph.Pgraph):
+class HandyPgraph(pgraph.Pgraph):
 
     def __init__(self):
-        super(TestPgraph, self).__init__()
+        super(HandyPgraph, self).__init__()
 
         for node_type in type(self)._iter_all_node_types():
             if not hasattr(self, node_type.__name__):
@@ -38,7 +38,7 @@ class Named(object):
         return self._name or super(Named, self).__repr__()
 
 
-@TestPgraph.node_type
+@HandyPgraph.node_type
 class NamedAtom(Named, pgraph.Atom):
     pass
 
@@ -50,17 +50,17 @@ class StarArgsToArg(object):
         return super(StarArgsToArg, cls)._new(operands, **kwargs)
 
 
-@TestPgraph.node_type
+@HandyPgraph.node_type
 class Or(Named, StarArgsToArg, pgraph.Or):
     pass
-@TestPgraph.node_type
+@HandyPgraph.node_type
 class And(Named, StarArgsToArg, pgraph.And):
     pass
 
-@TestPgraph.node_type
+@HandyPgraph.node_type
 class AtMostOne(Named, StarArgsToArg, pgraph.AtMostOne):
     pass
-@TestPgraph.node_type
+@HandyPgraph.node_type
 class AllEqual(Named, StarArgsToArg, pgraph.AllEqual):
     pass
 
@@ -68,7 +68,7 @@ class AllEqual(Named, StarArgsToArg, pgraph.AllEqual):
 class SolverTestCaseBase(unittest.TestCase):
 
     def setUp(self):
-        self.pgraph = TestPgraph()
+        self.pgraph = HandyPgraph()
 
     def atoms(self, names):
         return [self.pgraph.NamedAtom(name=name) for name in names]
