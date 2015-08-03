@@ -62,6 +62,7 @@ class setup_params:
 
         dev = test + [
             'pytest-catchlog',
+            'pytest-cov',
         ]
 
     tests_require = extras_require['test']
