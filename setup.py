@@ -65,6 +65,11 @@ class setup_params:
             'pytest-cov',
         ]
 
+        ci = dev + [
+            'codecov',
+            'pytest-travis-fold',
+        ]
+
     tests_require = extras_require['test']
 
 
