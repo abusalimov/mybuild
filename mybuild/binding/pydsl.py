@@ -35,13 +35,13 @@ class PyDslModuleMeta(core.ModuleMetaBase):
     def _prepare_optypes(cls):
         """Converts a constructor argspec into a list of Optype objects."""
         func = cls.__dict__.get('__init__')  # to avoid MRO lookup
-
-        if func is None or isinstance(func, type(object.__init__)):
-            # no constructor, or it is a wrapper descriptor, give up
+        try:
+            argspec = inspect.getargspec(inspect.unwrap(func))
+        except TypeError:  # no constructor, or it is a wrapper descriptor
             return []
-
-        args, va, kw, dfls = inspect.getargspec(inspect.unwrap(func))
-        dfls = dfls or []
+        else:
+            args, va, kw, dfls = argspec
+            dfls = dfls or []
 
         if not args and not va:
             raise TypeError('Module must accept at least one argument')
@@ -101,6 +101,9 @@ class PyDslModuleBase(extend(core.ModuleBase,
     ...       baz = option.bool(default=True),  # boolean flag
     ...         ):
     ...     pass
+
+    >>> list(m._options)
+    ['foo', 'bar', 'baz']
 
     >>> class modclass(module):
     ...     def __init__(self, opt = option.bool()):
