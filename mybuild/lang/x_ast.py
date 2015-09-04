@@ -29,8 +29,21 @@ def x_Name(name, ctx=None):
         ctx = Load()
     return Name(name, ctx)
 
-def x_Call(func, args=None, keywords=None, starargs=None, kwargs=None):
-    return Call(func, args or [], keywords or [], starargs, kwargs)
+
+try:
+    def x_Call(func, args=None, keywords=None, starargs=None, kwargs=None):
+        return Call(func, args or [], keywords or [], starargs, kwargs)
+    x_Call(x_Const(None))
+except TypeError:
+    # Python 3.5 introduced generic handling of star- and kw-args in Call().
+    def x_Call(func, args=None, keywords=None, starargs=None, kwargs=None):
+        args = args or []
+        keywords = keywords or []
+        if starargs is not None:
+            args.append(Starred(starargs, Load()))
+        if kwargs is not None:
+            keywords.append(keyword(None, kwargs))
+        return Call(func, args, keywords)
 
 
 if py3k:
