@@ -305,35 +305,3 @@ def why_inviable_instance_is_disabled(outcome, *_):
 
 def resolve(initial_module):
     return Context().resolve(initial_module)
-
-
-if __name__ == '__main__':
-    from mybuild import util
-    util.init_logging('%s.log' % __name__)
-
-    from pprint import pprint
-
-    from mybuild.binding.pydsl import *
-
-    @module
-    def conf(self):
-        self._constrain(m1(bar=17))
-        # self._constrain(m3)
-        self.sources = 'test.c'
-
-    @module
-    def m1(self, bar=42):
-        self._constrain(m2(foo=bar))
-
-    @module
-    def m2(self, foo=42):
-        if foo == 42:
-            raise InstanceError('FUUU')
-
-    @module
-    def m3(self):
-        pass
-
-    instances = resolve(conf)
-
-    pprint(instances)

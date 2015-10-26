@@ -137,8 +137,3 @@ application = None
 library = None
 
 option = core.Optype
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

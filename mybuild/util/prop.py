@@ -194,8 +194,3 @@ class cached_class_property(default_class_property, _func_deco_with_attr):
         ret = super(cached_class_property, self).__get__(obj, objtype)
         setattr(objtype, self.attr, ret)
         return ret
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

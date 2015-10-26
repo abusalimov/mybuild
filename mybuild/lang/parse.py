@@ -820,33 +820,3 @@ class MySyntaxError(Exception):
     def __init__(self, msg, loc=None):
         loc_args = (loc.to_syntax_error_tuple(),) if loc is not None else ()
         super(MySyntaxError, self).__init__(msg, *loc_args)
-
-
-if __name__ == "__main__":
-    source = """
-    "module docstring"
-    y: mod { "doc"; a::s }
-    a: 0; b: 1; c: 2
-    x: (call(s,d,f,x=0,y=1,z=2), [1,2,3,4], ["a":1, "b":2, "c":3, "d":4], [:])
-    module foo: {
-        option bar(metaclass=type _(type){}):: {}
-        tools:: [cc]
-        files: ["foo.c"]
-    }
-    """
-    from mako._ast_util import SourceGenerator
-
-    class SG(SourceGenerator):
-        def visit_Delete(self, node):
-            super(SG, self).visit_Delete(node.targets)  # workaround
-
-    def pr(node):
-        sg=SG('    ')
-        sg.visit(node)
-        return ''.join(sg.result)
-
-    ast_root = my_parse(source, debug=0)
-
-    compile(ast_root, "", 'exec')
-    print(pr(ast_root))
-    # print(ast.dump(ast_root))

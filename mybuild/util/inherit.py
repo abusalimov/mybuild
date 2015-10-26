@@ -189,8 +189,3 @@ class InheritMeta(type):
 
 def is_inherit_value(value):
     return getattr(value, 'inherit_self', False)
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
