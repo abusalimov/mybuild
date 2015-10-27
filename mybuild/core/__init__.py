@@ -7,11 +7,10 @@ from __future__ import absolute_import, division, print_function
 from mybuild._compat import *
 
 import sys
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from itertools import starmap
 from operator import attrgetter
 
-from mybuild.util.collections import OrderedDict
 from mybuild.util.itertools import unique_values
 from mybuild.util.misc import InstanceBoundTypeMixin
 from mybuild.util.operator import attr, getter, instanceof, invoker

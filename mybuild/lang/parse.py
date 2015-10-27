@@ -7,12 +7,11 @@ from mybuild._compat import *
 import functools
 import itertools
 import ply.yacc
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 
 from mybuild.lang import lex, x_ast as ast
 from mybuild.lang.helpers import rule
 from mybuild.lang.location import Fileinfo, Location
-from mybuild.util.collections import OrderedDict
 from mybuild.util.operator import getter
 
 
