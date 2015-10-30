@@ -1,17 +1,25 @@
+sudo: false
+
 language: python
 python:
-#  - "2.6"
   - "2.7"
-  - "3.2"
   - "3.3"
+  - "3.4"
+  - "3.5"
   - "pypy"
+  - "pypy3"
 
-# command to install dependencies
 install:
-  - pip install ply
+  - pip install -e .[ci]
 
-# command to run tests
 script:
-  - python -m mybuild.test.test_solver
-  - python -m mylang.test.test_parser
-  - python -m test.module_tests_solver
+  - py.test --doctest-module --cov
+
+after_success:
+  - codecov
+
+before_cache:
+  - rm -rf $HOME/.cache/pip/log
+cache:
+  directories:
+    - $HOME/.cache/pip

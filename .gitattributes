@@ -1,0 +1,5 @@
+# End-of-line normalization of text files
+*       text=auto
+
+# PEP8: indent with 4 spaces
+*.py    text whitespace=tab-in-indent,tabwidth=4,trailing-space
